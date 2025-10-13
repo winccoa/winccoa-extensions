@@ -24,8 +24,10 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     return Vrpc.Variant.createUndefined();
   }
 
-  private async listRepos(): Promise<Vrpc.Variant> {
-
+  private async listRepos(
+    serverContext: Vrpc.ServerContext,
+    request: Vrpc.Variant,
+  ): Promise<Vrpc.Variant> {
     return Vrpc.Variant.createUndefined();
   }
 }
