@@ -4,11 +4,7 @@ import globals from "globals";
 
 export default tseslint.config(
   {
-    ignores: [
-      "**/node_modules",
-      "**/winccoa-manager",
-      "**/@types",
-    ],
+    ignores: ["**/node_modules", "**/winccoa-manager", "**/@types"],
   },
   {
     extends: [eslint.configs.recommended, ...tseslint.configs.recommended],

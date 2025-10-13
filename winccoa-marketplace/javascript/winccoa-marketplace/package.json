@@ -8,15 +8,19 @@
     "WinCCOA"
   ],
   "license": "MIT",
-  "dependencies": {},
+  "dependencies": {
+    "octokit": "^5.0.3",
+    "simple-git": "^3.28.0",
+  },
   "devDependencies": {
+    "@types/eslint__js": "^8.42.3",
+    "@types/node": "^24.7.2",
+    "@types/winccoa-manager": "C:/Program Files/Siemens/WinCC_OA/3.21/javascript/@types/winccoa-manager",
     "@typescript-eslint/eslint-plugin": "^8.11.0",
     "@typescript-eslint/parser": "^8.11.0",
-    "@types/eslint__js": "^8.42.3",
-    "@types/winccoa-manager": "C:/Program Files/Siemens/WinCC_OA/3.21/javascript/@types/winccoa-manager",
-    "typescript-eslint": "^8.11.0",
     "eslint": "^9.13.0",
-    "prettier": "^3.3.3"
+    "prettier": "^3.3.3",
+    "typescript-eslint": "^8.11.0"
   },
   "scripts": {
     "build": "npm run eslint-check && npm run format && npx tsc",
