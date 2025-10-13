@@ -6,12 +6,8 @@ export default tseslint.config(
   {
     ignores: [
       "**/node_modules",
-      "**/dist",
       "**/winccoa-manager",
-      "**/templates",
       "**/@types",
-      "**/tempWidget",
-      "rollup.config.mjs",
     ],
   },
   {
@@ -28,7 +24,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["system-dashboard/**"],
+    files: ["**/*.ts"],
     rules: {
       "@typescript-eslint/no-redundant-type-constituents": "error",
       "require-await": "error",
