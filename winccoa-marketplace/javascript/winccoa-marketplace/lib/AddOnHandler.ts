@@ -4,6 +4,7 @@ import { simpleGit } from "simple-git";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
+import { WinccoaCtrlScript, WinccoaCtrlType, WinccoaManager } from "winccoa-manager";
 
 // Export the class for use in other modules
 export { AddOnHandler, RepositoryInfo };
@@ -37,6 +38,8 @@ interface RepositoryInfo {
   repo: string;
   branch?: string; // Optional branch, defaults to default branch
 }
+
+const winccoa = new WinccoaManager();
 
 /**
  * Read a specific value from Windows registry
@@ -207,6 +210,82 @@ class AddOnHandler {
       return false;
     }
   }
+
+  private readonly ctrlScript: WinccoaCtrlScript = new WinccoaCtrlScript(winccoa,
+  `
+    void registerSubProj(string path)
+    {
+      strreplace(path, "\\", "/");
+      pathParts = strsplit(path, "/");
+
+      if (dynlen(pathParts)>0)
+      {
+        projName = pathParts[dynlen(pathParts)];
+      }
+
+      for ( i = 1; i <= dynlen(pathParts) - 1; i++ )
+        path += pathParts[i] + "/";
+
+      int ret = paRegProj(projName, path, "", 0, false);
+      if (ret < 0)
+        return ret;
+
+      dyn_string subProjects;
+      paGetSubProjs(PROJ, subProjects);
+      if (!subProjects.contains(projName))
+      {
+        subProjects.append(projName);
+        paSetSubProjs(PROJ, subProjects);
+      }
+
+      return ret;
+    }
+    
+    void unregisterSubProj(string path)
+    {
+      strreplace(path, "\\", "/");
+      pathParts = strsplit(path, "/");
+
+      if (dynlen(pathParts)>0)
+      {
+        projName = pathParts[dynlen(pathParts)];
+      }
+
+      paGetSubProjs(PROJ, subProjects);
+      if (!subProjects.contains(projName))
+      {
+        int idx = subProjects.indexOf(projName, 0);
+        subProjects.removeAt(idx);
+        paSetSubProjs(PROJ, subProjects);
+     }
+
+      return paDelProj(projName, true);
+    }
+    
+    dyn_dyn_string listSubProjs()
+    {
+      dyn_string projects, versions, paths;
+      dyn_string subProjects;
+      paGetProjs(projects, versions, paths);
+
+
+
+      return makeDynAnytype(projects, paths);
+    }
+  `
+);
+
+async registerSubProject(path: string): Promise<number> {
+  return await this.ctrlScript.start("registerSubProj", [path], [WinccoaCtrlType.string]) as number;
+}
+
+async unregisterSubProject(path: string): Promise<number> {
+  return await this.ctrlScript.start("unregisterSubProj", [path], [WinccoaCtrlType.string]) as number;
+}
+
+async listSubProjects(): Promise<string[]> {
+  return await this.ctrlScript.start("listSubProjs") as string[];
+}
 
   /**
    * Get current authenticated user information
@@ -548,7 +627,7 @@ class AddOnHandler {
       }
 
       console.log(
-        `Pulling latest changes from repository: ${repositoryDirectory}`,
+        `Pulling latest changes from repository: ${repositoryDirectory} to {}`,
       );
 
       // Use simple-git for pull operation

@@ -43,13 +43,13 @@ class MarketplaceClient
     return response.getResponse();
   }
 
-  public bool regSubProject(string path)
+  public bool registerSubProjects(dyn_string paths)
   {
     VrpcResponseData response = stub.callFunction("register", path);
     return response.getResponse();
   }
 
-  public bool unregister(string path)
+  public bool unregisterSubProjects(dyn_string paths)
   {
     VrpcResponseData response = stub.callFunction("unregister", path);
     return response.getResponse();
