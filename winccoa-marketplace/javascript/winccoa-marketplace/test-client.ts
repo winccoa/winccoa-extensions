@@ -10,8 +10,7 @@ async function testMarketplaceService() {
     const stub = await VrpcStub.createAndInitialize("marketplace", new VrpcStubOptions());
     const result = await stub.callFunction("listRepos", clientContext, Vrpc.Variant.createUndefined());
     
-    console.log("Test call result:", result.response);
-    console.log("Test call result value:", result.response.value);
+    console.log("Test call result value JSON:", JSON.stringify(result.response.value, null, 2));
 
     console.log("\nTest completed successfully!");
   
