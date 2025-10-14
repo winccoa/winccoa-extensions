@@ -1,0 +1,64 @@
+// $License: NOLICENSE
+//--------------------------------------------------------------------------------
+/**
+  @file $relPath
+  @copyright $copyright
+  @author Jonas Schulz
+*/
+
+//--------------------------------------------------------------------------------
+// Libraries used (#uses)
+#uses "vrpc"
+//--------------------------------------------------------------------------------
+// Variables and Constants
+
+//--------------------------------------------------------------------------------
+/**
+*/
+class MarketplaceClient
+{
+  private VrpcStub stub = nullptr;
+
+  public MarketplaceClient()
+  {
+    stub = VrpcStub::createAndInitialize("marketplace", new VrpcStubOptions());
+  }
+
+  public anytype listRepos()
+  {
+    VrpcResponseData response = stub.callFunction("listRepos", nullptr);
+    return jsonDecode(response.getResponse());
+  }
+
+  public bool clone(string url, string path = "")
+  {
+    mapping request = makeMapping("url", url, "path", path);
+    VrpcResponseData response = stub.callFunction("clone", request);
+    return response.getResponse();
+  }
+
+  public bool pull(string urlOrName)
+  {
+    VrpcResponseData response = stub.callFunction("pull", urlOrName);
+    return response.getResponse();
+  }
+
+  public bool regSubProject(string path)
+  {
+    VrpcResponseData response = stub.callFunction("register", path);
+    return response.getResponse();
+  }
+
+  public bool unregister(string path)
+  {
+    VrpcResponseData response = stub.callFunction("unregister", path);
+    return response.getResponse();
+  }
+
+  public dyn_string listProjects()
+  {
+    VrpcResponseData response = stub.callFunction("listProjects", nullptr);
+    return response.getResponse();
+  }
+
+};
