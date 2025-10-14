@@ -205,13 +205,13 @@ class AddOnHandler {
    * @param cloneUrl Complete git URL (HTTPS or SSH)
    * @param targetDirectory Optional target directory name
    * @param branch Optional branch to clone
-   * @returns The full path to the cloned repository
+   * @returns Object containing the full path to the cloned repository and package.winccoa.json content
    */
-  async cloneRepositoryFromUrl(
+  async cloneRepository(
     cloneUrl: string,
     targetDirectory?: string,
     branch?: string,
-  ): Promise<string> {
+  ): Promise<{ path: string; fileContent: string | null }> {
     try {
       // Determine the target directory and repository name
       let fullPath: string;
@@ -291,7 +291,9 @@ class AddOnHandler {
         }
 
         console.log("Git pull completed successfully!");
-        return fullPath; // Return the path since repository already exists
+        
+        // Check if package.winccoa.json exists and read its content
+        return { path: fullPath, fileContent: this.readPackageWinCCoAJson(fullPath) };
       }
 
       console.log(`Cloning repository from URL: ${cloneUrl}`);
@@ -337,7 +339,9 @@ class AddOnHandler {
 
       console.log("Git pull completed successfully!");
 
-      return fullPath;
+      // Check if package.winccoa.json exists and read its content
+      return { path: fullPath, fileContent: this.readPackageWinCCoAJson(fullPath) };
+
     } catch (error: any) {
       // Provide more specific error messages based on simple-git error types
       if (
@@ -365,6 +369,31 @@ class AddOnHandler {
         throw new Error(
           `Failed to clone repository from URL: ${error.message}`,
         );
+      }
+    }
+  }
+
+  /**
+   * Read and parse the package.winccoa.json file from a repository
+   * @param repositoryPath The full path to the repository directory
+   * @returns The parsed JSON content or null if file doesn't exist
+   */
+  private readPackageWinCCoAJson(repositoryPath: string): string | null {
+    try {
+      const packageWinCCoAPath = path.join(repositoryPath, "package.winccoa.json");
+      
+      if (fs.existsSync(packageWinCCoAPath)) {
+        console.log("package.winccoa.json found - this appears to be a WinCC OA addon");
+        const fileContent = fs.readFileSync(packageWinCCoAPath, 'utf8');
+        return JSON.stringify(JSON.parse(fileContent), null, 2);
+      } else {
+        throw new Error("package.winccoa.json not found - this may not be a WinCC OA addon");
+      }
+    } catch (error: any) {
+      if (error.message.includes("package.winccoa.json not found")) {
+        throw error; // Re-throw our specific error message
+      } else {
+        throw new Error(`Failed to read or parse package.winccoa.json: ${error.message}`);
       }
     }
   }

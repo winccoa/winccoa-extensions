@@ -87,31 +87,43 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     let targetDir: string | undefined;
     let branch: string | undefined;
 
-    const mapping = request.getMapping();
+    const requestMapping = request.getMapping();
 
     // Extract URL from mapping
-    const urlVariant = mapping.get(Vrpc.Variant.createString("url"));
+    const urlVariant = requestMapping.get(Vrpc.Variant.createString("url"));
     if (!urlVariant) {
       throw new Error('Missing required "url" parameter in mapping');
     }
     repositoryURL = urlVariant.getString();
 
     // Extract optional parameters targetDirectory and branch from mapping
-    const branchVariant = mapping.get(Vrpc.Variant.createString("branch"));
-    const targetDirVariant = mapping.get(
+    const branchVariant = requestMapping.get(Vrpc.Variant.createString("branch"));
+    const targetDirVariant = requestMapping.get(
       Vrpc.Variant.createString("targetDirectory"),
     );
 
     targetDir = targetDirVariant ? targetDirVariant.getString() : undefined;
     branch = branchVariant ? branchVariant.getString() : undefined;
 
-    const repositoryPath = await this._addOnHandler.cloneRepositoryFromUrl(
+    const result = await this._addOnHandler.cloneRepository(
       repositoryURL,
       targetDir,
       branch,
     );
 
+    const resultMapping = new Vrpc.Mapping();
+    
+    resultMapping.set(
+      Vrpc.Variant.createString("repositoryPath"),
+      Vrpc.Variant.createString(result.path),
+    ); 
+
+    resultMapping.set(
+      Vrpc.Variant.createString("fileContent"),
+      Vrpc.Variant.createString(result.fileContent ? result.fileContent : ""),
+    );
+
     // return full path of the cloned repository with name
-    return Vrpc.Variant.createString(repositoryPath);
+    return Vrpc.Variant.createMapping(resultMapping);
   }
 }
