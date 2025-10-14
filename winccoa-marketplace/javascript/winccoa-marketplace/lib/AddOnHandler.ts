@@ -159,65 +159,89 @@ class AddOnHandler {
 
   private readonly ctrlScript: WinccoaCtrlScript = new WinccoaCtrlScript(winccoa,
   `
-    void registerSubProj(string path)
-    {
-      strreplace(path, "\\", "/");
-      pathParts = strsplit(path, "/");
+#uses "CtrlPv2Admin"
 
-      if (dynlen(pathParts)>0)
-      {
-        projName = pathParts[dynlen(pathParts)];
-      }
+main()
+{
+  string projName = "winccoa-marketplace";
+  string path = "C:/repos/WinCCOA-Hub/winccoa-marketplace/";
 
-      for ( i = 1; i <= dynlen(pathParts) - 1; i++ )
-        path += pathParts[i] + "/";
+  dyn_string subProjects;
+  paGetSubProjs(PROJ, subProjects);
+  paSetSubProjs(PROJ, subProjects);
+  int ret = paRegProj(projName, path, "", 0, false);
+  paDelProj(projName, true);
+  int ret = paRegProj(projName, path, "", 0, false);
+}
 
-      int ret = paRegProj(projName, path, "", 0, false);
-      if (ret < 0)
-        return ret;
+int registerSubProj(string path)
+{
+  string projName;
+  string pathParts;
 
-      dyn_string subProjects;
-      paGetSubProjs(PROJ, subProjects);
-      if (!subProjects.contains(projName))
-      {
-        subProjects.append(projName);
-        paSetSubProjs(PROJ, subProjects);
-      }
+  strreplace(path, "//", "/");
+  pathParts = strsplit(path, "/");
 
-      return ret;
-    }
-    
-    void unregisterSubProj(string path)
-    {
-      strreplace(path, "\\", "/");
-      pathParts = strsplit(path, "/");
+  if (dynlen(pathParts) > 0)
+  {
+    projName = pathParts[dynlen(pathParts)];
+  }
 
-      if (dynlen(pathParts)>0)
-      {
-        projName = pathParts[dynlen(pathParts)];
-      }
+  for (int i = 1; i <= dynlen(pathParts) - 1; i++)
+    path += pathParts[i] + "/";
 
-      paGetSubProjs(PROJ, subProjects);
-      if (!subProjects.contains(projName))
-      {
-        int idx = subProjects.indexOf(projName, 0);
-        subProjects.removeAt(idx);
-        paSetSubProjs(PROJ, subProjects);
-     }
+  int ret = paRegProj(projName, path, "", 0, false);
 
-      return paDelProj(projName, true);
-    }
-    
-    dyn_dyn_string listSubProjs()
-    {
-      dyn_string projects, versions, paths;
-      dyn_string subProjects;
-      paGetProjs(projects, versions, paths);
+  if (ret < 0)
+  {
+    return ret;
+  }
 
+  dyn_string subProjects;
+  paGetSubProjs(PROJ, subProjects);
 
+  if (!subProjects.contains(projName))
+  {
+    subProjects.append(projName);
+    paSetSubProjs(PROJ, subProjects);
+  }
 
-      return makeDynAnytype(projects, paths);
-    }
+  return ret;
+}
+
+int unregisterSubProj(string path)
+{
+  string projName;
+  dyn_string subProjects;
+
+  strreplace(path, "//", "/");
+  string pathParts = strsplit(path, "/");
+
+  if (dynlen(pathParts) > 0)
+  {
+    projName = pathParts[dynlen(pathParts)];
+  }
+
+  paGetSubProjs(PROJ, subProjects);
+
+  if (!subProjects.contains(projName))
+  {
+    int idx = subProjects.indexOf(projName, 0);
+    subProjects.removeAt(idx);
+    paSetSubProjs(PROJ, subProjects);
+  }
+
+  return paDelProj(projName, true);
+}
+
+dyn_dyn_string listSubProjs()
+{
+  dyn_string projects, versions, paths;
+  dyn_string subProjects;
+  paGetProjs(projects, versions, paths);
+
+  return makeDynAnytype(projects, paths);
+}
   `
 );
 
