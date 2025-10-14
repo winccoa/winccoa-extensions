@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WinCC OA Marketplace</title>
+    
+    <!-- Siemens IX Web Components -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@siemens/ix@3.2.0/dist/siemens-ix/siemens-ix.css">
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@siemens/ix@3.2.0/dist/siemens-ix/siemens-ix.esm.js"></script>
+    <script nomodule src="https://cdn.jsdelivr.net/npm/@siemens/ix@3.2.0/dist/siemens-ix/siemens-ix.js"></script>
+    
+    <!-- Siemens IX Icons (required for IX 3.0.0+) -->
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@siemens/ix-icons@^3.0.0/dist/ix-icons/ix-icons.esm.js"></script>
+    <script nomodule src="https://cdn.jsdelivr.net/npm/@siemens/ix-icons@^3.0.0/dist/ix-icons/ix-icons.js"></script>
+    
+    <!-- Custom styles -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="theme-classic-light" data-theme="light">
+    <ix-application>
+        <ix-menu>
+            <ix-menu-item>
+                <ix-icon name="home" slot="icon"></ix-icon>
+                Marketplace
+            </ix-menu-item>
+        </ix-menu>
+        
+        <ix-content>
+            <div class="marketplace-container">
+                <!-- Left sidebar - Repository list -->
+                <div class="repository-sidebar">
+                    <div class="sidebar-header">
+                        <h3 id="repositories-title">Available Repositories</h3>
+                        <ix-button 
+                            id="refresh-btn" 
+                            variant="ghost" 
+                            size="small"
+                            title="Refresh repositories">
+                            <ix-icon name="refresh"></ix-icon>
+                        </ix-button>
+                    </div>
+                    
+                    <div class="organization-selector">
+                        <label for="organization-input">Organization</label>
+                        <div class="input-field">
+                            <input
+                                id="organization-input"
+                                type="text"
+                                value="winccoa"
+                                placeholder="Enter GitHub organization"
+                                class="native-input">
+                        </div>
+                    </div>
+                    
+                    <div class="search-container">
+                        <div class="input-field">
+                            <ix-icon name="search" size="16" class="input-icon"></ix-icon>
+                            <input
+                                id="search-input"
+                                type="text"
+                                placeholder="Search repositories..."
+                                class="native-input">
+                        </div>
+                    </div>
+                    
+                    <div id="repository-list" class="repository-list">
+                        <div class="loading-spinner">
+                            <ix-spinner></ix-spinner>
+                            <span>Loading repositories...</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Main content - Repository details -->
+                <div class="repository-details">
+                    <div id="empty-state" class="empty-state">
+                        <ix-icon name="folder" size="48"></ix-icon>
+                        <h2>Select a repository</h2>
+                        <p>Choose a repository from the list to view its details and available actions.</p>
+                    </div>
+                    
+                    <div id="repository-detail" class="repository-detail" style="display: none;">
+                        <div class="detail-header">
+                            <div class="repo-info">
+                                <h1 id="repo-name"></h1>
+                                <p id="repo-description"></p>
+                                <div class="repo-meta">
+                                    <ix-chip id="repo-visibility" variant="outline">
+                                        <ix-icon name="lock" slot="start"></ix-icon>
+                                        <span id="repo-visibility-text">Private</span>
+                                    </ix-chip>
+                                    <ix-chip variant="outline">
+                                        <ix-icon name="star" slot="start"></ix-icon>
+                                        <span id="repo-stars">0</span>
+                                    </ix-chip>
+                                    <ix-chip variant="outline">
+                                        <span id="repo-forks">0 forks</span>
+                                    </ix-chip>
+                                </div>
+                            </div>
+                            
+                            <div class="action-buttons">
+                                <ix-button
+                                    id="clone-btn"
+                                    variant="primary">
+                                    <ix-icon name="download" slot="start"></ix-icon>
+                                    Clone
+                                </ix-button>
+                                
+                                <ix-button
+                                    id="pull-btn"
+                                    variant="secondary"
+                                    disabled>
+                                    <ix-icon name="refresh" slot="start"></ix-icon>
+                                    Pull
+                                </ix-button>
+                                
+                                <ix-button
+                                    id="register-btn"
+                                    variant="secondary"
+                                    disabled>
+                                    <ix-icon name="plus" slot="start"></ix-icon>
+                                    Register
+                                </ix-button>
+                                
+                                <ix-button
+                                    id="unregister-btn"
+                                    variant="ghost"
+                                    disabled>
+                                    <ix-icon name="trash" slot="start"></ix-icon>
+                                    Unregister
+                                </ix-button>
+                            </div>
+                        </div>
+                        
+                        <ix-tabs>
+                            <ix-tab-item>Overview</ix-tab-item>
+                            <ix-tab-item>README</ix-tab-item>
+                            <ix-tab-item>Files</ix-tab-item>
+                        </ix-tabs>
+                        
+                        <div class="tab-content">
+                            <div id="overview-tab" class="tab-pane active">
+                                <div class="overview-grid">
+                                    <div class="overview-card">
+                                        <h4>Repository Stats</h4>
+                                        <div class="stat-item">
+                                            <span class="stat-label">Language:</span>
+                                            <span id="repo-language">-</span>
+                                        </div>
+                                        <div class="stat-item">
+                                            <span class="stat-label">Size:</span>
+                                            <span id="repo-size">-</span>
+                                        </div>
+                                        <div class="stat-item">
+                                            <span class="stat-label">Created:</span>
+                                            <span id="repo-created">-</span>
+                                        </div>
+                                        <div class="stat-item">
+                                            <span class="stat-label">Updated:</span>
+                                            <span id="repo-updated">-</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="overview-card">
+                                        <h4>Local Status</h4>
+                                        <div id="local-status" class="status-info">
+                                            <ix-icon name="info" class="status-icon"></ix-icon>
+                                            <span>Not cloned locally</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div id="readme-tab" class="tab-pane">
+                                <div id="readme-content" class="readme-content">
+                                    <div class="loading-spinner">
+                                        <ix-spinner></ix-spinner>
+                                        <span>Loading README...</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div id="files-tab" class="tab-pane">
+                                <div id="files-content" class="files-content">
+                                    <p>File browser functionality would be implemented here.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </ix-content>
+        
+        <!-- Toast notifications -->
+        <ix-toast-container></ix-toast-container>
+        
+        <!-- Theme Toggle -->
+        <ix-button 
+            id="theme-toggle"
+            variant="ghost"
+            size="small"
+            style="position: fixed; top: 10px; right: 10px; z-index: 1000;"
+            title="Toggle Theme">
+            <ix-icon name="contrast"></ix-icon>
+        </ix-button>
+        
+        <!-- Modals -->
+
+        <ix-modal id="clone-modal" header-title="Clone Repository">
+            <div class="modal-content">
+                <p>Choose where to clone the repository:</p>
+                <ix-input
+                    id="clone-path-input"
+                    label="Local Path"
+                    placeholder="Enter path or leave empty for default">
+                </ix-input>
+            </div>
+            <ix-button slot="footer" variant="secondary" onclick="closeCloneModal()">
+                Cancel
+            </ix-button>
+            <ix-button slot="footer" variant="primary" onclick="confirmClone()">
+                Clone Repository
+            </ix-button>
+        </ix-modal>
+    </ix-application>
+    
+    <script src="marketplace.js"></script>
+</body>
+</html>
