@@ -46,7 +46,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     serverContext: Vrpc.ServerContext,
     request: Vrpc.Variant,
   ): Promise<Vrpc.Variant> {
-    const organizationName = request.toString();
+    const organizationName = request.getString();
     console.log("Fetching repositories for organization:", organizationName);
 
     const orgRepos = await this._addOnHandler.listOrganizationRepositories(
@@ -67,7 +67,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     serverContext: Vrpc.ServerContext,
     request: Vrpc.Variant,
   ): Promise<Vrpc.Variant> {
-    const directory = request.toString();
+    const directory = request.getString();
     console.log("Pulling latest changes in directory:", directory);
 
     await this._addOnHandler.pullRepository(directory);
@@ -90,7 +90,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     if (!urlVariant) {
       throw new Error('Missing required "url" parameter in mapping');
     }
-    repositoryURL = urlVariant.toString();
+    repositoryURL = urlVariant.getString();
 
     // Extract optional parameters from mapping
     const branchVariant = mapping.get(Vrpc.Variant.createString("branch"));
@@ -98,8 +98,8 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       Vrpc.Variant.createString("targetDirectory"),
     );
 
-    targetDir = targetDirVariant ? targetDirVariant.toString() : undefined;
-    branch = branchVariant ? branchVariant.toString() : undefined;
+    targetDir = targetDirVariant ? targetDirVariant.getString() : undefined;
+    branch = branchVariant ? branchVariant.getString() : undefined;
 
     console.log("Cloning repository:", repositoryURL);
     if (targetDir) console.log("Target directory:", targetDir);
