@@ -24,9 +24,9 @@ class MarketplaceClient
     stub = VrpcStub::createAndInitialize("marketplace", new VrpcStubOptions());
   }
 
-  public anytype listRepos()
+  public anytype listRepos(string organization = "winccoa")
   {
-    VrpcResponseData response = stub.callFunction("listRepos", nullptr);
+    VrpcResponseData response = stub.callFunction("listRepos", organization);
     return jsonDecode(response.getResponse());
   }
 
