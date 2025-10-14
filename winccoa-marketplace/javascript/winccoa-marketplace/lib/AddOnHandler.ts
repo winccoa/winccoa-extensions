@@ -6,6 +6,7 @@ import * as fs from "fs";
 import * as os from "os";
 import { WinccoaCtrlScript, WinccoaCtrlType, WinccoaManager } from "winccoa-manager";
 import { AsciiManager } from "./AsciiManager";
+import { NodeInstaller } from "./NodeInstaller";
 
 
 // Export the class for use in other modules
@@ -236,7 +237,9 @@ dyn_dyn_string listSubProjs()
 );
 
 async registerSubProject(path: string): Promise<number> {
-  return await this.ctrlScript.start("registerSubProj", [path], [WinccoaCtrlType.string]) as number;
+  const ret = await this.ctrlScript.start("registerSubProj", [path], [WinccoaCtrlType.string]) as number;
+  await NodeInstaller.installAndBuild(path);
+  return ret;
 }
 
 async unregisterSubProject(path: string): Promise<number> {
