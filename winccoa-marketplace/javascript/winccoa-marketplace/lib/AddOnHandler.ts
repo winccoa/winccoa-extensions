@@ -5,6 +5,8 @@ import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
 import { WinccoaCtrlScript, WinccoaCtrlType, WinccoaManager } from "winccoa-manager";
+import { AsciiManager } from "./AsciiManager";
+
 
 // Export the class for use in other modules
 export { AddOnHandler };
@@ -685,6 +687,24 @@ async listSubProjects(): Promise<string[]> {
       } else {
         throw new Error(
           `Failed to list organization repositories: ${error.message}`,
+        );
+      }
+    }
+  }
+
+  public async importAsciiFiles(fileList: string | string[]): Promise<void> {
+    // Convert single file to array for uniform processing
+    const files = Array.isArray(fileList) ? fileList : [fileList];
+    
+    for (const file of files) {
+      try {
+        if (!(await AsciiManager.import(winccoa, file))) {
+          console.error(`[importAsciiFiles] Failed to import: ${file}`);
+        }
+      } catch (error) {
+        console.error(
+          `[importAsciiFiles] Exception while importing ${file}:`,
+          error,
         );
       }
     }
