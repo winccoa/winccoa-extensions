@@ -5,6 +5,9 @@ import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
 
+// Export the class for use in other modules
+export { AddOnHandler, RepositoryInfo };
+
 /**
  * Simple script to clone a public GitHub repository using octokit.js
  *
@@ -150,31 +153,6 @@ function getTargetCloneDirectory(): string {
   const targetDir = path.join(currentDir, "marketplace-repos");
   console.log(`Using current directory as target: ${targetDir}`);
   return targetDir;
-}
-
-/**
- * Execute a command safely in WinCC OA environment
- * @param command Command to execute
- * @param options Execution options
- * @returns Command output
- */
-function safeExecSync(command: string, options: { cwd?: string } = {}): string {
-  try {
-    const result = execSync(command, {
-      encoding: "utf8",
-      cwd: options.cwd,
-      timeout: 300000, // 5 minute timeout
-      stdio: ["pipe", "pipe", "pipe"], // Use pipes for Windows compatibility
-    });
-    return result.toString();
-  } catch (error: any) {
-    // Git commands sometimes return non-zero exit codes for informational messages
-    if (error.stdout) {
-      console.log("Command output:", error.stdout);
-      return error.stdout;
-    }
-    throw error;
-  }
 }
 
 // Target directory where repositories will be cloned
@@ -544,6 +522,88 @@ class AddOnHandler {
       return `repo-${Date.now()}`;
     } catch (error) {
       return `repo-${Date.now()}`;
+    }
+  }
+
+  /**
+   * Pull latest changes from a git repository
+   * @param repositoryDirectory Absolute path to the repository directory
+   * @returns Pull result with summary information
+   */
+  async pullRepository(repositoryDirectory: string): Promise<any> {
+    try {
+      // Verify the directory exists
+      if (!fs.existsSync(repositoryDirectory)) {
+        throw new Error(
+          `Repository directory does not exist: ${repositoryDirectory}`,
+        );
+      }
+
+      // Verify it's a git repository (check for .git directory)
+      const gitDir = path.join(repositoryDirectory, ".git");
+      if (!fs.existsSync(gitDir)) {
+        throw new Error(
+          `Directory is not a git repository: ${repositoryDirectory}`,
+        );
+      }
+
+      console.log(
+        `Pulling latest changes from repository: ${repositoryDirectory}`,
+      );
+
+      // Use simple-git for pull operation
+      const git = simpleGit(repositoryDirectory);
+      const pullResult = await git.pull();
+
+      if (pullResult.summary.changes) {
+        console.log(
+          `Pull completed: ${pullResult.summary.changes} changes, ${pullResult.summary.insertions} insertions, ${pullResult.summary.deletions} deletions`,
+        );
+      } else {
+        console.log("Repository is already up to date");
+      }
+
+      console.log("Git pull completed successfully!");
+
+      return {
+        success: true,
+        message: "Repository updated successfully",
+        directory: repositoryDirectory,
+        changes: pullResult.summary.changes || 0,
+        insertions: pullResult.summary.insertions || 0,
+        deletions: pullResult.summary.deletions || 0,
+        files: pullResult.files || [],
+        updatedAt: new Date().toISOString(),
+      };
+    } catch (error: any) {
+      console.error(
+        `Failed to pull repository at ${repositoryDirectory}:`,
+        error.message,
+      );
+
+      // Provide more specific error messages
+      if (error.message.includes("not a git repository")) {
+        throw new Error(
+          `Directory is not a git repository: ${repositoryDirectory}`,
+        );
+      } else if (error.message.includes("does not exist")) {
+        throw new Error(
+          `Repository directory does not exist: ${repositoryDirectory}`,
+        );
+      } else if (
+        error.message.includes("Permission denied") ||
+        error.message.includes("authentication")
+      ) {
+        throw new Error(
+          `Authentication failed for repository at: ${repositoryDirectory}`,
+        );
+      } else if (error.message.includes("merge conflict")) {
+        throw new Error(
+          `Merge conflicts detected in repository at: ${repositoryDirectory}. Please resolve conflicts manually.`,
+        );
+      } else {
+        throw new Error(`Failed to pull repository: ${error.message}`);
+      }
     }
   }
 
@@ -943,9 +1003,6 @@ async function main() {
     process.exit(1);
   }
 }
-
-// Export the class for use in other modules
-export { AddOnHandler, RepositoryInfo };
 
 // Run the example if this script is executed directly (not imported as a module)
 if (require.main === module) {

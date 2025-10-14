@@ -67,6 +67,11 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     serverContext: Vrpc.ServerContext,
     request: Vrpc.Variant,
   ): Promise<Vrpc.Variant> {
+    const directory = request.toString();
+    console.log("Pulling latest changes in directory:", directory);
+
+    await this._addOnHandler.pullRepository(directory);
+
     return Vrpc.Variant.createUndefined();
   }
 
