@@ -164,7 +164,7 @@ class AddOnHandler {
 int registerSubProj(string path)
 {
   string projName;
-  string pathParts;
+  dyn_string pathParts;
 
   strreplace(path, "//", "/");
   pathParts = strsplit(path, "/");
@@ -174,10 +174,11 @@ int registerSubProj(string path)
     projName = pathParts[dynlen(pathParts)];
   }
 
+  path = "";
   for (int i = 1; i <= dynlen(pathParts) - 1; i++)
     path += pathParts[i] + "/";
 
-  int ret = paRegProj(projName, path, "", 0, false);
+  int ret = paRegProj(projName, path, "", 0, true);
 
   if (ret < 0)
   {
@@ -202,7 +203,7 @@ int unregisterSubProj(string path)
   dyn_string subProjects;
 
   strreplace(path, "//", "/");
-  string pathParts = strsplit(path, "/");
+  dyn_string pathParts = strsplit(path, "/");
 
   if (dynlen(pathParts) > 0)
   {
@@ -211,7 +212,7 @@ int unregisterSubProj(string path)
 
   paGetSubProjs(PROJ, subProjects);
 
-  if (!subProjects.contains(projName))
+  if (subProjects.contains(projName))
   {
     int idx = subProjects.indexOf(projName, 0);
     subProjects.removeAt(idx);
