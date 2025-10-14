@@ -161,19 +161,6 @@ class AddOnHandler {
   `
 #uses "CtrlPv2Admin"
 
-main()
-{
-  string projName = "winccoa-marketplace";
-  string path = "C:/repos/WinCCOA-Hub/winccoa-marketplace/";
-
-  dyn_string subProjects;
-  paGetSubProjs(PROJ, subProjects);
-  paSetSubProjs(PROJ, subProjects);
-  int ret = paRegProj(projName, path, "", 0, false);
-  paDelProj(projName, true);
-  int ret = paRegProj(projName, path, "", 0, false);
-}
-
 int registerSubProj(string path)
 {
   string projName;
