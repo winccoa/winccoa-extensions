@@ -27,31 +27,34 @@ class MarketplaceClient
   public anytype listRepos(string organization = "winccoa")
   {
     VrpcResponseData response = stub.callFunction("listRepos", organization);
+    DebugTN(__FUNCTION__, "VRPC STATUS: ", response.getStatus());
     return jsonDecode(response.getResponse());
   }
 
-  public bool clone(string url, string path = "")
+  public string clone(string url, string path = "")
   {
-    mapping request = makeMapping("url", url, "path", path);
+    mapping request = makeMapping("url", url, "targetDirectory", path);
     VrpcResponseData response = stub.callFunction("clone", request);
+    DebugTN(__FUNCTION__, "VRPC STATUS: ", response.getStatus());
     return response.getResponse();
   }
 
-  public bool pull(string urlOrName)
+  public int pull(string urlOrName)
   {
     VrpcResponseData response = stub.callFunction("pull", urlOrName);
+    DebugTN(__FUNCTION__, "VRPC STATUS: ", response.getStatus());
     return response.getResponse();
   }
 
-  public bool regSubProject(string path)
+  public bool registerSubProjects(dyn_string paths)
   {
-    VrpcResponseData response = stub.callFunction("register", path);
+    VrpcResponseData response = stub.callFunction("register", paths);
     return response.getResponse();
   }
 
-  public bool unregister(string path)
+  public bool unregisterSubProjects(dyn_string paths)
   {
-    VrpcResponseData response = stub.callFunction("unregister", path);
+    VrpcResponseData response = stub.callFunction("unregister", paths);
     return response.getResponse();
   }
 

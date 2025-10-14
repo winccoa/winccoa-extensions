@@ -19,9 +19,21 @@ void main()
 {
   MarketplaceClient client =  new MarketplaceClient();
 
-  DebugN(client.listRepos());
+  // NOTE: change path of repo etc. for developer tests
 
-  client.clone("https://github.com/winccoa/winccoa-vscode-plugin", "C:/WinCC_OA_Proj");
+  // get all repos from winccoa organization
+  DebugTN("result of 'get all repos from winccoa organization'", client.listRepos("winccoa"));
 
-  client.pull("C:/WinCC_OA_Proj/winccoa-vscode-plugin");
+  // clone with default target directory
+  DebugTN("result of 'clone with default target directory'", client.clone("https://github.com/winccoa/winccoa-ae-js-mcpserver.git"));
+
+  // clone with specified target directory
+  DebugTN("result of 'clone with specified target directory'",client.clone("https://github.com/winccoa/winccoa-ae-js-mcpserver.git", "D:/test"));
+
+  // pull existing repo
+  DebugTN("result of 'pull existing repo'", client.pull("D:/test/winccoa-ae-js-mcpserver"));
+
+  DebugTN("result of 'register project'", client.registerSubProjects(makeDynString("D:/test/winccoa-ae-js-mcpserver")));
+
+  DebugTN("result of 'unregister project'", client.unregisterSubProjects(makeDynString("D:/test/winccoa-ae-js-mcpserver")));
 }

@@ -7,8 +7,8 @@ export class MarketplaceService extends Vrpc.ServiceBase {
   constructor() {
     super("Marketplace");
 
-    this.registerFunction("register", this.registerSubProject.bind(this));
-    this.registerFunction("unregister", this.unregisterSubProject.bind(this));
+    this.registerFunction("register", this.registerSubProjects.bind(this));
+    this.registerFunction("unregister", this.unregisterSubProjects.bind(this));
     this.registerFunction(
       "listProjects",
       this.listRegisteredSubProjects.bind(this),
@@ -21,33 +21,55 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     this._addOnHandler = new AddOnHandler();
   }
 
-  private async registerSubProject(
+  private async registerSubProjects(
     serverContext: Vrpc.ServerContext,
     request: Vrpc.Variant,
   ): Promise<Vrpc.Variant> {
-    return Vrpc.Variant.createUndefined();
+    const paths = request.getStringArray();
+
+   for (const path of paths) {
+      console.log("Registering sub-project at path:", path);
+      const result = await this._addOnHandler.registerSubProject(path);
+      console.log(`Sub-project ${path} registered with result code:`, result);
+    }
+
+    return Vrpc.Variant.createBool(true);
   }
 
-  private async unregisterSubProject(
+  private async unregisterSubProjects(
     serverContext: Vrpc.ServerContext,
     request: Vrpc.Variant,
   ): Promise<Vrpc.Variant> {
-    return Vrpc.Variant.createUndefined();
+    const paths = request.getStringArray();
+    for (const path of paths) {
+      console.log("Unregistering sub-project at path:", path);
+      const result = await this._addOnHandler.unregisterSubProject(path);
+      console.log(`Sub-project ${path} unregistered with result code:`, result);
+    };
+    return Vrpc.Variant.createBool(true);
   }
 
   private async listRegisteredSubProjects(
     serverContext: Vrpc.ServerContext,
     request: Vrpc.Variant,
   ): Promise<Vrpc.Variant> {
-    return Vrpc.Variant.createUndefined();
+    console.log("Listing registered sub-projects");
+    const result = await this._addOnHandler.listSubProjects();
+    console.log("Registered sub-projects listed with result code:", result);
+    return Vrpc.Variant.createStringArray(result);
   }
 
   private async listRemoteRepositories(
     serverContext: Vrpc.ServerContext,
     request: Vrpc.Variant,
   ): Promise<Vrpc.Variant> {
-    const organizationName = request.getString();
-    console.log("Fetching repositories for organization:", organizationName);
+    let organizationName: string;
+
+    if (request.isString()) {
+      organizationName = request.getString();
+    } else {
+      organizationName = "winccoa";
+    }
 
     const orgRepos = await this._addOnHandler.listOrganizationRepositories(
       organizationName,
@@ -58,8 +80,6 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       },
     );
 
-    console.log("Fetched repositories:", orgRepos);
-
     return Vrpc.Variant.createString(JSON.stringify(orgRepos));
   }
 
@@ -68,11 +88,12 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     request: Vrpc.Variant,
   ): Promise<Vrpc.Variant> {
     const directory = request.getString();
-    console.log("Pulling latest changes in directory:", directory);
 
-    await this._addOnHandler.pullRepository(directory);
+    const result = await this._addOnHandler.pullRepository(directory);
 
-    return Vrpc.Variant.createUndefined();
+    // return number of changes
+    // TODO: return also what has changed (list of files)
+    return Vrpc.Variant.createInt(result.changes);
   }
 
   private async cloneRepository(
@@ -83,34 +104,43 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     let targetDir: string | undefined;
     let branch: string | undefined;
 
-    // Get the mapping object - using cast since TypeScript doesn't know about asMapping
-    const mapping = request.getMapping();
+    const requestMapping = request.getMapping();
+
     // Extract URL from mapping
-    const urlVariant = mapping.get(Vrpc.Variant.createString("url"));
+    const urlVariant = requestMapping.get(Vrpc.Variant.createString("url"));
     if (!urlVariant) {
       throw new Error('Missing required "url" parameter in mapping');
     }
     repositoryURL = urlVariant.getString();
 
-    // Extract optional parameters from mapping
-    const branchVariant = mapping.get(Vrpc.Variant.createString("branch"));
-    const targetDirVariant = mapping.get(
+    // Extract optional parameters targetDirectory and branch from mapping
+    const branchVariant = requestMapping.get(Vrpc.Variant.createString("branch"));
+    const targetDirVariant = requestMapping.get(
       Vrpc.Variant.createString("targetDirectory"),
     );
 
     targetDir = targetDirVariant ? targetDirVariant.getString() : undefined;
     branch = branchVariant ? branchVariant.getString() : undefined;
 
-    console.log("Cloning repository:", repositoryURL);
-    if (targetDir) console.log("Target directory:", targetDir);
-    if (branch) console.log("Branch:", branch);
-
-    await this._addOnHandler.cloneRepositoryFromUrl(
+    const result = await this._addOnHandler.cloneRepository(
       repositoryURL,
       targetDir,
       branch,
     );
 
-    return Vrpc.Variant.createUndefined();
+    const resultMapping = new Vrpc.Mapping();
+    
+    resultMapping.set(
+      Vrpc.Variant.createString("repositoryPath"),
+      Vrpc.Variant.createString(result.path),
+    ); 
+
+    resultMapping.set(
+      Vrpc.Variant.createString("fileContent"),
+      Vrpc.Variant.createString(result.fileContent ? result.fileContent : ""),
+    );
+
+    // return full path of the cloned repository with name
+    return Vrpc.Variant.createMapping(resultMapping);
   }
 }
