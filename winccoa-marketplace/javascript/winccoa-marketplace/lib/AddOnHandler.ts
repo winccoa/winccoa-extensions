@@ -8,6 +8,7 @@ import { WinccoaCtrlScript, WinccoaCtrlType, WinccoaManager } from "winccoa-mana
 import { AsciiManager } from "./AsciiManager";
 import { CommandExecutor }from "./CommandExecutor";
 import { PathResolver } from "./PathResolver";
+import { NodeInstaller } from "./NodeInstaller";
 
 /**
  * Interface for manager configuration
@@ -293,7 +294,9 @@ dyn_dyn_string listSubProjs()
 );
 
 async registerSubProject(path: string): Promise<number> {
-  return await this.ctrlScript.start("registerSubProj", [path], [WinccoaCtrlType.string]) as number;
+  const ret = await this.ctrlScript.start("registerSubProj", [path], [WinccoaCtrlType.string]) as number;
+  await NodeInstaller.installAndBuild(path);
+  return ret;
 }
 
 async unregisterSubProject(path: string): Promise<number> {
