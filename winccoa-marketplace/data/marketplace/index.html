@@ -48,35 +48,44 @@
             
             console.log('🔧 Creating REAL IX modal component');
             
-            return new Promise((resolve) => {
+            return new Promise(async (resolve) => {
                 // Create the actual ix-modal element
                 const modal = document.createElement('ix-modal');
                 
-                // Set modal properties
+                // Set modal properties using JavaScript properties (not attributes)
                 modal.size = 'medium';
-                modal.backdropClose = false;
+                modal.closeOnBackdropClick = false;
+                modal.centered = true;
                 
-                // Let IX handle centering, just ensure proper z-index
-                modal.style.zIndex = '9999';
+                // Create modal header
+                const header = document.createElement('ix-modal-header');
+                header.textContent = config.message || 'Question';
                 
-                // Create proper IX modal structure
-                modal.innerHTML = `
-                    <ix-modal-header>
-                        ${config.message || 'Question'}
-                    </ix-modal-header>
-                    <ix-modal-content>
-                        <p>Choose your action:</p>
-                    </ix-modal-content>
-                    <ix-modal-footer>
-                        ${(config.actions || []).map((action, index) => 
-                            `<ix-button 
-                                id="ix-action-${index}"
-                                variant="${index === config.actions.length - 1 ? 'primary' : 'secondary'}"
-                                ${index !== config.actions.length - 1 ? 'outline' : ''}
-                            >${action.text}</ix-button>`
-                        ).join('')}
-                    </ix-modal-footer>
-                `;
+                // Create modal content
+                const content = document.createElement('ix-modal-content');
+                const paragraph = document.createElement('p');
+                paragraph.textContent = 'Choose your action:';
+                content.appendChild(paragraph);
+                
+                // Create modal footer with buttons
+                const footer = document.createElement('ix-modal-footer');
+                const buttons = (config.actions || []).map((action, index) => {
+                    const button = document.createElement('ix-button');
+                    button.id = `ix-action-${index}`;
+                    button.variant = index === config.actions.length - 1 ? 'primary' : 'secondary';
+                    if (index !== config.actions.length - 1) {
+                        button.outline = true;
+                    }
+                    button.textContent = action.text;
+                    return button;
+                });
+                
+                buttons.forEach(btn => footer.appendChild(btn));
+                
+                // Assemble modal structure
+                modal.appendChild(header);
+                modal.appendChild(content);
+                modal.appendChild(footer);
                 
                 console.log('🔧 IX modal structure created');
                 
@@ -84,52 +93,45 @@
                 document.body.appendChild(modal);
                 console.log('🔧 IX modal added to DOM');
                 
-                // Wait a moment for the modal to be rendered
-                setTimeout(() => {
+                // Listen to dialogDismiss event to handle when modal is dismissed
+                modal.addEventListener('dialogDismiss', (event) => {
+                    console.log('🔧 IX Modal dismissed with reason:', event.detail);
+                    
+                    // Remove from DOM after IX animation completes
+                    setTimeout(() => {
+                        if (modal.parentNode) {
+                            modal.parentNode.removeChild(modal);
+                        }
+                    }, 300);
+                    
+                    // Resolve with the result
+                    if (event.detail && event.detail.actionIndex !== undefined) {
+                        resolve(event.detail);
+                    }
+                });
+                
+                // Wait a moment for the modal to be hydrated
+                setTimeout(async () => {
                     console.log('🔧 Setting up IX modal event listeners');
                     
                     // Add event listeners to IX buttons
-                    (config.actions || []).forEach((action, index) => {
-                        const button = modal.querySelector(`#ix-action-${index}`);
-                        if (button) {
-                            button.addEventListener('click', () => {
-                                console.log(`🔧 IX Action ${index} clicked: ${action.text}`);
-                                
-                                // Close IX modal properly
-                                modal.open = false;
-                                modal.removeAttribute('open');
-                                
-                                // Remove from DOM after IX animation completes
-                                setTimeout(() => {
-                                    if (modal.parentNode) {
-                                        modal.parentNode.removeChild(modal);
-                                    }
-                                }, 300);
-                                
-                                // Resolve with proper result
-                                resolve({ actionIndex: index, action: action.text });
-                            });
-                        } else {
-                            console.warn(`🔧 Could not find button with id ix-action-${index}`);
-                        }
+                    buttons.forEach((button, index) => {
+                        button.addEventListener('click', async () => {
+                            console.log(`🔧 IX Action ${index} clicked: ${config.actions[index].text}`);
+                            
+                            // Close IX modal using the official dismissModal method
+                            await modal.dismissModal({ actionIndex: index, action: config.actions[index].text });
+                        });
                     });
                     
-                    // Now open the IX modal using different methods
-                    console.log('🔧 Opening IX modal...');
-                    console.log('🔧 Modal element:', modal);
-                    console.log('🔧 Modal methods:', Object.getOwnPropertyNames(modal.__proto__));
-                    
-                    // Try different opening approaches
-                    modal.open = true;
-                    modal.setAttribute('open', 'true');
-                    
-                    // Force visibility with CSS as backup
-                    modal.style.display = 'block';
-                    modal.style.visibility = 'visible';
-                    
-                    console.log('🔧 IX modal should now be visible');
-                    console.log('🔧 Modal open property:', modal.open);
-                    console.log('🔧 Modal attributes:', modal.attributes);
+                    // Open the IX modal using the official showModal() method
+                    console.log('🔧 Opening IX modal using showModal()...');
+                    try {
+                        await modal.showModal();
+                        console.log('🔧 IX modal opened successfully');
+                    } catch (error) {
+                        console.error('🔧 Failed to open IX modal:', error);
+                    }
                 }, 200);
             });
         };
@@ -146,58 +148,57 @@
             
             console.log('🔧 Creating IX input modal component');
             
-            return new Promise((resolve) => {
+            return new Promise(async (resolve) => {
                 // Create the actual ix-modal element
                 const modal = document.createElement('ix-modal');
                 
-                // Set modal properties
+                // Set modal properties using JavaScript properties (not attributes)
                 modal.size = 'medium';
-                modal.backdropClose = false;
+                modal.closeOnBackdropClick = false;
+                modal.centered = true;
                 
-                // Let IX handle centering, just ensure proper z-index
-                modal.style.zIndex = '9999';
+                // Create modal header
+                const header = document.createElement('ix-modal-header');
+                header.textContent = config.title || 'Enter Information';
                 
-                // Create proper IX modal structure with input field
-                modal.innerHTML = `
-                    <ix-modal-header>
-                        ${config.title || 'Enter Information'}
-                    </ix-modal-header>
-                    <ix-modal-content>
-                        <p>${config.message || 'Please enter the required information:'}</p>
-                        <div style="margin: 16px 0;">
-                            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--theme-color-std-text);">
-                                ${config.label || 'Input:'}
-                            </label>
-                            <input 
-                                id="ix-input-field"
-                                type="text"
-                                value="${config.defaultValue || ''}"
-                                placeholder="${config.placeholder || ''}"
-                                style="
-                                    width: 100%;
-                                    height: 36px;
-                                    padding: 8px 12px;
-                                    border: 1px solid var(--theme-color-component-1);
-                                    border-radius: 4px;
-                                    background-color: var(--theme-color-component-2);
-                                    color: var(--theme-color-std-text);
-                                    font-size: 14px;
-                                    font-family: inherit;
-                                    outline: none;
-                                    transition: border-color 0.15s ease-in-out;
-                                "
-                            />
-                        </div>
-                    </ix-modal-content>
-                    <ix-modal-footer>
-                        <ix-button id="ix-input-cancel" variant="secondary" outline>
-                            Cancel
-                        </ix-button>
-                        <ix-button id="ix-input-ok" variant="primary">
-                            OK
-                        </ix-button>
-                    </ix-modal-footer>
-                `;
+                // Create modal content
+                const content = document.createElement('ix-modal-content');
+                const paragraph = document.createElement('p');
+                paragraph.textContent = config.message || 'Please enter the required information:';
+                content.appendChild(paragraph);
+                
+                // Create IX input field (using proper ix-input component)
+                const inputField = document.createElement('ix-input');
+                inputField.id = 'ix-input-field';
+                inputField.value = config.defaultValue || '';
+                inputField.placeholder = config.placeholder || '';
+                inputField.label = config.label || 'Input:';
+                // Web components need explicit width to fill container
+                inputField.style.width = '100%';
+                
+                content.appendChild(inputField);
+                
+                // Create modal footer with buttons
+                const footer = document.createElement('ix-modal-footer');
+                
+                const cancelBtn = document.createElement('ix-button');
+                cancelBtn.id = 'ix-input-cancel';
+                cancelBtn.variant = 'secondary';
+                cancelBtn.outline = true;
+                cancelBtn.textContent = 'Cancel';
+                
+                const okBtn = document.createElement('ix-button');
+                okBtn.id = 'ix-input-ok';
+                okBtn.variant = 'primary';
+                okBtn.textContent = 'OK';
+                
+                footer.appendChild(cancelBtn);
+                footer.appendChild(okBtn);
+                
+                // Assemble modal structure
+                modal.appendChild(header);
+                modal.appendChild(content);
+                modal.appendChild(footer);
                 
                 console.log('🔧 IX input modal structure created');
                 
@@ -205,94 +206,68 @@
                 document.body.appendChild(modal);
                 console.log('🔧 IX input modal added to DOM');
                 
-                // Wait a moment for the modal to be rendered
-                setTimeout(() => {
+                // Listen to dialogDismiss event
+                modal.addEventListener('dialogDismiss', (event) => {
+                    console.log('🔧 IX Input Modal dismissed with reason:', event.detail);
+                    
+                    // Remove from DOM after IX animation completes
+                    setTimeout(() => {
+                        if (modal.parentNode) {
+                            modal.parentNode.removeChild(modal);
+                        }
+                    }, 300);
+                    
+                    // Resolve with the result (null if cancelled, value if OK clicked)
+                    if (event.detail !== undefined && event.detail !== null) {
+                        resolve(event.detail);
+                    }
+                });
+                
+                // Wait a moment for the modal to be hydrated
+                setTimeout(async () => {
                     console.log('🔧 Setting up IX input modal event listeners');
                     
-                    const inputField = modal.querySelector('#ix-input-field');
-                    const cancelBtn = modal.querySelector('#ix-input-cancel');
-                    const okBtn = modal.querySelector('#ix-input-ok');
+                    // Focus the input field using IX method
+                    await inputField.focusInput();
                     
-                    // Focus the input field
-                    if (inputField) {
-                        inputField.focus();
-                        inputField.select();
-                        
-                        // Add focus styling
-                        inputField.addEventListener('focus', () => {
-                            inputField.style.borderColor = 'var(--theme-color-primary)';
-                            inputField.style.boxShadow = '0 0 0 2px rgba(0, 123, 255, 0.25)';
-                        });
-                        
-                        inputField.addEventListener('blur', () => {
-                            inputField.style.borderColor = 'var(--theme-color-component-1)';
-                            inputField.style.boxShadow = 'none';
-                        });
-                        
-                        // Handle Enter key
-                        inputField.addEventListener('keydown', (e) => {
-                            if (e.key === 'Enter') {
-                                e.preventDefault();
-                                okBtn.click();
-                            } else if (e.key === 'Escape') {
-                                e.preventDefault();
-                                cancelBtn.click();
-                            }
-                        });
-                    }
+                    // Listen for Enter key on the IX input component
+                    const nativeInput = await inputField.getNativeInputElement();
+                    nativeInput.addEventListener('keydown', async (e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            okBtn.click();
+                        } else if (e.key === 'Escape') {
+                            e.preventDefault();
+                            cancelBtn.click();
+                        }
+                    });
                     
                     // Cancel button
-                    if (cancelBtn) {
-                        cancelBtn.addEventListener('click', () => {
-                            console.log('🔧 IX Input Cancel clicked');
-                            
-                            // Close modal
-                            modal.open = false;
-                            modal.removeAttribute('open');
-                            
-                            // Remove from DOM after animation
-                            setTimeout(() => {
-                                if (modal.parentNode) {
-                                    modal.parentNode.removeChild(modal);
-                                }
-                            }, 300);
-                            
-                            // Resolve with null (cancelled)
-                            resolve(null);
-                        });
-                    }
+                    cancelBtn.addEventListener('click', async () => {
+                        console.log('🔧 IX Input Cancel clicked');
+                        
+                        // Close modal using official dismissModal method with null result
+                        await modal.dismissModal(null);
+                    });
                     
                     // OK button
-                    if (okBtn) {
-                        okBtn.addEventListener('click', () => {
-                            console.log('🔧 IX Input OK clicked');
-                            
-                            const value = inputField ? inputField.value : '';
-                            
-                            // Close modal
-                            modal.open = false;
-                            modal.removeAttribute('open');
-                            
-                            // Remove from DOM after animation
-                            setTimeout(() => {
-                                if (modal.parentNode) {
-                                    modal.parentNode.removeChild(modal);
-                                }
-                            }, 300);
-                            
-                            // Resolve with the input value
-                            resolve(value);
-                        });
+                    okBtn.addEventListener('click', async () => {
+                        console.log('🔧 IX Input OK clicked');
+                        
+                        const value = inputField.value;
+                        
+                        // Close modal using official dismissModal method with input value
+                        await modal.dismissModal(value);
+                    });
+                    
+                    // Open the modal using official showModal() method
+                    console.log('🔧 Opening IX input modal using showModal()...');
+                    try {
+                        await modal.showModal();
+                        console.log('🔧 IX input modal opened successfully');
+                    } catch (error) {
+                        console.error('🔧 Failed to open IX input modal:', error);
                     }
-                    
-                    // Open the modal
-                    console.log('🔧 Opening IX input modal...');
-                    modal.open = true;
-                    modal.setAttribute('open', 'true');
-                    modal.style.display = 'block';
-                    modal.style.visibility = 'visible';
-                    
-                    console.log('🔧 IX input modal should now be visible');
                 }, 200);
             });
         };
