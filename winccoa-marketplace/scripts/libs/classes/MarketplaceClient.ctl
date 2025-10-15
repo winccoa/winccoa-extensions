@@ -31,7 +31,7 @@ class MarketplaceClient
     return jsonDecode(response.getResponse());
   }
 
-  public string clone(string url, string path = "")
+  public mapping clone(string url, string path = "")
   {
     mapping request = makeMapping("url", url, "targetDirectory", path);
     VrpcResponseData response = stub.callFunction("clone", request);
@@ -39,22 +39,22 @@ class MarketplaceClient
     return response.getResponse();
   }
 
-  public int pull(string urlOrName)
+  public mapping pull(string urlOrName)
   {
     VrpcResponseData response = stub.callFunction("pull", urlOrName);
     DebugTN(__FUNCTION__, "VRPC STATUS: ", response.getStatus());
     return response.getResponse();
   }
 
-  public bool registerSubProjects(dyn_string paths)
+  public bool registerSubProjects(mapping request)
   {
-    VrpcResponseData response = stub.callFunction("register", paths);
+    VrpcResponseData response = stub.callFunction("register", request);
     return response.getResponse();
   }
 
-  public bool unregisterSubProjects(dyn_string paths)
+  public bool unregisterSubProjects(mapping request)
   {
-    VrpcResponseData response = stub.callFunction("unregister", paths);
+    VrpcResponseData response = stub.callFunction("unregister", request);
     return response.getResponse();
   }
 
