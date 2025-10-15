@@ -225,6 +225,10 @@ class AddOnHandler {
     console.log(`Target clone directory: ${this._defaultDirectory}`);
   }
 
+  getDefaultAddonPath(): string {
+    return this._defaultDirectory;
+  }
+
   /**
    * Check if the current authentication is valid
    */
