@@ -1,5 +1,6 @@
 import { Vrpc } from "winccoa-manager";
 import { AddOnHandler, Manager } from "./AddOnHandler";
+import * as pathModule from "path";
 
 export class MarketplaceService extends Vrpc.ServiceBase {
   private _addOnHandler: AddOnHandler;
@@ -29,11 +30,6 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       console.log("check if request is mapping:", request.isMapping());
       const requestMapping = request.getMapping();
 
-      // Convert mapping to JavaScript object for easier access
-      const requestObject = requestMapping.convertToObject() as any;
-
-      console.log("requestObject:", requestObject);
-
       // Extract repositoryPath using requestMapping for the keys
       const repositoryPathVariant = requestMapping.get(
         Vrpc.Variant.createString("repositoryPath"),
@@ -45,19 +41,9 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       }
       const repositoryPath = repositoryPathVariant.getString();
       console.log("-------- repositoryPath:", repositoryPath);
-      const config: import("./AddonConfig").AddonConfig = {
-        RepoName: "",
-        Keywords: [],
-        Subproject: "",
-        Version: "1.0.0",
-        Description: "",
-        OaVersion: "",
-        Managers: [],
-        Dplists: [],
-        UpdateScripts: []
-      };
+
       // Extract fileContent using requestMapping for the keys
-      const result = await this._addOnHandler.registerSubProject(path);
+      const fileContentVariant = requestMapping.get(
         Vrpc.Variant.createString("fileContent"),
       );
       if (!fileContentVariant) {
@@ -66,14 +52,57 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       const fileContent = fileContentVariant.getString();
       console.log("-------- fileContent:", fileContent);
 
-      const result =
-        await this._addOnHandler.registerSubProject(repositoryPath);
+      // Parse the JSON string to get addon configurations
+      let addonConfigs: any[];
+      try {
+        const parsedContent = JSON.parse(fileContent);
+        // Handle both single object and array of objects
+        addonConfigs = Array.isArray(parsedContent)
+          ? parsedContent
+          : [parsedContent];
+      } catch (error) {
+        throw new Error(`Invalid JSON in fileContent: ${error}`);
+      }
 
-      console.log(
-        `Sub-project ${repositoryPath} registered with result code:`,
-        result,
+      // Map each parsed config to AddonConfig interface
+      const configs: import("./AddonConfig").AddonConfig[] = addonConfigs.map(
+        (jsonConfig: any) => ({
+          RepoName: jsonConfig.RepoName,
+          Keywords: jsonConfig.Keywords,
+          Subproject: jsonConfig.Subproject,
+          Version: jsonConfig.Version,
+          Description: jsonConfig.Description,
+          OaVersion: jsonConfig.OaVersion,
+          Managers: jsonConfig.Managers
+            ? jsonConfig.Managers.map((manager: any) => ({
+                Name: manager.Name || "",
+                StartMode: manager.StartMode || "Unknown",
+                Options: manager.Options || "",
+              }))
+            : [],
+          Dplists: jsonConfig.Dplists || [],
+          UpdateScripts: jsonConfig.UpdateScripts || [],
+        }),
       );
 
+      console.log("--------- Parsed addon configurations:", configs);
+
+      // Register each addon configuration
+      const results: any[] = [];
+      for (const config of configs) {
+        const result = await this._addOnHandler.registerSubProject(
+          repositoryPath,
+          config.Subproject,
+          config,
+        );
+        results.push(result);
+        console.log(
+          `Sub-project ${config.RepoName || "unnamed"} at ${repositoryPath} registered with result code:`,
+          result,
+        );
+      }
+
+      console.log(`All ${configs.length} sub-projects registered successfully`);
       return Vrpc.Variant.createBool(true);
     } catch (error) {
       console.error("Error in registerSubProjects:", error);
@@ -85,12 +114,83 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     serverContext: Vrpc.ServerContext,
     request: Vrpc.Variant,
   ): Promise<Vrpc.Variant> {
-    const paths = request.getStringArray();
-    for (const path of paths) {
-      console.log("Unregistering sub-project at path:", path);
-      const result = await this._addOnHandler.unregisterSubProject(path);
-      console.log(`Sub-project ${path} unregistered with result code:`, result);
+    const requestMapping = request.getMapping();
+
+    // Extract repositoryPath using requestMapping for the keys
+    const repositoryPathVariant = requestMapping.get(
+      Vrpc.Variant.createString("repositoryPath"),
+    );
+    if (!repositoryPathVariant) {
+      throw new Error('Missing required "repositoryPath" parameter in mapping');
     }
+    const repositoryPath = repositoryPathVariant.getString();
+    console.log("-------- repositoryPath:", repositoryPath);
+
+    // Extract if files shall be deleted
+    const deleteFileVariant = requestMapping.get(
+      Vrpc.Variant.createString("deleteFiles"),
+    );
+    if (!deleteFileVariant) {
+      throw new Error('Missing required "deleteFiles" parameter in mapping');
+    }
+    const deleteFiles = deleteFileVariant.getBool();
+    console.log("-------- deleteFiles:", deleteFiles);
+
+    // Extract fileContent using requestMapping for the keys
+    const fileContentVariant = requestMapping.get(
+      Vrpc.Variant.createString("fileContent"),
+    );
+    if (!fileContentVariant) {
+      throw new Error('Missing required "fileContent" parameter in mapping');
+    }
+    const fileContent = fileContentVariant.getString();
+    console.log("-------- fileContent:", fileContent);
+
+    // Parse the JSON string to get addon configurations
+    let addonConfigs: any[];
+    try {
+      const parsedContent = JSON.parse(fileContent);
+      // Handle both single object and array of objects
+      addonConfigs = Array.isArray(parsedContent)
+        ? parsedContent
+        : [parsedContent];
+    } catch (error) {
+      throw new Error(`Invalid JSON in fileContent: ${error}`);
+    }
+
+    // Map each parsed config to AddonConfig interface
+    const configs: import("./AddonConfig").AddonConfig[] = addonConfigs.map(
+      (jsonConfig: any) => ({
+        RepoName: jsonConfig.RepoName,
+        Keywords: jsonConfig.Keywords,
+        Subproject: jsonConfig.Subproject,
+        Version: jsonConfig.Version,
+        Description: jsonConfig.Description,
+        OaVersion: jsonConfig.OaVersion,
+        Managers: jsonConfig.Managers
+          ? jsonConfig.Managers.map((manager: any) => ({
+              Name: manager.Name || "",
+              StartMode: manager.StartMode || "Unknown",
+              Options: manager.Options || "",
+            }))
+          : [],
+        Dplists: jsonConfig.Dplists || [],
+        UpdateScripts: jsonConfig.UpdateScripts || [],
+      }),
+    );
+
+    for (const config of configs) {
+      const result = await this._addOnHandler.unregisterSubProject(
+        repositoryPath,
+        config.Subproject,
+        deleteFiles,
+      );
+      console.log(
+        `Sub-project ${config.Subproject} unregistered with result code:`,
+        result,
+      );
+    }
+
     return Vrpc.Variant.createBool(true);
   }
 
@@ -136,9 +236,25 @@ export class MarketplaceService extends Vrpc.ServiceBase {
 
     const result = await this._addOnHandler.pullRepository(directory);
 
-    // return number of changes
-    // TODO: return also what has changed (list of files)
-    return Vrpc.Variant.createInt(result.changes);
+    const resultMapping = new Vrpc.Mapping();
+
+    resultMapping.set(
+      Vrpc.Variant.createString("repositoryPath"),
+      Vrpc.Variant.createString(directory),
+    );
+
+    resultMapping.set(
+      Vrpc.Variant.createString("changes"),
+      Vrpc.Variant.createInt(result.changes),
+    );
+
+    resultMapping.set(
+      Vrpc.Variant.createString("fileContent"),
+      Vrpc.Variant.createString(result.fileContent ? result.fileContent : ""),
+    );
+
+    // return repository path, number of changes and file content
+    return Vrpc.Variant.createMapping(resultMapping);
   }
 
   private async cloneRepository(

@@ -8,19 +8,19 @@ interface AddonConfig {
   Managers?: ManagerConfig[];
   Dplists?: string[];
   UpdateScripts?: string[];
-} 
+}
 
 interface ManagerConfig {
-    Name: string;
-    StartMode: StartMode;
-    Options: string;
+  Name: string;
+  StartMode: StartMode;
+  Options: string;
 }
 
 enum StartMode {
-    Always = "always",
-    Manual = "manual",
-    Once = "once",
-    Unknown = ""
+  Always = "always",
+  Manual = "manual",
+  Once = "once",
+  Unknown = "",
 }
 
 export { AddonConfig, ManagerConfig, StartMode };
