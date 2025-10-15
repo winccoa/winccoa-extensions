@@ -59,6 +59,8 @@ export class AsciiManager {
         return false;
       }
 
+      console.log(`[AsciiManager.import] Executing command: ${command}`);
+
       const result = await CommandExecutor.execute(command);
       const exitCode = Number(result.exitCode);
 

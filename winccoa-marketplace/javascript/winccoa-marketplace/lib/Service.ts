@@ -1,5 +1,5 @@
 import { Vrpc } from "winccoa-manager";
-import { AddOnHandler } from "./AddOnHandler";
+import { AddOnHandler, Manager } from "./AddOnHandler";
 
 export class MarketplaceService extends Vrpc.ServiceBase {
   private _addOnHandler: AddOnHandler;
