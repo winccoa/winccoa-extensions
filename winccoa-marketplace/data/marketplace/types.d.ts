@@ -45,6 +45,8 @@ export interface Repository {
     cloneUrl?: string;
     sshUrl?: string;
     cloned?: boolean;
+    fileContent?: string; // JSON content from .winccoa-marketplace.json file
+    localPath?: string; // Local filesystem path where repository is cloned
 }
 
 export interface ApiError extends Error {

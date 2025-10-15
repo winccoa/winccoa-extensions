@@ -455,3 +455,27 @@ ix-toast-container ix-toast {
     margin-bottom: 8px;
     max-width: 400px;
 }
+
+/* JSON display styling */
+.json-display {
+    background-color: var(--theme-color-component-2);
+    border: 1px solid var(--theme-color-component-1);
+    border-radius: 4px;
+    padding: 12px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    color: var(--theme-color-std-text);
+    margin: 0;
+}
+
+.overview-card {
+    min-width: 0;
+}
+
+.overview-card#metadata-card {
+    grid-column: 1 / -1;
+}

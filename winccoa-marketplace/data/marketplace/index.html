@@ -528,6 +528,12 @@
                                     disabled>
                                     Unregister
                                 </ix-button>
+                                
+                                <ix-spinner 
+                                    id="action-loading-spinner" 
+                                    size="small"
+                                    style="display: none; margin-left: 12px;">
+                                </ix-spinner>
                             </div>
                         </div>
                         
@@ -562,6 +568,11 @@
                                             <ix-icon name="info" class="status-icon"></ix-icon>
                                             <span>Not cloned locally</span>
                                         </div>
+                                    </div>
+                                    
+                                    <div id="metadata-card" class="overview-card" style="display: none;">
+                                        <h4>Repository Metadata</h4>
+                                        <pre id="file-content-json" class="json-display"></pre>
                                     </div>
                                 </div>
                             </div>

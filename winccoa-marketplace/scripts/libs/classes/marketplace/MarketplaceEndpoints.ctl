@@ -31,10 +31,10 @@ class MarketplaceEndpoints
     const string MARKETPLACE_URL_PREFIX = "/marketplace";
 
     httpConnect(listRepos, MARKETPLACE_URL_PREFIX + "/listRepos", "application/json");
-    httpConnect(cloneRepo, MARKETPLACE_URL_PREFIX + "/cloneRepo", "application/json");
-    httpConnect(pullRepo, MARKETPLACE_URL_PREFIX + "/pullRepo", "application/json");
-    httpConnect(regSubProject, MARKETPLACE_URL_PREFIX + "/regSubProject", "application/json");
-    httpConnect(unregister, MARKETPLACE_URL_PREFIX + "/unregister", "application/json");
+    httpConnect(clone, MARKETPLACE_URL_PREFIX + "/clone", "application/json");
+    httpConnect(pull, MARKETPLACE_URL_PREFIX + "/pull", "application/json");
+    httpConnect(registerSubProjects, MARKETPLACE_URL_PREFIX + "/registerSubProjects", "application/json");
+    httpConnect(unregisterSubProjects, MARKETPLACE_URL_PREFIX + "/unregisterSubProjects", "application/json");
     httpConnect(listProjects, MARKETPLACE_URL_PREFIX + "/listProjects", "application/json");
   }
 
@@ -61,7 +61,7 @@ class MarketplaceEndpoints
 
 
   //--------------------------------------------------------------------------------
-  public static dyn_string cloneRepo(const dyn_string &names, const dyn_string &values)
+  public static dyn_string clone(const dyn_string &names, const dyn_string &values)
   {
     int idx = names.indexOf("url");
     if (idx < 0)
@@ -76,21 +76,22 @@ class MarketplaceEndpoints
       path = values.at(idx);
     }
 
-    bool success = client.clone(url, path);
-
-    if (success)
+    try
     {
-      return makeDynString("Successfully cloned " + url + " into " + path, "Status: 200 OK");
+      mapping result = client.clone(url, path);
+      result.insert("message", "Successfully cloned " + url + " into " + path);
+      return makeDynString(jsonEncode(result), "Status: 200 OK");
     }
-    else
+    catch
     {
+      DebugTN("clone failed!", getLastException());
       return makeDynString(jsonEncode(makeMapping("error", "Couldn't clone repository " + url + " into " + path)), "Status: 500 Internal Server Error");
     }
   }
 
 
   //--------------------------------------------------------------------------------
-  public static dyn_string pullRepo(const dyn_string &names, const dyn_string &values)
+  public static dyn_string pull(const dyn_string &names, const dyn_string &values)
   {
     int idx = names.indexOf("repo");
     if (idx < 0)
@@ -99,13 +100,14 @@ class MarketplaceEndpoints
     }
     string repo = values.at(idx);
 
-    bool success = client.pull(repo);
 
-    if (success)
+    try
     {
-      return makeDynString("Successfully pulled repository " + repo, "Status: 200 OK");
+      mapping result = client.pull(repo);
+      result.insert("message", "Successfully pulled repository " + repo);
+      return makeDynString(jsonEncode(result), "Status: 200 OK");
     }
-    else
+    catch
     {
       return makeDynString(jsonEncode(makeMapping("error", "Couldn't pull repository " + repo)), "Status: 500 Internal Server Error");
     }
@@ -113,7 +115,7 @@ class MarketplaceEndpoints
 
 
   //--------------------------------------------------------------------------------
-  public static dyn_string regSubProject(const dyn_string &names, const dyn_string &values)
+  public static dyn_string registerSubProjects(const dyn_string &names, const dyn_string &values)
   {
     int idx = names.indexOf("path");
     if (idx < 0)
@@ -122,7 +124,18 @@ class MarketplaceEndpoints
     }
     string path = values.at(idx);
 
-    bool success = client.registerSubProjects(makeDynString(path));
+    idx = names.indexOf("fileContent");
+    if (idx < 0)
+    {
+      return makeDynString("Missing required parameter: fileContent", "Status: 400 Bad Request");
+    }
+    string fileContent = values.at(idx);
+
+    mapping requestMapping;
+    requestMapping.insert("repositoryPath", path);
+    requestMapping.insert("fileContent", fileContent);
+
+    bool success = client.registerSubProjects(requestMapping);
 
     if (success)
     {
@@ -135,7 +148,7 @@ class MarketplaceEndpoints
   }
 
   //--------------------------------------------------------------------------------
-  public static dyn_string unregister(const dyn_string &names, const dyn_string &values)
+  public static dyn_string unregisterSubProjects(const dyn_string &names, const dyn_string &values)
   {
     int idx = names.indexOf("path");
     if (idx < 0)
@@ -144,17 +157,34 @@ class MarketplaceEndpoints
     }
     string path = values.at(idx);
 
-    bool delete = true;
-    idx = names.indexOf("delete");
+
+    idx = names.indexOf("fileContent");
+    if (idx < 0)
+    {
+      return makeDynString("Missing required parameter: fileContent", "Status: 400 Bad Request");
+    }
+    string fileContent = values.at(idx);
+
+    bool deleteFiles = true;
+    idx = names.indexOf("deleteFiles");
     if (idx >= 0)
     {
-      delete = values.at(idx) == "true";
+      deleteFiles = values.at(idx) == "true";
     }
 
-    bool success = client.unregisterSubProjects(makeDynString(path));
+    mapping requestMapping;
+    requestMapping.insert("repositoryPath", path);
+    requestMapping.insert("fileContent", fileContent);
+    requestMapping.insert("deleteFiles", deleteFiles);
+
+    bool success = client.unregisterSubProjects(requestMapping);
 
     if (success)
     {
+      if (deleteFiles)
+      {
+        return makeDynString("Successfully unregistered and deleted subproject from " + path, "Status: 200 OK");
+      }
       return makeDynString("Successfully unregistered subproject from " + path, "Status: 200 OK");
     }
     else
