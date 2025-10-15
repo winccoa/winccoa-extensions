@@ -209,11 +209,11 @@ ix-menu ix-menu-item ix-icon {
 }
 
 .repository-status.cloned {
-    background-color: var(--theme-color-success);
+    background-color: var(--theme-color-primary);
 }
 
 .repository-status.registered {
-    background-color: var(--theme-color-primary);
+    background-color: var(--theme-color-success);
 }
 
 /* Repository Details */

@@ -297,40 +297,6 @@
             });
         };
         
-        // Add a global test function for debugging
-        window.testIxModal = () => {
-            console.log('🧪 Testing IX modal...');
-            if (window.ixShowMessage) {
-                window.ixShowMessage({
-                    message: 'Test Modal',
-                    actions: [
-                        { text: 'Cancel' },
-                        { text: 'OK' }
-                    ]
-                });
-            } else {
-                console.error('❌ ixShowMessage not available for test');
-            }
-        };
-        
-        // Add test function for input modal
-        window.testIxInputModal = async () => {
-            console.log('🧪 Testing IX input modal...');
-            if (window.ixShowInput) {
-                const result = await window.ixShowInput({
-                    title: 'Test Input',
-                    message: 'Enter a test value:',
-                    label: 'Test Value:',
-                    placeholder: 'Type something...',
-                    defaultValue: 'default'
-                });
-                console.log('🧪 Input result:', result);
-                alert('You entered: ' + (result || 'cancelled'));
-            } else {
-                console.error('❌ ixShowInput not available for test');
-            }
-        };
-        
         console.log('✅ IX input modal function created');
     </script>
 
@@ -431,7 +397,7 @@
                                 
                                 <ix-button
                                     id="pull-btn"
-                                    variant="secondary"
+                                    variant="primary"
                                     disabled>
                                     <ix-icon name="chevron-down" slot="start"></ix-icon>
                                     Pull
@@ -439,7 +405,7 @@
                                 
                                 <ix-button
                                     id="register-btn"
-                                    variant="secondary"
+                                    variant="primary"
                                     disabled>
                                     <ix-icon name="star" slot="start"></ix-icon>
                                     Register
@@ -447,9 +413,9 @@
                                 
                                 <ix-button
                                     id="unregister-btn"
-                                    variant="ghost"
+                                    variant="danger"
                                     disabled>
-                                    <ix-icon name="info" slot="start"></ix-icon>
+                                    <ix-icon name="x" slot="start"></ix-icon>
                                     Unregister
                                 </ix-button>
                             </div>
@@ -525,25 +491,6 @@
             style="position: fixed; top: 10px; right: 10px; z-index: 1000;"
             title="Toggle Theme">
             <ix-icon name="contrast"></ix-icon>
-        </ix-button>
-        
-        <!-- Debug Test Buttons (temporary) -->
-        <ix-button 
-            id="test-modal-btn"
-            variant="secondary"
-            size="small"
-            style="position: fixed; top: 10px; right: 110px; z-index: 1000;"
-            title="Test Modal">
-            Test Modal
-        </ix-button>
-        
-        <ix-button 
-            id="test-input-btn"
-            variant="secondary"
-            size="small"
-            style="position: fixed; top: 10px; right: 60px; z-index: 1000;"
-            title="Test Input">
-            Test Input
         </ix-button>
         
         <!-- Modals will be created programmatically -->

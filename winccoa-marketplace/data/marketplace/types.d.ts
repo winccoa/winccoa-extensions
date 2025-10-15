@@ -63,8 +63,6 @@ declare global {
     interface Window {
         ixShowMessage?: (config: IxModalConfig) => Promise<IxModalResult>;
         ixShowInput?: (config: IxInputModalConfig) => Promise<string | null>;
-        testIxModal?: () => void;
-        testIxInputModal?: () => Promise<void>;
         marketplaceUI?: import('./marketplace').MarketplaceUI;
         ixIcons?: any;
     }

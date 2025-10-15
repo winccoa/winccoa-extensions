@@ -275,50 +275,6 @@ export class MarketplaceUI {
             this.toggleTheme();
         });
         
-        // Test modal button (temporary)
-        document.getElementById('test-modal-btn')?.addEventListener('click', () => {
-            console.log('🧪 Test modal button clicked');
-            if (window.testIxModal) {
-                window.testIxModal();
-            } else if (window.ixShowMessage) {
-                window.ixShowMessage({
-                    message: 'Test Modal from Button',
-                    actions: [
-                        { text: 'Cancel' },
-                        { text: 'OK' }
-                    ]
-                });
-            } else {
-                console.error('❌ No modal function available');
-                alert('Modal function not available');
-            }
-        });
-        
-        // Test input modal button (temporary)
-        document.getElementById('test-input-btn')?.addEventListener('click', async () => {
-            console.log('🧪 Test input modal button clicked');
-            if (window.testIxInputModal) {
-                await window.testIxInputModal();
-            } else if (window.ixShowInput) {
-                const result = await window.ixShowInput({
-                    title: 'Test Input Modal',
-                    message: 'Enter a test path or value:',
-                    label: 'Test Path:',
-                    placeholder: 'e.g., /path/to/directory',
-                    defaultValue: '/default/path'
-                });
-                console.log('🧪 Input result:', result);
-                if (result !== null) {
-                    this.showToast(`You entered: ${result}`, 'info');
-                } else {
-                    this.showToast('Input cancelled', 'warning');
-                }
-            } else {
-                console.error('❌ No input modal function available');
-                alert('Input modal function not available');
-            }
-        });
-        
         // Initialize theme
         this.initializeTheme();
     }
@@ -616,7 +572,7 @@ export class MarketplaceUI {
         if (isRegistered) {
             if (statusElement) {
                 statusElement.innerHTML = `
-                    <ix-icon name="check-circle" class="status-icon" style="color: var(--theme-color-success);"></ix-icon>
+                    <ix-icon name="success" class="status-icon" style="color: var(--theme-color-success);"></ix-icon>
                     <span>Registered as subproject</span>
                 `;
             }
@@ -836,7 +792,15 @@ export class MarketplaceUI {
             if (response.ok) {
                 this.showSuccess('Repository cloned successfully');
                 this.currentRepository.cloned = true;
+                
+                // Also update the repository in the repositories array
+                const repoIndex = this.repositories.findIndex(repo => repo.name === this.currentRepository!.name);
+                if (repoIndex !== -1) {
+                    this.repositories[repoIndex].cloned = true;
+                }
+                
                 this.updateLocalStatus(this.currentRepository);
+                this.renderRepositoryList(); // Re-render to show updated status
             } else {
                 this.showError('Failed to clone repository: ' + result);
             }
@@ -905,7 +869,15 @@ export class MarketplaceUI {
             if (response.ok) {
                 this.showSuccess('Repository cloned successfully');
                 this.currentRepository.cloned = true;
+                
+                // Also update the repository in the repositories array
+                const repoIndex = this.repositories.findIndex(repo => repo.name === this.currentRepository!.name);
+                if (repoIndex !== -1) {
+                    this.repositories[repoIndex].cloned = true;
+                }
+                
                 this.updateLocalStatus(this.currentRepository);
+                this.renderRepositoryList(); // Re-render to show updated status
             } else {
                 this.showError('Failed to clone repository: ' + result);
             }
