@@ -42,16 +42,6 @@ export class MarketplaceUI {
             }
         };
         
-        // Debug: Check if IX components are loaded
-        setTimeout(() => {
-            console.log('🔧 IX Components loaded:', {
-                ixButton: !!customElements.get('ix-button'),
-                ixModal: !!customElements.get('ix-modal'),
-                ixIcon: !!customElements.get('ix-icon'),
-                ixIcons: !!window.ixIcons
-            });
-        }, 1000);
-        
         // Show connection info to user
         this.showConnectionInfo();
         
@@ -127,8 +117,6 @@ export class MarketplaceUI {
             body.setAttribute('data-theme', 'light');
             if (themeIcon) themeIcon.setAttribute('name', 'sun');
         }
-        
-        console.log(`🎨 Theme set to: ${theme}`);
     }
 
     /**
@@ -148,11 +136,6 @@ export class MarketplaceUI {
      * Show connection information to help with debugging
      */
     private showConnectionInfo(): void {
-        console.log(`🔗 Frontend URL: ${window.location.origin}`);
-        console.log(`🔗 Backend URL: ${this.baseUrl}`);
-        console.log(`📡 CORS Mode: ${this.fetchOptions.mode}`);
-        console.log(`🔐 Credentials: ${this.fetchOptions.credentials}`);
-        
         // Show a temporary info message about the connection
         setTimeout(() => {
             this.showToast(`Connecting to backend at ${this.baseUrl}`, 'info');
@@ -266,10 +249,8 @@ export class MarketplaceUI {
 
         // Action buttons
         const cloneBtn = document.getElementById('clone-btn');
-        console.log('🔧 Clone button found:', cloneBtn);
         
-        cloneBtn?.addEventListener('click', (e: Event) => {
-            console.log('🔧 Clone button clicked!', e);
+        cloneBtn?.addEventListener('click', () => {
             this.showCloneModal();
         });
 
@@ -278,9 +259,7 @@ export class MarketplaceUI {
         });
 
         const registerBtn = document.getElementById('register-btn');
-        console.log('🔧 Register button found:', registerBtn);
         registerBtn?.addEventListener('click', () => {
-            console.log('🔧 Register button clicked!');
             this.registerSubProject();
         });
 
@@ -922,7 +901,6 @@ export class MarketplaceUI {
             }
             
             const pathData = await response.json();
-            console.log('🔧 Default addon path response:', pathData);
             
             // Extract the path from the array response
             const defaultPath = Array.isArray(pathData) && pathData.length > 0 
@@ -947,15 +925,10 @@ export class MarketplaceUI {
                     ]
                 });
                 
-                console.log('🔧 IX showMessage result:', result);
-                
                 // Handle the result based on which action was clicked
                 if (result && result.actionIndex === 1) {
                     // User clicked "Clone"
-                    console.log('🔧 User confirmed clone to:', fullClonePath);
                     await this.performClone(defaultPath);
-                } else {
-                    console.log('🔧 Clone cancelled');
                 }
             } else {
                 // Fallback to native confirm
@@ -1134,13 +1107,8 @@ export class MarketplaceUI {
         console.log('🔧 currentRepository:', this.currentRepository);
         
         if (!this.currentRepository) {
-            console.log('❌ No current repository');
             return;
         }
-        
-        console.log('🔧 fileContent available:', !!this.currentRepository.fileContent);
-        console.log('🔧 fileContent length:', this.currentRepository.fileContent?.length);
-        console.log('🔧 localPath:', this.currentRepository.localPath);
         
         // Check if fileContent is available
         if (!this.currentRepository.fileContent) {
@@ -1162,15 +1130,9 @@ export class MarketplaceUI {
                 fileContent: this.currentRepository.fileContent
             });
             
-            console.log('🔧 Calling API with params:', params.toString().substring(0, 200));
-            
             const response = await this.makeApiCall(`/marketplace/registerSubProjects?${params}`);
             
-            console.log('🔧 API response status:', response.status);
-            
             const result = await response.text();
-            
-            console.log('🔧 API response text:', result);
             
             if (response.ok) {
                 this.showSuccess('Subproject registered successfully');

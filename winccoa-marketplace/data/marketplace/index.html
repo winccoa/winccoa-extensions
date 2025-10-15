@@ -27,10 +27,9 @@
                     customElements.whenDefined('ix-modal-content'),
                     customElements.whenDefined('ix-modal-footer')
                 ]).then(() => {
-                    console.log('✅ All IX components are defined');
                     resolve();
                 }).catch((err) => {
-                    console.log('⚠️ Some IX components not found, using fallback timeout:', err);
+                    console.error('⚠️ Some IX components not found, using fallback timeout:', err);
                     // Fallback - wait a bit more
                     setTimeout(resolve, 2000);
                 });
@@ -38,15 +37,10 @@
         }
         
         // Define the modal function immediately (not waiting for DOMContentLoaded)
-        console.log('🔧 Setting up IX modal function...');
         
         window.ixShowMessage = async (config) => {
-            console.log('🔧 ixShowMessage called with config:', config);
-            
             // Wait for IX components to be ready when the function is actually called
             await waitForCustomElements();
-            
-            console.log('🔧 Creating REAL IX modal component');
             
             return new Promise(async (resolve) => {
                 // Create the actual ix-modal element
@@ -102,16 +96,11 @@
                 modal.appendChild(content);
                 modal.appendChild(footer);
                 
-                console.log('🔧 IX modal structure created');
-                
                 // Add to DOM
                 document.body.appendChild(modal);
-                console.log('🔧 IX modal added to DOM');
                 
                 // Listen to dialogDismiss event to handle when modal is dismissed
                 modal.addEventListener('dialogDismiss', (event) => {
-                    console.log('🔧 IX Modal dismissed with reason:', event.detail);
-                    
                     // Remove from DOM after IX animation completes
                     setTimeout(() => {
                         if (modal.parentNode) {
@@ -127,37 +116,26 @@
                 
                 // Wait a moment for the modal to be hydrated
                 setTimeout(async () => {
-                    console.log('🔧 Setting up IX modal event listeners');
-                    
                     // Add event listeners to IX buttons
                     buttons.forEach((button, index) => {
                         button.addEventListener('click', async () => {
-                            console.log(`🔧 IX Action ${index} clicked: ${config.actions[index].text}`);
-                            
                             // Close IX modal using the official dismissModal method
                             await modal.dismissModal({ actionIndex: index, action: config.actions[index].text });
                         });
                     });
                     
                     // Open the IX modal using the official showModal() method
-                    console.log('🔧 Opening IX modal using showModal()...');
                     try {
                         await modal.showModal();
-                        console.log('🔧 IX modal opened successfully');
                     } catch (error) {
-                        console.error('🔧 Failed to open IX modal:', error);
+                        console.error('Failed to open IX modal:', error);
                     }
                 }, 200);
             });
         };
         
-        console.log('✅ IX modal function created immediately');
-        console.log('🔧 window.ixShowMessage is now:', typeof window.ixShowMessage);
-        
         // Create IX input modal function for text input (like prompts)
         window.ixShowInput = async (config) => {
-            console.log('🔧 ixShowInput called with config:', config);
-            
             // Wait for IX components to be ready
             await waitForCustomElements();
             
@@ -215,16 +193,11 @@
                 modal.appendChild(content);
                 modal.appendChild(footer);
                 
-                console.log('🔧 IX input modal structure created');
-                
                 // Add to DOM
                 document.body.appendChild(modal);
-                console.log('🔧 IX input modal added to DOM');
                 
                 // Listen to dialogDismiss event
                 modal.addEventListener('dialogDismiss', (event) => {
-                    console.log('🔧 IX Input Modal dismissed with reason:', event.detail);
-                    
                     // Remove from DOM after IX animation completes
                     setTimeout(() => {
                         if (modal.parentNode) {
@@ -240,8 +213,6 @@
                 
                 // Wait a moment for the modal to be hydrated
                 setTimeout(async () => {
-                    console.log('🔧 Setting up IX input modal event listeners');
-                    
                     // Focus the input field using IX method
                     await inputField.focusInput();
                     
@@ -259,16 +230,12 @@
                     
                     // Cancel button
                     cancelBtn.addEventListener('click', async () => {
-                        console.log('🔧 IX Input Cancel clicked');
-                        
                         // Close modal using official dismissModal method with null result
                         await modal.dismissModal(null);
                     });
                     
                     // OK button
                     okBtn.addEventListener('click', async () => {
-                        console.log('🔧 IX Input OK clicked');
-                        
                         const value = inputField.value;
                         
                         // Close modal using official dismissModal method with input value
@@ -276,27 +243,20 @@
                     });
                     
                     // Open the modal using official showModal() method
-                    console.log('🔧 Opening IX input modal using showModal()...');
                     try {
                         await modal.showModal();
-                        console.log('🔧 IX input modal opened successfully');
                     } catch (error) {
-                        console.error('🔧 Failed to open IX input modal:', error);
+                        console.error('Failed to open IX input modal:', error);
                     }
                 }, 200);
             });
         };
         
-        console.log('✅ IX input modal function created');
-        
         // Create IX unregister confirmation modal with delete checkbox
         window.ixShowUnregisterConfirm = async (repositoryName) => {
-            console.log('🔧 ixShowUnregisterConfirm called for:', repositoryName);
             
             // Wait for IX components to be ready
             await waitForCustomElements();
-            
-            console.log('🔧 Creating IX unregister confirmation modal');
             
             return new Promise(async (resolve) => {
                 // Create the actual ix-modal element
@@ -366,16 +326,11 @@
                 modal.appendChild(content);
                 modal.appendChild(footer);
                 
-                console.log('🔧 IX unregister modal structure created');
-                
                 // Add to DOM
                 document.body.appendChild(modal);
-                console.log('🔧 IX unregister modal added to DOM');
                 
                 // Listen to dialogDismiss event
                 modal.addEventListener('dialogDismiss', (event) => {
-                    console.log('🔧 IX Unregister Modal dismissed with reason:', event.detail);
-                    
                     // Remove from DOM after IX animation completes
                     setTimeout(() => {
                         if (modal.parentNode) {
@@ -393,38 +348,28 @@
                 
                 // Wait a moment for the modal to be hydrated
                 setTimeout(async () => {
-                    console.log('🔧 Setting up IX unregister modal event listeners');
-                    
                     // Cancel button
                     cancelBtn.addEventListener('click', async () => {
-                        console.log('🔧 IX Unregister Cancel clicked');
                         await modal.dismissModal(null);
                     });
                     
                     // Confirm button
                     confirmBtn.addEventListener('click', async () => {
-                        console.log('🔧 IX Unregister Confirm clicked');
-                        
                         const shouldDelete = checkbox.checked;
-                        console.log('🔧 Delete option:', shouldDelete);
                         
                         // Close modal and return whether to delete
                         await modal.dismissModal({ confirmed: true, deleteRepository: shouldDelete });
                     });
                     
                     // Open the modal using official showModal() method
-                    console.log('🔧 Opening IX unregister modal using showModal()...');
                     try {
                         await modal.showModal();
-                        console.log('🔧 IX unregister modal opened successfully');
                     } catch (error) {
-                        console.error('🔧 Failed to open IX unregister modal:', error);
+                        console.error('Failed to open IX unregister modal:', error);
                     }
                 }, 200);
             });
         };
-        
-        console.log('✅ IX unregister confirmation modal function created');
     </script>
 
     
@@ -621,7 +566,7 @@
             size="small"
             style="position: fixed; top: 10px; right: 10px; z-index: 1000;"
             title="Toggle Theme">
-            <ix-icon name="contrast"></ix-icon>
+            <ix-icon name="sun"></ix-icon>
         </ix-button>
         
         <!-- Modals will be created programmatically -->
