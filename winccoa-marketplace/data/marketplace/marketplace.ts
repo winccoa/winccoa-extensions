@@ -24,6 +24,7 @@ export class MarketplaceUI {
     private registeredProjects: string[] = [];
     private fetchOptions: FetchOptions;
     private currentMode: 'marketplace' | 'registered' = 'marketplace';
+    private predefinedOrganizations: string[] = ['winccoa'];
 
     constructor() {
         // Auto-detect backend URL based on current frontend URL
@@ -54,8 +55,31 @@ export class MarketplaceUI {
         // Show connection info to user
         this.showConnectionInfo();
         
+        this.populateOrganizationSelect();
         this.initializeEventListeners();
         this.loadInitialData();
+    }
+
+    /**
+     * Populate organization select dropdown with predefined values
+     */
+    private populateOrganizationSelect(): void {
+        const orgSelect = document.getElementById('organization-select') as any;
+        if (!orgSelect) return;
+        
+        // Add "All organizations" option (empty value)
+        const allOption = document.createElement('ix-select-item');
+        allOption.setAttribute('label', 'All organizations');
+        allOption.setAttribute('value', '');
+        orgSelect.appendChild(allOption);
+        
+        // Add predefined organizations
+        this.predefinedOrganizations.forEach(org => {
+            const option = document.createElement('ix-select-item');
+            option.setAttribute('label', org);
+            option.setAttribute('value', org);
+            orgSelect.appendChild(option);
+        });
     }
 
     /**
@@ -206,9 +230,16 @@ export class MarketplaceUI {
         // Refresh button
         const refreshBtn = document.getElementById('refresh-btn');
         refreshBtn?.addEventListener('click', () => {
-            const orgInput = document.getElementById('organization-input') as HTMLInputElement | null;
-            const currentOrg = orgInput?.value?.trim() || 'winccoa';
-            this.loadRepositories(currentOrg);
+            const orgSelect = document.getElementById('organization-select') as any;
+            const selectedValue = orgSelect?.value?.trim() || '';
+            
+            if (selectedValue) {
+                // Single organization selected
+                this.loadRepositories(selectedValue);
+            } else {
+                // Empty = load all predefined organizations
+                this.loadAllOrganizations();
+            }
         });
 
         // Search functionality
@@ -218,32 +249,18 @@ export class MarketplaceUI {
             this.filterRepositories(target.value);
         });
 
-        // Organization input with debounced loading
-        const orgInput = document.getElementById('organization-input') as HTMLInputElement | null;
-        let orgInputTimer: number;
+        // Organization select with change event
+        const orgSelect = document.getElementById('organization-select') as any;
         
-        orgInput?.addEventListener('input', (e: Event) => {
-            const target = e.target as HTMLInputElement;
-            const organization = target.value.trim();
+        orgSelect?.addEventListener('valueChange', (e: CustomEvent) => {
+            const value = e.detail?.trim() || '';
             
-            // Debounce the API call to avoid too many requests while typing
-            clearTimeout(orgInputTimer);
-            orgInputTimer = window.setTimeout(() => {
-                if (organization) {
-                    this.loadRepositories(organization);
-                }
-            }, 500); // Wait 500ms after user stops typing
-        });
-        
-        // Also handle Enter key for immediate search
-        orgInput?.addEventListener('keydown', (e: KeyboardEvent) => {
-            if (e.key === 'Enter') {
-                clearTimeout(orgInputTimer);
-                const target = e.target as HTMLInputElement;
-                const organization = target.value.trim();
-                if (organization) {
-                    this.loadRepositories(organization);
-                }
+            if (value) {
+                // Single organization selected or custom value entered
+                this.loadRepositories(value);
+            } else {
+                // Empty = load all predefined organizations
+                this.loadAllOrganizations();
             }
         });
 
@@ -304,9 +321,14 @@ export class MarketplaceUI {
         this.updateTitle();
         
         // Load organization repositories
-        const orgInput = document.getElementById('organization-input') as HTMLInputElement | null;
-        const currentOrg = orgInput?.value?.trim() || 'winccoa';
-        this.loadRepositories(currentOrg);
+        const orgSelect = document.getElementById('organization-select') as any;
+        const selectedValue = orgSelect?.value?.trim() || '';
+        
+        if (selectedValue) {
+            this.loadRepositories(selectedValue);
+        } else {
+            this.loadAllOrganizations();
+        }
     }
 
     /**
@@ -426,9 +448,43 @@ export class MarketplaceUI {
      */
     private async loadInitialData(): Promise<void> {
         await Promise.all([
-            this.loadRepositories(),
+            this.loadAllOrganizations(), // Load all organizations by default
             this.loadRegisteredProjects()
         ]);
+    }
+
+    /**
+     * Load repositories from all predefined organizations
+     */
+    private async loadAllOrganizations(): Promise<void> {
+        try {
+            this.showLoading('repository-list');
+            
+            const title = document.getElementById('repositories-title');
+            if (title) {
+                title.textContent = 'All Organizations';
+            }
+            
+            // Load repositories from all predefined organizations in parallel
+            const promises = this.predefinedOrganizations.map(org => 
+                this.makeApiCall(`/marketplace/listRepos?organization=${org}`)
+                    .then(response => response.json())
+                    .then(data => Array.isArray(data) ? data : [])
+                    .catch(() => []) // Ignore errors for individual organizations
+            );
+            
+            const results = await Promise.all(promises);
+            
+            // Combine all repositories
+            this.repositories = results.flat();
+            this.renderRepositoryList();
+            
+            this.showToast(`Loaded ${this.repositories.length} repositories from all organizations`, 'success');
+        } catch (error) {
+            this.showError('Failed to load repositories from all organizations');
+            this.repositories = [];
+            this.renderRepositoryList();
+        }
     }
 
     /**
@@ -438,14 +494,11 @@ export class MarketplaceUI {
         try {
             this.showLoading('repository-list');
             
-            // Update the organization input to show current organization
-            const orgInput = document.getElementById('organization-input') as HTMLInputElement | null;
-            if (orgInput && orgInput.value !== organization) {
-                orgInput.value = organization;
+            // Update the organization select to show current organization
+            const orgSelect = document.getElementById('organization-select') as any;
+            if (orgSelect && orgSelect.value !== organization) {
+                orgSelect.value = organization;
             }
-            
-            // Show loading feedback in the organization input
-            orgInput?.setAttribute('loading', 'true');
             
             const response = await this.makeApiCall(`/marketplace/listRepos?organization=${organization}`);
             const data: Repository[] | { error?: string } = await response.json();
