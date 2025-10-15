@@ -28,7 +28,7 @@ export interface Manager {
 export { AddOnHandler };
 
 /**
- * Simple script to clone a public GitHub repository using octokit.js
+ * WinCC OA AddOn Handler for managing GitHub repositories
  *
  * AUTHENTICATION SETUP:
  *
@@ -38,7 +38,7 @@ export { AddOnHandler };
  *    - Select scopes: "repo" (for private repos) or "public_repo" (for public repos)
  *    - Copy the generated token
  *    - Set environment variable: GITHUB_TOKEN=your_token_here
- *    - Or pass directly to constructor: new GitHubCloner('your_token_here')
+ *    - Or pass directly to constructor: new AddOnHandler('your_token_here')
  *
  * 2. Environment Variable Setup:
  *    Windows PowerShell: $env:GITHUB_TOKEN="your_token_here"
@@ -640,6 +640,98 @@ bool addManager(string manager, string startMode, string options, string user, s
   }
 
   /**
+   * Extract version from package.winccoa.json file
+   * @param repositoryPath The full path to the repository directory
+   * @returns The version string or null if not found
+   */
+  private extractVersionFromPackageJson(repositoryPath: string): string | null {
+    try {
+      const packageWinCCoAPath = path.join(
+        repositoryPath,
+        "package.winccoa.json",
+      );
+
+      if (fs.existsSync(packageWinCCoAPath)) {
+        const fileContent = fs.readFileSync(packageWinCCoAPath, "utf8");
+        const parseResult = JSON.parse(fileContent);
+        return parseResult.version || parseResult.Version || null;
+      }
+      return null;
+    } catch (error: any) {
+      console.error(
+        `Failed to extract version from package.winccoa.json: ${error.message}`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Compare two version strings to determine if the first is higher than the second
+   * @param version1 First version string (e.g., "1.2.0")
+   * @param version2 Second version string (e.g., "1.1.0")
+   * @returns True if version1 is higher than version2
+   */
+  private isVersionHigher(version1: string, version2: string): boolean {
+    try {
+      // Remove 'v' prefix if present
+      const v1 = version1.replace(/^v/, "");
+      const v2 = version2.replace(/^v/, "");
+
+      // Split versions into parts and convert to numbers
+      const parts1 = v1
+        .split(".")
+        .map((part) => parseInt(part.replace(/\D/g, ""), 10) || 0);
+      const parts2 = v2
+        .split(".")
+        .map((part) => parseInt(part.replace(/\D/g, ""), 10) || 0);
+
+      // Normalize lengths by padding with zeros
+      const maxLength = Math.max(parts1.length, parts2.length);
+      while (parts1.length < maxLength) parts1.push(0);
+      while (parts2.length < maxLength) parts2.push(0);
+
+      // Compare each part
+      for (let i = 0; i < maxLength; i++) {
+        if (parts1[i] > parts2[i]) return true;
+        if (parts1[i] < parts2[i]) return false;
+      }
+
+      return false; // Versions are equal
+    } catch (error) {
+      console.error(
+        `Error comparing versions ${version1} and ${version2}:`,
+        error,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Map package.winccoa.json content to AddonConfig interface
+   * @param packageJson Parsed package.winccoa.json content
+   * @returns AddonConfig object
+   */
+  private mapPackageJsonToAddonConfig(packageJson: any): AddonConfig {
+    return {
+      RepoName: packageJson.RepoName,
+      Keywords: packageJson.Keywords,
+      Subproject: packageJson.Subproject,
+      Version: packageJson.Version,
+      Description: packageJson.Description,
+      OaVersion: packageJson.OaVersion,
+      Managers: packageJson.Managers
+        ? packageJson.Managers.map((manager: any) => ({
+            Name: manager.Name || "",
+            StartMode: manager.StartMode || "Unknown",
+            Options: manager.Options || "",
+          }))
+        : [],
+      Dplists: packageJson.Dplists || [],
+      UpdateScripts: packageJson.UpdateScripts || [],
+    };
+  }
+
+  /**
    * Read and parse the package.winccoa.json file from a repository
    * @param repositoryPath The full path to the repository directory
    * @returns The parsed JSON content as string, or null if file doesn't exist
@@ -722,8 +814,12 @@ bool addManager(string manager, string startMode, string options, string user, s
         );
       }
 
+      // Read version before pull
+      const versionBeforePull =
+        this.extractVersionFromPackageJson(repositoryDirectory);
+
       console.log(
-        `Pulling latest changes from repository: ${repositoryDirectory} to {}`,
+        `Pulling latest changes from repository: ${repositoryDirectory}`,
       );
 
       // Use simple-git for pull operation
@@ -740,6 +836,54 @@ bool addManager(string manager, string startMode, string options, string user, s
 
       console.log("Git pull completed successfully!");
 
+      // Read version after pull and compare
+      const versionAfterPull =
+        this.extractVersionFromPackageJson(repositoryDirectory);
+      let updatedAddonConfig: AddonConfig | null = null;
+
+      if (
+        versionBeforePull &&
+        versionAfterPull &&
+        this.isVersionHigher(versionAfterPull, versionBeforePull)
+      ) {
+        console.log(
+          `INFO: Version updated from ${versionBeforePull} to ${versionAfterPull}`,
+        );
+
+        // Read and parse the updated package.winccoa.json as AddonConfig
+        const packageJsonContent =
+          this.readWinCCOAPackageJson(repositoryDirectory);
+        if (packageJsonContent) {
+          try {
+            const parsedPackage = JSON.parse(packageJsonContent);
+            updatedAddonConfig =
+              this.mapPackageJsonToAddonConfig(parsedPackage);
+
+            if (updatedAddonConfig.Dplists) {
+              this.importAsciiFiles(updatedAddonConfig.Dplists);
+            }
+
+            // Execute update scripts if any
+            if (updatedAddonConfig.UpdateScripts) {
+              console.log(
+                `Executing ${updatedAddonConfig.UpdateScripts.length} update script(s)...`,
+              );
+              await this.executeUpdateScripts(
+                repositoryDirectory,
+                updatedAddonConfig.UpdateScripts,
+              );
+            } else {
+              console.log("No update scripts to execute");
+            }
+          } catch (error) {
+            console.error(
+              `Failed to parse updated package.winccoa.json as AddonConfig:`,
+              error,
+            );
+          }
+        }
+      }
+
       return {
         success: true,
         message: "Repository updated successfully",
@@ -750,6 +894,7 @@ bool addManager(string manager, string startMode, string options, string user, s
         files: pullResult.files || [],
         updatedAt: new Date().toISOString(),
         fileContent: this.readWinCCOAPackageJson(repositoryDirectory),
+        updatedAddonConfig: updatedAddonConfig,
       };
     } catch (error: any) {
       console.error(
@@ -855,7 +1000,62 @@ bool addManager(string manager, string startMode, string options, string user, s
           license: repo.license?.name || null,
         }));
 
-        allRepos.push(...repos);
+        // Fetch package.winccoa.json content for each repository and filter valid WinCC OA addons
+        const validRepos: any[] = [];
+        for (const repo of repos) {
+          try {
+            console.log(
+              `Fetching package.winccoa.json for ${repo.fullName}...`,
+            );
+            const packageResponse = await this.octokit.rest.repos.getContent({
+              owner: org,
+              repo: repo.name,
+              path: "package.winccoa.json",
+              ref: repo.defaultBranch,
+            });
+
+            // Check if the response is a file (not a directory)
+            if (
+              "content" in packageResponse.data &&
+              packageResponse.data.type === "file"
+            ) {
+              // Decode base64 content
+              const content = Buffer.from(
+                packageResponse.data.content,
+                "base64",
+              ).toString("utf-8");
+              try {
+                const packageJson = JSON.parse(content);
+                (repo as any).winccoaPackage = packageJson;
+                validRepos.push(repo); // Only add repos with valid package.winccoa.json
+                console.log(
+                  `Found package.winccoa.json for ${repo.fullName} - added to results`,
+                );
+              } catch (parseError) {
+                console.warn(
+                  `Invalid JSON in package.winccoa.json for ${repo.fullName}:`,
+                  parseError,
+                );
+                // Don't add repos with invalid JSON to results
+              }
+            }
+          } catch (error: any) {
+            // File doesn't exist or other error - this is expected for many repos
+            if (error.status === 404) {
+              console.log(
+                `No package.winccoa.json found for ${repo.fullName} - skipping repository`,
+              );
+            } else {
+              console.warn(
+                `Error fetching package.winccoa.json for ${repo.fullName}:`,
+                error.message,
+              );
+            }
+            // Don't add repos without valid package.winccoa.json to results
+          }
+        }
+
+        allRepos.push(...validRepos);
 
         // Check if there are more pages
         hasMorePages = response.data.length === perPage;
@@ -863,7 +1063,7 @@ bool addManager(string manager, string startMode, string options, string user, s
       }
 
       console.log(
-        `Retrieved ${allRepos.length} repositories from organization: ${org}`,
+        `Retrieved ${allRepos.length} WinCC OA addon repositories from organization: ${org}`,
       );
       return allRepos;
     } catch (error: any) {
@@ -927,6 +1127,90 @@ bool addManager(string manager, string startMode, string options, string user, s
         );
       }
     }
+  }
+
+  /**
+   * Execute update scripts based on their file extensions
+   * @param repositoryPath The path to the repository
+   * @param updateScripts Array of update script filenames
+   */
+  private async executeUpdateScripts(
+    repositoryPath: string,
+    updateScripts: string[],
+  ): Promise<void> {
+    for (const scriptFile of updateScripts) {
+      try {
+        const scriptPath = path.join(repositoryPath, scriptFile);
+        const fileExtension = path.extname(scriptFile).toLowerCase();
+
+        console.log(`Executing update script: ${scriptFile}`);
+
+        switch (fileExtension) {
+          case ".ctl":
+            // For .ctl files, use WCCOActrl manager
+            console.log(`Executing CTRL script: ${scriptFile}`);
+            await this.startManagers(repositoryPath, [
+              {
+                exeName: "WCCOActrl",
+                startParams: scriptFile,
+              },
+            ]);
+            break;
+
+          case ".ts":
+            // For .ts files, use NodeInstaller.installAndBuild
+            console.log(`Building TypeScript project for: ${scriptFile}`);
+            await NodeInstaller.installAndBuild(repositoryPath);
+            console.log("currently not implemented - skipping");
+            break;
+
+          case ".js":
+            // TODO: clarify why pmonIndex is needed to start a javascript file
+            /*
+            // For .js files, execute with Node.js using WinCC OA bootstrap
+            console.log(`Executing JavaScript script: ${scriptFile}`);
+            const installDir = getWinCCOAInstallDir(winccoa);
+            if (installDir) {
+              const bootstrapPath = path.join(
+                installDir,
+                "javascript",
+                "winccoa-manager",
+                "lib",
+                "bootstrap.js",
+              );
+              const command = `node.exe -- "${bootstrapPath}" -currentproj ${scriptFile}`;
+              console.log(`Executing JavaScript command: ${command}`);
+
+              const result = await CommandExecutor.execute(command);
+              if (result.exitCode === 0) {
+                console.log(
+                  `Successfully executed JavaScript script: ${scriptFile}`,
+                );
+              } else {
+                console.error(
+                  `Failed to execute JavaScript script ${scriptFile}. Exit code: ${result.exitCode}, Error: ${result.stderr}`,
+                );
+              }
+            } else {
+              console.error(
+                `Could not determine WinCC OA installation directory for JavaScript script: ${scriptFile}`,
+              );
+            }*/
+            console.log("currently not implemented - skipping");
+            break;
+
+          default:
+            console.log(
+              `Unknown script type '${fileExtension}' for file: ${scriptFile}`,
+            );
+            break;
+        }
+      } catch (error) {
+        console.error(`Failed to execute update script ${scriptFile}:`, error);
+      }
+    }
+
+    console.log("All update scripts have been processed");
   }
 
   public async startManagers(
