@@ -69,7 +69,7 @@ class MarketplaceClient
     VrpcResponseData response = stub.callFunction("repoPath", nullptr);
     return response.getResponse();
   }
-  
+
   public dyn_string listSubProjects()
   {
     VrpcResponseData response = stub.callFunction("subProjects", nullptr);
@@ -79,6 +79,6 @@ class MarketplaceClient
   public string listLocalRepos()
   {
     VrpcResponseData response = stub.callFunction("localRepos", nullptr);
-    return jsonDecode(response.getResponse());
+    return response.getResponse();
   }
 };

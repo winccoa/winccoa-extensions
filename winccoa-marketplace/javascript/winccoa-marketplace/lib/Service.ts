@@ -11,7 +11,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     this.registerFunction("register", this.registerSubProjects.bind(this));
     this.registerFunction("unregister", this.unregisterSubProjects.bind(this));
     this.registerFunction(
-      "listProjects",
+      "subProjects",
       this.listRegisteredSubProjects.bind(this),
     );
 
@@ -19,7 +19,6 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     this.registerFunction("clone", this.cloneRepository.bind(this));
     this.registerFunction("listRepos", this.listRemoteRepositories.bind(this));
     this.registerFunction("repoPath", this.getDefaultAddonPath.bind(this));
-    this.registerFunction("subProjects", this.listSubProjects.bind(this));
     this.registerFunction("localRepos", this.listLocalAddOns.bind(this));
     this._addOnHandler = new AddOnHandler();
   }
@@ -319,14 +318,6 @@ export class MarketplaceService extends Vrpc.ServiceBase {
   ): Promise<Vrpc.Variant> {
     const defaultPath = this._addOnHandler.getDefaultAddonPath();
     return Vrpc.Variant.createString(defaultPath);
-  }
-
-  private async listSubProjects(
-    serverContext: Vrpc.ServerContext,
-    request: Vrpc.Variant,
-  ): Promise<Vrpc.Variant> {
-    const result = await this._addOnHandler.listSubProjects();
-    return Vrpc.Variant.createStringArray(result);
   }
 
   private async listLocalAddOns(
