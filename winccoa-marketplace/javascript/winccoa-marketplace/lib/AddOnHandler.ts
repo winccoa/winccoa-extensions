@@ -6,7 +6,17 @@ import * as fs from "fs";
 import * as os from "os";
 import { WinccoaCtrlScript, WinccoaCtrlType, WinccoaManager } from "winccoa-manager";
 import { AsciiManager } from "./AsciiManager";
+import { CommandExecutor }from "./CommandExecutor";
+import { PathResolver } from "./PathResolver";
+import { NodeInstaller } from "./NodeInstaller";
 
+/**
+ * Interface for manager configuration
+ */
+export interface Manager {
+  exeName: string;
+  startParams: string;
+}
 
 // Export the class for use in other modules
 export { AddOnHandler };
@@ -83,36 +93,84 @@ function readWindowsRegistry(
 }
 
 /**
+ * Generic function to read WinCC OA registry values with consistent error handling
+ * @param valueName The registry value name to read (e.g., "PROJECTDIR", "INSTALLDIR")
+ * @param description Human-readable description for logging
+ * @returns Registry value or null if not found/invalid
+ */
+function getWinCCOARegistryValue(valueName: string, description: string): string | null {
+  if (os.platform() !== "win32") {
+    console.log(`Not running on Windows, ${description} registry lookup skipped`);
+    return null;
+  }
+
+  try {
+    const registryPath = "HKEY_LOCAL_MACHINE\\SOFTWARE\\ETM\\WinCC_OA\\3.21";
+    console.log(`Checking Windows registry for ${description}: ${registryPath}`);
+
+    const registryValue = readWindowsRegistry(registryPath, valueName);
+    if (registryValue && fs.existsSync(registryValue)) {
+      console.log(`Found WinCC OA ${description} from registry: ${registryValue}`);
+      return registryValue;
+    }
+
+    console.log(`No valid WinCC OA ${description} found in registry`);
+    return null;
+  } catch (error) {
+    console.log(`Failed to read ${description} from registry:`, (error as Error).message);
+    return null;
+  }
+}
+
+/**
  * Get the target clone directory from Windows registry or fall back to current directory
  * Registry path: HKEY_LOCAL_MACHINE\SOFTWARE\ETM\WinCC_OA\3.21
  */
 function getDefaultProjDir(): string {
+  // TODO: check how to read on linux -> pvssInst.conf
+  const projDir = getWinCCOARegistryValue("PROJECTDIR", "PROJECTDIR");
+  return projDir || process.cwd();
+}
+
+/**
+ * Get the WinCC OA installation directory using multiple methods
+ * 1. Try WinCC OA manager API (preferred)
+ * 2. Fallback to Windows registry INSTALLDIR key
+ * 3. Fallback to environment variables (PVSS_INSTALL_BASE)
+ */
+function getWinCCOAInstallDir(winccoa?: WinccoaManager): string | null {
   try {
-    // Only attempt registry reading on Windows
-    if (os.platform() === "win32") {
-      const registryPath = "HKEY_LOCAL_MACHINE\\SOFTWARE\\ETM\\WinCC_OA\\3.21";
-
-      console.log(`Checking Windows registry: ${registryPath}`);
-
-      // Read only the PROJECTDIR key
-      const registryValue = readWindowsRegistry(registryPath, "PROJECTDIR");
-      if (registryValue && fs.existsSync(registryValue)) {
-        console.log(
-          `Found WinCC OA PROJECTDIR from registry: ${registryValue}`,
-        );
-        return registryValue;
+    // Method 1: Use WinCC OA manager API (preferred)
+    if (winccoa) {
+      const installPath = PathResolver.getInstallationPath(winccoa);
+      if (installPath && fs.existsSync(installPath)) {
+        console.log(`Found WinCC OA installation directory via API: ${installPath}`);
+        return installPath;
       }
-
-      console.log("No valid WinCC OA PROJECTDIR found in registry");
+      console.log("WinCC OA API did not return a valid installation path");
     } else {
-      console.log("Not running on Windows, registry lookup skipped");
+      console.log("No WinCC OA manager instance available for API query");
     }
-  } catch (error) {
-    console.log("Failed to read registry:", (error as Error).message);
-  }
 
-  // Fallback to current directory
-  return process.cwd();
+    // Method 2: Windows Registry (fallback)
+    const installDir = getWinCCOARegistryValue("INSTALLDIR", "installation directory");
+    if (installDir) {
+      return installDir;
+    }
+
+    // Method 3: Environment variables (additional fallback)
+    const envInstallBase = process.env.PVSS_INSTALL_BASE;
+    if (envInstallBase && fs.existsSync(envInstallBase)) {
+      console.log(`Found WinCC OA installation directory from environment: ${envInstallBase}`);
+      return envInstallBase;
+    }
+
+    console.log("Could not determine WinCC OA installation directory");
+    return null;
+  } catch (error) {
+    console.error("Error while determining WinCC OA installation directory:", (error as Error).message);
+    return null;
+  }
 }
 
 class AddOnHandler {
@@ -236,7 +294,9 @@ dyn_dyn_string listSubProjs()
 );
 
 async registerSubProject(path: string): Promise<number> {
-  return await this.ctrlScript.start("registerSubProj", [path], [WinccoaCtrlType.string]) as number;
+  const ret = await this.ctrlScript.start("registerSubProj", [path], [WinccoaCtrlType.string]) as number;
+  await NodeInstaller.installAndBuild(path);
+  return ret;
 }
 
 async unregisterSubProject(path: string): Promise<number> {
@@ -708,5 +768,86 @@ async listSubProjects(): Promise<string[]> {
         );
       }
     }
+  }
+
+  public async startManagers(subprojectPath: string, managers: Manager[]): Promise<void> {
+    // Create array to hold all manager start promises
+    const startPromises: Promise<void>[] = [];
+    
+    for (const manager of managers) {
+      // Create a promise for each manager startup
+      const startPromise = (async () => {
+        try {
+          // Add .exe extension on Windows if not already present
+          let exeName = manager.exeName;
+          if (os.platform() === "win32" && !exeName.toLowerCase().endsWith(".exe")) {
+            exeName += ".exe";
+          }
+          
+          // First, try to find the executable in the subproject's /bin directory
+          let exePath = path.join(subprojectPath, "bin", exeName);
+          let foundInBin = fs.existsSync(exePath);
+          
+          if (foundInBin) {
+            console.log(`[startManagers] Found executable in subproject bin: ${exePath}`);
+          } else {
+            console.log(`[startManagers] Executable not found in subproject bin: ${exePath}`);
+            
+            // Search in WinCC OA installation directory
+            const installDir = getWinCCOAInstallDir(winccoa);
+            if (installDir) {
+              // Check standard WinCC OA bin directory
+              const installBinPath = path.join(installDir, "bin", exeName);
+              
+              if (fs.existsSync(installBinPath)) {
+                exePath = installBinPath;
+                console.log(`[startManagers] Found executable in WinCC OA installation: ${exePath}`);
+              } else {
+                console.error(`[startManagers] Executable '${exeName}' not found in subproject bin or WinCC OA installation directory`);
+                console.error(`[startManagers] Searched paths:`);
+                console.error(`  - ${path.join(subprojectPath, "bin", exeName)}`);
+                console.error(`  - ${installBinPath}`);
+                return;
+              }
+            } else {
+              console.error(`[startManagers] Executable not found: ${path.join(subprojectPath, "bin", exeName)}`);
+              console.error(`[startManagers] Could not determine WinCC OA installation directory for fallback search`);
+              return;
+            }
+          }
+          
+          // Check if project parameters are present, add -currentproj if not
+          let startParams = manager.startParams;
+          const projectParamRegex = /-(?:proj|PROJ|currentproj|CURRENTPROJ)\b/i;
+          if (!projectParamRegex.test(startParams)) {
+            startParams = "-currentproj " + startParams.trim();
+            console.log(`[startManagers] No project parameter found, adding -currentproj to: ${manager.exeName}`);
+          }
+          
+          // Build the command string with executable and start parameters
+          const command = `"${exePath}" ${startParams}`.trim();
+          
+          console.log(`###### [startManagers] Starting manager: ${command}`);
+          
+          // Execute the command (this will start the manager and return immediately)
+          const result = await CommandExecutor.execute(command);
+          
+          if (result.exitCode === 0) {
+            console.log(`[startManagers] Successfully started manager ${manager.exeName}`);
+          } else {
+            console.error(`[startManagers] Failed to start manager ${manager.exeName}. Exit code: ${result.exitCode}, Error: ${result.stderr}`);
+          }
+        } catch (error) {
+          console.error(`[startManagers] Failed to start manager ${manager.exeName}:`, error);
+        }
+      })();
+      
+      startPromises.push(startPromise);
+    }
+    
+    // Wait for all managers to be started (but not for them to finish running)
+    await Promise.all(startPromises);
+    
+    console.log(`[startManagers] All ${managers.length} manager(s) have been started`);
   }
 }

@@ -33,7 +33,7 @@ void main()
   // pull existing repo
   DebugTN("result of 'pull existing repo'", client.pull("D:/test/winccoa-ae-js-mcpserver"));
 
-  DebugTN("result of 'register project'", client.registerSubProjects(makeDynString("D:/test/winccoa-ae-js-mcpserver")));
+  DebugTN("result of 'register project'", client.registerSubProjects(makeDynString("D:/test/winccoa-ae-js-mcpserver/MqttExplorerAndImporterTool")));
 
-  DebugTN("result of 'unregister project'", client.unregisterSubProjects(makeDynString("D:/test/winccoa-ae-js-mcpserver")));
+  DebugTN("result of 'unregister project'", client.unregisterSubProjects(makeDynString("D:/test/winccoa-ae-js-mcpserver/MqttExplorerAndImporterTool")));
 }
