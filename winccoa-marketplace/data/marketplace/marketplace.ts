@@ -1122,20 +1122,31 @@ export class MarketplaceUI {
      */
     public showToast(message: string, type: ToastType = 'info'): void {
         // Create toast element
-        const toast = document.createElement('ix-toast');
-        toast.setAttribute('type', type);
+        const toast = document.createElement('ix-toast') as any;
+        
+        // Set properties directly on the element (not as attributes)
+        // This ensures proper type handling for Stencil web components
+        toast.type = type;
         toast.textContent = message;
+        
+        // Configure auto-close behavior using JavaScript properties
+        // autoClose is a boolean, autoCloseDelay is a number
+        toast.autoClose = true;
+        toast.autoCloseDelay = 5000;
         
         // Add to container
         const container = document.querySelector('ix-toast-container');
         container?.appendChild(toast);
         
-        // Auto remove after 5 seconds
-        setTimeout(() => {
+        // Listen to the closeToast event to remove the toast from DOM
+        // This event is emitted when:
+        // - User clicks the close button
+        // - Auto-close timer completes (respecting hover pause)
+        toast.addEventListener('closeToast', () => {
             if (toast.parentNode) {
                 toast.parentNode.removeChild(toast);
             }
-        }, 5000);
+        });
     }
 
     /**

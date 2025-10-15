@@ -490,3 +490,19 @@ ix-menu ix-menu-item ix-icon {
 .tab-pane::-webkit-scrollbar-thumb:hover {
     background: var(--theme-color-component-4);
 }
+
+/* Toast container positioning */
+ix-toast-container {
+    position: fixed !important;
+    bottom: 20px !important;
+    left: 20px !important;
+    z-index: 10000 !important;
+    pointer-events: none !important;
+}
+
+/* Individual toast styling */
+ix-toast-container ix-toast {
+    pointer-events: auto !important;
+    margin-bottom: 8px !important;
+    max-width: 400px !important;
+}
