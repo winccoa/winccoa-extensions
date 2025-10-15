@@ -225,6 +225,10 @@ class AddOnHandler {
     console.log(`Target clone directory: ${this._defaultDirectory}`);
   }
 
+  getDefaultAddonPath(): string {
+    return this._defaultDirectory;
+  }
+
   /**
    * Check if the current authentication is valid
    */
@@ -791,6 +795,7 @@ bool addManager(string manager, string startMode, string options, string user, s
       while (hasMorePages && page <= maxPages) {
         console.log(`Fetching page ${page}...`);
 
+        // eslint-disable-next-line no-await-in-loop
         const response = await this.octokit.rest.repos.listForOrg({
           org,
           type,
@@ -851,6 +856,33 @@ bool addManager(string manager, string startMode, string options, string user, s
           `Failed to list organization repositories: ${error.message}`,
         );
       }
+    }
+  }
+
+  listCustomRepositories(): object[] {
+    // Read repositories.config.json and return an array of repository info objects
+    try {
+      const configPath = path.resolve(__dirname, "../../../config/repositories.config.json");
+      if (!fs.existsSync(configPath)) {
+        console.warn(
+          `[listCustomRepositories] repositories.config.json not found at ${configPath}`,
+        );
+        return [];
+      }
+      const fileContent = fs.readFileSync(configPath, "utf8");
+      const repos = JSON.parse(fileContent);
+
+      return repos
+        .filter((repo: any) => !!repo.url)
+        .map((repo: any) => ({
+          cloneUrl: repo.url,
+        }));
+    } catch (error) {
+      console.error(
+        "[listCustomRepositories] Failed to read repositories.config.json:",
+        error,
+      );
+      return [];
     }
   }
 

@@ -18,6 +18,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     this.registerFunction("pull", this.pullRepository.bind(this));
     this.registerFunction("clone", this.cloneRepository.bind(this));
     this.registerFunction("listRepos", this.listRemoteRepositories.bind(this));
+    this.registerFunction("repoPath", this.getDefaultAddonPath.bind(this));
 
     this._addOnHandler = new AddOnHandler();
   }
@@ -225,7 +226,11 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       },
     );
 
-    return Vrpc.Variant.createString(JSON.stringify(orgRepos));
+    const customRepos = this._addOnHandler.listCustomRepositories();
+
+    const repos = [...orgRepos, ...customRepos];
+
+    return Vrpc.Variant.createString(JSON.stringify(repos));
   }
 
   private async pullRepository(
@@ -305,5 +310,13 @@ export class MarketplaceService extends Vrpc.ServiceBase {
 
     // return full path of the cloned repository with name
     return Vrpc.Variant.createMapping(resultMapping);
+  }
+
+    private async getDefaultAddonPath(
+    serverContext: Vrpc.ServerContext,
+    request: Vrpc.Variant,
+  ): Promise<Vrpc.Variant> {
+    const defaultPath = this._addOnHandler.getDefaultAddonPath();
+    return Vrpc.Variant.createString(defaultPath);
   }
 }
