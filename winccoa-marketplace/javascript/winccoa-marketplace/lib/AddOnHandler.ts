@@ -295,13 +295,11 @@ int unregisterSubProj(string path, string projName, bool deleteFiles)
   return paDelProj(projName, deleteFiles);
 }
 
-dyn_dyn_string listSubProjs()
+dyn_string listSubProjs()
 {
-  dyn_string projects, versions, paths;
   dyn_string subProjects;
-  paGetProjs(projects, versions, paths);
-
-  return makeDynAnytype(projects, paths);
+  paGetSubProjs(PROJ, subProjects);
+  return subProjects;
 }
 
 int gTcpFileDescriptor2;
@@ -389,6 +387,24 @@ bool addManager(string manager, string startMode, string options, string user, s
 
   async listSubProjects(): Promise<string[]> {
     return (await this.ctrlScript.start("listSubProjs")) as string[];
+  }
+
+  async listLocalAddOns(): Promise<{addon: string, fileContent: string}[]> {
+    const localAddOns: {addon: string, fileContent: string}[] = [];
+    if (!fs.existsSync(this._defaultDirectory)) {
+      return localAddOns;
+    }
+    const entries = await fs.promises.readdir(this._defaultDirectory, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const addonJsonPath = path.join(this._defaultDirectory, entry.name, "package.winccoa.json");
+        if (fs.existsSync(addonJsonPath)) {
+          const fileContent = fs.readFileSync(addonJsonPath, "utf-8");
+          localAddOns.push({ addon: entry.name, fileContent });
+        }
+      }
+    }
+    return localAddOns;
   }
 
   /**
