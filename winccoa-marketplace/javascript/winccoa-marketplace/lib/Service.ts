@@ -225,7 +225,11 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       },
     );
 
-    return Vrpc.Variant.createString(JSON.stringify(orgRepos));
+    const customRepos = this._addOnHandler.listCustomRepositories();
+
+    const repos = [...orgRepos, ...customRepos];
+
+    return Vrpc.Variant.createString(JSON.stringify(repos));
   }
 
   private async pullRepository(
