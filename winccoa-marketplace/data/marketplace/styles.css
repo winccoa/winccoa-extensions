@@ -441,10 +441,7 @@ ix-menu ix-menu-item ix-icon {
     gap: 16px;
 }
 
-/* Modal styles */
-.modal-content {
-    padding: 16px 0;
-}
+
 
 /* Responsive design */
 @media (max-width: 768px) {

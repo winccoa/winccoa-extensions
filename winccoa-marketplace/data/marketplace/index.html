@@ -5,14 +5,335 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WinCC OA Marketplace</title>
     
-    <!-- Siemens IX Web Components -->
+
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@siemens/ix@3.2.0/dist/siemens-ix/siemens-ix.css">
     <script type="module" src="https://cdn.jsdelivr.net/npm/@siemens/ix@3.2.0/dist/siemens-ix/siemens-ix.esm.js"></script>
     <script nomodule src="https://cdn.jsdelivr.net/npm/@siemens/ix@3.2.0/dist/siemens-ix/siemens-ix.js"></script>
     
     <!-- Siemens IX Icons (required for IX 3.0.0+) -->
-    <script type="module" src="https://cdn.jsdelivr.net/npm/@siemens/ix-icons@^3.0.0/dist/ix-icons/ix-icons.esm.js"></script>
-    <script nomodule src="https://cdn.jsdelivr.net/npm/@siemens/ix-icons@^3.0.0/dist/ix-icons/ix-icons.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@siemens/ix-icons@3.2.0/dist/ix-icons/ix-icons.esm.js"></script>
+    <script nomodule src="https://cdn.jsdelivr.net/npm/@siemens/ix-icons@3.2.0/dist/ix-icons/ix-icons.js"></script>
+    
+    <!-- IX Modal using REAL IX components only -->
+    <script>
+        // Wait for IX components to be loaded 
+        function waitForCustomElements() {
+            return new Promise((resolve) => {
+                // Wait for all IX components to be defined
+                Promise.all([
+                    customElements.whenDefined('ix-modal'),
+                    customElements.whenDefined('ix-button'),
+                    customElements.whenDefined('ix-modal-header'),
+                    customElements.whenDefined('ix-modal-content'),
+                    customElements.whenDefined('ix-modal-footer')
+                ]).then(() => {
+                    console.log('✅ All IX components are defined');
+                    resolve();
+                }).catch((err) => {
+                    console.log('⚠️ Some IX components not found, using fallback timeout:', err);
+                    // Fallback - wait a bit more
+                    setTimeout(resolve, 2000);
+                });
+            });
+        }
+        
+        // Define the modal function immediately (not waiting for DOMContentLoaded)
+        console.log('🔧 Setting up IX modal function...');
+        
+        window.ixShowMessage = async (config) => {
+            console.log('🔧 ixShowMessage called with config:', config);
+            
+            // Wait for IX components to be ready when the function is actually called
+            await waitForCustomElements();
+            
+            console.log('🔧 Creating REAL IX modal component');
+            
+            return new Promise((resolve) => {
+                // Create the actual ix-modal element
+                const modal = document.createElement('ix-modal');
+                
+                // Set modal properties
+                modal.size = 'medium';
+                modal.backdropClose = false;
+                
+                // Let IX handle centering, just ensure proper z-index
+                modal.style.zIndex = '9999';
+                
+                // Create proper IX modal structure
+                modal.innerHTML = `
+                    <ix-modal-header>
+                        ${config.message || 'Question'}
+                    </ix-modal-header>
+                    <ix-modal-content>
+                        <p>Choose your action:</p>
+                    </ix-modal-content>
+                    <ix-modal-footer>
+                        ${(config.actions || []).map((action, index) => 
+                            `<ix-button 
+                                id="ix-action-${index}"
+                                variant="${index === config.actions.length - 1 ? 'primary' : 'secondary'}"
+                                ${index !== config.actions.length - 1 ? 'outline' : ''}
+                            >${action.text}</ix-button>`
+                        ).join('')}
+                    </ix-modal-footer>
+                `;
+                
+                console.log('🔧 IX modal structure created');
+                
+                // Add to DOM
+                document.body.appendChild(modal);
+                console.log('🔧 IX modal added to DOM');
+                
+                // Wait a moment for the modal to be rendered
+                setTimeout(() => {
+                    console.log('🔧 Setting up IX modal event listeners');
+                    
+                    // Add event listeners to IX buttons
+                    (config.actions || []).forEach((action, index) => {
+                        const button = modal.querySelector(`#ix-action-${index}`);
+                        if (button) {
+                            button.addEventListener('click', () => {
+                                console.log(`🔧 IX Action ${index} clicked: ${action.text}`);
+                                
+                                // Close IX modal properly
+                                modal.open = false;
+                                modal.removeAttribute('open');
+                                
+                                // Remove from DOM after IX animation completes
+                                setTimeout(() => {
+                                    if (modal.parentNode) {
+                                        modal.parentNode.removeChild(modal);
+                                    }
+                                }, 300);
+                                
+                                // Resolve with proper result
+                                resolve({ actionIndex: index, action: action.text });
+                            });
+                        } else {
+                            console.warn(`🔧 Could not find button with id ix-action-${index}`);
+                        }
+                    });
+                    
+                    // Now open the IX modal using different methods
+                    console.log('🔧 Opening IX modal...');
+                    console.log('🔧 Modal element:', modal);
+                    console.log('🔧 Modal methods:', Object.getOwnPropertyNames(modal.__proto__));
+                    
+                    // Try different opening approaches
+                    modal.open = true;
+                    modal.setAttribute('open', 'true');
+                    
+                    // Force visibility with CSS as backup
+                    modal.style.display = 'block';
+                    modal.style.visibility = 'visible';
+                    
+                    console.log('🔧 IX modal should now be visible');
+                    console.log('🔧 Modal open property:', modal.open);
+                    console.log('🔧 Modal attributes:', modal.attributes);
+                }, 200);
+            });
+        };
+        
+        console.log('✅ IX modal function created immediately');
+        console.log('🔧 window.ixShowMessage is now:', typeof window.ixShowMessage);
+        
+        // Create IX input modal function for text input (like prompts)
+        window.ixShowInput = async (config) => {
+            console.log('🔧 ixShowInput called with config:', config);
+            
+            // Wait for IX components to be ready
+            await waitForCustomElements();
+            
+            console.log('🔧 Creating IX input modal component');
+            
+            return new Promise((resolve) => {
+                // Create the actual ix-modal element
+                const modal = document.createElement('ix-modal');
+                
+                // Set modal properties
+                modal.size = 'medium';
+                modal.backdropClose = false;
+                
+                // Let IX handle centering, just ensure proper z-index
+                modal.style.zIndex = '9999';
+                
+                // Create proper IX modal structure with input field
+                modal.innerHTML = `
+                    <ix-modal-header>
+                        ${config.title || 'Enter Information'}
+                    </ix-modal-header>
+                    <ix-modal-content>
+                        <p>${config.message || 'Please enter the required information:'}</p>
+                        <div style="margin: 16px 0;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--theme-color-std-text);">
+                                ${config.label || 'Input:'}
+                            </label>
+                            <input 
+                                id="ix-input-field"
+                                type="text"
+                                value="${config.defaultValue || ''}"
+                                placeholder="${config.placeholder || ''}"
+                                style="
+                                    width: 100%;
+                                    height: 36px;
+                                    padding: 8px 12px;
+                                    border: 1px solid var(--theme-color-component-1);
+                                    border-radius: 4px;
+                                    background-color: var(--theme-color-component-2);
+                                    color: var(--theme-color-std-text);
+                                    font-size: 14px;
+                                    font-family: inherit;
+                                    outline: none;
+                                    transition: border-color 0.15s ease-in-out;
+                                "
+                            />
+                        </div>
+                    </ix-modal-content>
+                    <ix-modal-footer>
+                        <ix-button id="ix-input-cancel" variant="secondary" outline>
+                            Cancel
+                        </ix-button>
+                        <ix-button id="ix-input-ok" variant="primary">
+                            OK
+                        </ix-button>
+                    </ix-modal-footer>
+                `;
+                
+                console.log('🔧 IX input modal structure created');
+                
+                // Add to DOM
+                document.body.appendChild(modal);
+                console.log('🔧 IX input modal added to DOM');
+                
+                // Wait a moment for the modal to be rendered
+                setTimeout(() => {
+                    console.log('🔧 Setting up IX input modal event listeners');
+                    
+                    const inputField = modal.querySelector('#ix-input-field');
+                    const cancelBtn = modal.querySelector('#ix-input-cancel');
+                    const okBtn = modal.querySelector('#ix-input-ok');
+                    
+                    // Focus the input field
+                    if (inputField) {
+                        inputField.focus();
+                        inputField.select();
+                        
+                        // Add focus styling
+                        inputField.addEventListener('focus', () => {
+                            inputField.style.borderColor = 'var(--theme-color-primary)';
+                            inputField.style.boxShadow = '0 0 0 2px rgba(0, 123, 255, 0.25)';
+                        });
+                        
+                        inputField.addEventListener('blur', () => {
+                            inputField.style.borderColor = 'var(--theme-color-component-1)';
+                            inputField.style.boxShadow = 'none';
+                        });
+                        
+                        // Handle Enter key
+                        inputField.addEventListener('keydown', (e) => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                okBtn.click();
+                            } else if (e.key === 'Escape') {
+                                e.preventDefault();
+                                cancelBtn.click();
+                            }
+                        });
+                    }
+                    
+                    // Cancel button
+                    if (cancelBtn) {
+                        cancelBtn.addEventListener('click', () => {
+                            console.log('🔧 IX Input Cancel clicked');
+                            
+                            // Close modal
+                            modal.open = false;
+                            modal.removeAttribute('open');
+                            
+                            // Remove from DOM after animation
+                            setTimeout(() => {
+                                if (modal.parentNode) {
+                                    modal.parentNode.removeChild(modal);
+                                }
+                            }, 300);
+                            
+                            // Resolve with null (cancelled)
+                            resolve(null);
+                        });
+                    }
+                    
+                    // OK button
+                    if (okBtn) {
+                        okBtn.addEventListener('click', () => {
+                            console.log('🔧 IX Input OK clicked');
+                            
+                            const value = inputField ? inputField.value : '';
+                            
+                            // Close modal
+                            modal.open = false;
+                            modal.removeAttribute('open');
+                            
+                            // Remove from DOM after animation
+                            setTimeout(() => {
+                                if (modal.parentNode) {
+                                    modal.parentNode.removeChild(modal);
+                                }
+                            }, 300);
+                            
+                            // Resolve with the input value
+                            resolve(value);
+                        });
+                    }
+                    
+                    // Open the modal
+                    console.log('🔧 Opening IX input modal...');
+                    modal.open = true;
+                    modal.setAttribute('open', 'true');
+                    modal.style.display = 'block';
+                    modal.style.visibility = 'visible';
+                    
+                    console.log('🔧 IX input modal should now be visible');
+                }, 200);
+            });
+        };
+        
+        // Add a global test function for debugging
+        window.testIxModal = () => {
+            console.log('🧪 Testing IX modal...');
+            if (window.ixShowMessage) {
+                window.ixShowMessage({
+                    message: 'Test Modal',
+                    actions: [
+                        { text: 'Cancel' },
+                        { text: 'OK' }
+                    ]
+                });
+            } else {
+                console.error('❌ ixShowMessage not available for test');
+            }
+        };
+        
+        // Add test function for input modal
+        window.testIxInputModal = async () => {
+            console.log('🧪 Testing IX input modal...');
+            if (window.ixShowInput) {
+                const result = await window.ixShowInput({
+                    title: 'Test Input',
+                    message: 'Enter a test value:',
+                    label: 'Test Value:',
+                    placeholder: 'Type something...',
+                    defaultValue: 'default'
+                });
+                console.log('🧪 Input result:', result);
+                alert('You entered: ' + (result || 'cancelled'));
+            } else {
+                console.error('❌ ixShowInput not available for test');
+            }
+        };
+        
+        console.log('✅ IX input modal function created');
+    </script>
+
     
     <!-- Custom styles -->
     <link rel="stylesheet" href="styles.css">
@@ -104,7 +425,7 @@
                                 <ix-button
                                     id="clone-btn"
                                     variant="primary">
-                                    <ix-icon name="download" slot="start"></ix-icon>
+                                    <ix-icon name="folder" slot="start"></ix-icon>
                                     Clone
                                 </ix-button>
                                 
@@ -112,7 +433,7 @@
                                     id="pull-btn"
                                     variant="secondary"
                                     disabled>
-                                    <ix-icon name="refresh" slot="start"></ix-icon>
+                                    <ix-icon name="chevron-down" slot="start"></ix-icon>
                                     Pull
                                 </ix-button>
                                 
@@ -120,7 +441,7 @@
                                     id="register-btn"
                                     variant="secondary"
                                     disabled>
-                                    <ix-icon name="plus" slot="start"></ix-icon>
+                                    <ix-icon name="star" slot="start"></ix-icon>
                                     Register
                                 </ix-button>
                                 
@@ -128,7 +449,7 @@
                                     id="unregister-btn"
                                     variant="ghost"
                                     disabled>
-                                    <ix-icon name="trash" slot="start"></ix-icon>
+                                    <ix-icon name="info" slot="start"></ix-icon>
                                     Unregister
                                 </ix-button>
                             </div>
@@ -206,26 +527,28 @@
             <ix-icon name="contrast"></ix-icon>
         </ix-button>
         
-        <!-- Modals -->
-
-        <ix-modal id="clone-modal" header-title="Clone Repository">
-            <div class="modal-content">
-                <p>Choose where to clone the repository:</p>
-                <ix-input
-                    id="clone-path-input"
-                    label="Local Path"
-                    placeholder="Enter path or leave empty for default">
-                </ix-input>
-            </div>
-            <ix-button slot="footer" variant="secondary" onclick="closeCloneModal()">
-                Cancel
-            </ix-button>
-            <ix-button slot="footer" variant="primary" onclick="confirmClone()">
-                Clone Repository
-            </ix-button>
-        </ix-modal>
+        <!-- Debug Test Buttons (temporary) -->
+        <ix-button 
+            id="test-modal-btn"
+            variant="secondary"
+            size="small"
+            style="position: fixed; top: 10px; right: 110px; z-index: 1000;"
+            title="Test Modal">
+            Test Modal
+        </ix-button>
+        
+        <ix-button 
+            id="test-input-btn"
+            variant="secondary"
+            size="small"
+            style="position: fixed; top: 10px; right: 60px; z-index: 1000;"
+            title="Test Input">
+            Test Input
+        </ix-button>
+        
+        <!-- Modals will be created programmatically -->
     </ix-application>
     
-    <script src="marketplace.js"></script>
+    <script type="module" src="init.js"></script>
 </body>
 </html>
