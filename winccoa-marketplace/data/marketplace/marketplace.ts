@@ -1063,12 +1063,27 @@ export class MarketplaceUI {
     private async unregisterSubProject(): Promise<void> {
         if (!this.currentRepository) return;
         
+        // Show confirmation modal with delete option
+        const result = await window.ixShowUnregisterConfirm?.(this.currentRepository.name);
+        
+        // If user cancelled, return
+        if (!result || !result.confirmed) {
+            return;
+        }
+        
         try {
-            const response = await this.makeApiCall(`/marketplace/unregister?path=${encodeURIComponent(this.currentRepository.name)}`);
-            const result = await response.text();
+            // Pass the delete parameter to the API
+            const deleteParam = result.deleteRepository ? 'true' : 'false';
+            const response = await this.makeApiCall(
+                `/marketplace/unregister?path=${encodeURIComponent(this.currentRepository.name)}&delete=${deleteParam}`
+            );
+            const resultText = await response.text();
             
             if (response.ok) {
-                this.showSuccess('Subproject unregistered successfully');
+                const successMsg = result.deleteRepository 
+                    ? 'Subproject unregistered and repository deleted successfully'
+                    : 'Subproject unregistered successfully';
+                this.showSuccess(successMsg);
                 const index = this.registeredProjects.indexOf(this.currentRepository.name);
                 if (index > -1) {
                     this.registeredProjects.splice(index, 1);
@@ -1076,7 +1091,7 @@ export class MarketplaceUI {
                 this.updateLocalStatus(this.currentRepository);
                 this.renderRepositoryList(); // Refresh to show status change
             } else {
-                this.showError('Failed to unregister subproject: ' + result);
+                this.showError('Failed to unregister subproject: ' + resultText);
             }
         } catch (error) {
             const apiError = error as ApiError;

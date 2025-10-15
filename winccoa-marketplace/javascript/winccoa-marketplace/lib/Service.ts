@@ -40,12 +40,36 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     serverContext: Vrpc.ServerContext,
     request: Vrpc.Variant,
   ): Promise<Vrpc.Variant> {
-    const paths = request.getStringArray();
+    let paths: string[];
+    let deleteRepository = true;
+
+    // Check if request is a mapping (new format with delete parameter)
+    if (request.isMapping()) {
+      const requestMapping = request.getMapping();
+      
+      // Extract paths from mapping
+      const pathsVariant = requestMapping.get(Vrpc.Variant.createString("paths"));
+      if (!pathsVariant) {
+        throw new Error('Missing required "paths" parameter in mapping');
+      }
+      paths = pathsVariant.getStringArray();
+      
+      // Extract delete parameter from mapping
+      const deleteVariant = requestMapping.get(Vrpc.Variant.createString("delete"));
+      if (deleteVariant) {
+        deleteRepository = deleteVariant.getBool();
+      }
+    } else {
+      // Legacy format: just string array (for backward compatibility)
+      paths = request.getStringArray();
+    }
+
     for (const path of paths) {
-      console.log("Unregistering sub-project at path:", path);
-      const result = await this._addOnHandler.unregisterSubProject(path);
+      console.log("Unregistering sub-project at path:", path, "Delete repository:", deleteRepository);
+      const result = await this._addOnHandler.unregisterSubProject(path, deleteRepository);
       console.log(`Sub-project ${path} unregistered with result code:`, result);
-    };
+    }
+    
     return Vrpc.Variant.createBool(true);
   }
 

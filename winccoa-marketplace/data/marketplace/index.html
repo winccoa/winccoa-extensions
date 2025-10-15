@@ -273,6 +273,143 @@
         };
         
         console.log('✅ IX input modal function created');
+        
+        // Create IX unregister confirmation modal with delete checkbox
+        window.ixShowUnregisterConfirm = async (repositoryName) => {
+            console.log('🔧 ixShowUnregisterConfirm called for:', repositoryName);
+            
+            // Wait for IX components to be ready
+            await waitForCustomElements();
+            
+            console.log('🔧 Creating IX unregister confirmation modal');
+            
+            return new Promise(async (resolve) => {
+                // Create the actual ix-modal element
+                const modal = document.createElement('ix-modal');
+                
+                // Set modal properties
+                modal.size = 'medium';
+                modal.closeOnBackdropClick = false;
+                modal.centered = true;
+                
+                // Create modal header
+                const header = document.createElement('ix-modal-header');
+                header.textContent = 'Confirm Unregister';
+                
+                // Create modal content
+                const content = document.createElement('ix-modal-content');
+                
+                const paragraph = document.createElement('p');
+                paragraph.textContent = `Are you sure you want to unregister "${repositoryName}"?`;
+                paragraph.style.marginBottom = '16px';
+                content.appendChild(paragraph);
+                
+                // Create checkbox for delete option
+                const checkboxContainer = document.createElement('div');
+                checkboxContainer.style.display = 'flex';
+                checkboxContainer.style.alignItems = 'center';
+                checkboxContainer.style.gap = '8px';
+                checkboxContainer.style.padding = '12px';
+                checkboxContainer.style.backgroundColor = 'var(--theme-color-component-1)';
+                checkboxContainer.style.borderRadius = '4px';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = 'delete-checkbox';
+                checkbox.checked = true; // Default: delete
+                checkbox.style.cursor = 'pointer';
+                
+                const checkboxLabel = document.createElement('label');
+                checkboxLabel.htmlFor = 'delete-checkbox';
+                checkboxLabel.textContent = 'Also delete the cloned repository from disk';
+                checkboxLabel.style.cursor = 'pointer';
+                checkboxLabel.style.color = 'var(--theme-color-std-text)';
+                
+                checkboxContainer.appendChild(checkbox);
+                checkboxContainer.appendChild(checkboxLabel);
+                content.appendChild(checkboxContainer);
+                
+                // Create modal footer with buttons
+                const footer = document.createElement('ix-modal-footer');
+                
+                const cancelBtn = document.createElement('ix-button');
+                cancelBtn.id = 'ix-unregister-cancel';
+                cancelBtn.variant = 'secondary';
+                cancelBtn.outline = true;
+                cancelBtn.textContent = 'Cancel';
+                
+                const confirmBtn = document.createElement('ix-button');
+                confirmBtn.id = 'ix-unregister-confirm';
+                confirmBtn.variant = 'primary';
+                confirmBtn.textContent = 'Unregister';
+                
+                footer.appendChild(cancelBtn);
+                footer.appendChild(confirmBtn);
+                
+                // Assemble modal structure
+                modal.appendChild(header);
+                modal.appendChild(content);
+                modal.appendChild(footer);
+                
+                console.log('🔧 IX unregister modal structure created');
+                
+                // Add to DOM
+                document.body.appendChild(modal);
+                console.log('🔧 IX unregister modal added to DOM');
+                
+                // Listen to dialogDismiss event
+                modal.addEventListener('dialogDismiss', (event) => {
+                    console.log('🔧 IX Unregister Modal dismissed with reason:', event.detail);
+                    
+                    // Remove from DOM after IX animation completes
+                    setTimeout(() => {
+                        if (modal.parentNode) {
+                            modal.parentNode.removeChild(modal);
+                        }
+                    }, 300);
+                    
+                    // Resolve with the result
+                    if (event.detail !== undefined && event.detail !== null) {
+                        resolve(event.detail);
+                    } else {
+                        resolve(null); // Cancelled
+                    }
+                });
+                
+                // Wait a moment for the modal to be hydrated
+                setTimeout(async () => {
+                    console.log('🔧 Setting up IX unregister modal event listeners');
+                    
+                    // Cancel button
+                    cancelBtn.addEventListener('click', async () => {
+                        console.log('🔧 IX Unregister Cancel clicked');
+                        await modal.dismissModal(null);
+                    });
+                    
+                    // Confirm button
+                    confirmBtn.addEventListener('click', async () => {
+                        console.log('🔧 IX Unregister Confirm clicked');
+                        
+                        const shouldDelete = checkbox.checked;
+                        console.log('🔧 Delete option:', shouldDelete);
+                        
+                        // Close modal and return whether to delete
+                        await modal.dismissModal({ confirmed: true, deleteRepository: shouldDelete });
+                    });
+                    
+                    // Open the modal using official showModal() method
+                    console.log('🔧 Opening IX unregister modal using showModal()...');
+                    try {
+                        await modal.showModal();
+                        console.log('🔧 IX unregister modal opened successfully');
+                    } catch (error) {
+                        console.error('🔧 Failed to open IX unregister modal:', error);
+                    }
+                }, 200);
+            });
+        };
+        
+        console.log('✅ IX unregister confirmation modal function created');
     </script>
 
     
@@ -306,26 +443,24 @@
                     </div>
                     
                     <div class="organization-selector">
-                        <label for="organization-input">Organization</label>
-                        <div class="input-field">
-                            <input
-                                id="organization-input"
-                                type="text"
-                                value="winccoa"
-                                placeholder="Enter GitHub organization"
-                                class="native-input">
-                        </div>
+                        <ix-input
+                            id="organization-input"
+                            type="text"
+                            value="winccoa"
+                            placeholder="Enter GitHub organization"
+                            label="Organization"
+                            style="width: 100%;">
+                        </ix-input>
                     </div>
                     
                     <div class="search-container">
-                        <div class="input-field">
-                            <ix-icon name="search" size="16" class="input-icon"></ix-icon>
-                            <input
-                                id="search-input"
-                                type="text"
-                                placeholder="Search repositories..."
-                                class="native-input">
-                        </div>
+                        <ix-input
+                            id="search-input"
+                            type="text"
+                            placeholder="Search repositories..."
+                            style="width: 100%;">
+                            <ix-icon slot="icon-start" name="search" size="16"></ix-icon>
+                        </ix-input>
                     </div>
                     
                     <div id="repository-list" class="repository-list">

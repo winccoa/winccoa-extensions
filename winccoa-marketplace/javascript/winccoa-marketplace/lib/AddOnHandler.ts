@@ -257,7 +257,7 @@ int registerSubProj(string path)
   return ret;
 }
 
-int unregisterSubProj(string path)
+int unregisterSubProj(string path, bool deleteRepository = true)
 {
   string projName;
   dyn_string subProjects;
@@ -279,7 +279,18 @@ int unregisterSubProj(string path)
     paSetSubProjs(PROJ, subProjects);
   }
 
-  return paDelProj(projName, true);
+  // Delete the project configuration, then optionally delete files
+  int ret = paDelProj(projName, true);
+  
+  // If deleteRepository is true, also delete the directory
+  if (deleteRepository && ret == 0)
+  {
+    // Delete the directory and its contents
+    bool success = rmdir(path, true); // true = recursive delete
+    DebugTN("Directory deletion for", path, "result:", success);
+  }
+
+  return ret;
 }
 
 dyn_dyn_string listSubProjs()
@@ -299,8 +310,8 @@ async registerSubProject(path: string): Promise<number> {
   return ret;
 }
 
-async unregisterSubProject(path: string): Promise<number> {
-  return await this.ctrlScript.start("unregisterSubProj", [path], [WinccoaCtrlType.string]) as number;
+async unregisterSubProject(path: string, deleteRepository: boolean = true): Promise<number> {
+  return await this.ctrlScript.start("unregisterSubProj", [path, deleteRepository], [WinccoaCtrlType.string, WinccoaCtrlType.bool]) as number;
 }
 
 async listSubProjects(): Promise<string[]> {

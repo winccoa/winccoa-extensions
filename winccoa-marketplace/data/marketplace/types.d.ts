@@ -26,6 +26,11 @@ export interface IxInputModalConfig {
     defaultValue?: string;
 }
 
+export interface IxUnregisterConfirmResult {
+    confirmed: boolean;
+    deleteRepository: boolean;
+}
+
 // Repository and API types
 export interface Repository {
     name: string;
@@ -63,6 +68,7 @@ declare global {
     interface Window {
         ixShowMessage?: (config: IxModalConfig) => Promise<IxModalResult>;
         ixShowInput?: (config: IxInputModalConfig) => Promise<string | null>;
+        ixShowUnregisterConfirm?: (repositoryName: string) => Promise<IxUnregisterConfirmResult | null>;
         marketplaceUI?: import('./marketplace').MarketplaceUI;
         ixIcons?: any;
     }

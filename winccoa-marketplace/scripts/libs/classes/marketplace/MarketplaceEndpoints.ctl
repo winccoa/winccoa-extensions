@@ -122,7 +122,7 @@ class MarketplaceEndpoints
     }
     string path = values.at(idx);
 
-    bool success = client.regSubProject(path);
+    bool success = client.registerSubProjects(makeDynString(path));
 
     if (success)
     {
@@ -144,7 +144,14 @@ class MarketplaceEndpoints
     }
     string path = values.at(idx);
 
-    bool success = client.regSubProject(path);
+    bool delete = true;
+    idx = names.indexOf("delete");
+    if (idx >= 0)
+    {
+      delete = values.at(idx) == "true";
+    }
+
+    bool success = client.unregisterSubProjects(makeDynString(path));
 
     if (success)
     {
@@ -152,7 +159,7 @@ class MarketplaceEndpoints
     }
     else
     {
-      return makeDynString(jsonEncode(makeMapping("error", "Couldn't unregister subproject from " + repo)), "Status: 500 Internal Server Error");
+      return makeDynString(jsonEncode(makeMapping("error", "Couldn't unregister subproject from " + path)), "Status: 500 Internal Server Error");
     }
   }
 

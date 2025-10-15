@@ -10,23 +10,23 @@ body {
 
 /* Fix menu styling to follow theme and span full height */
 ix-menu {
-    background-color: var(--theme-color-component-1) !important;
-    border-right: 1px solid var(--theme-color-component-2) !important;
-    height: 100vh !important;
-    min-height: 100vh !important;
+    background-color: var(--theme-color-component-1);
+    border-right: 1px solid var(--theme-color-component-2);
+    height: 100vh;
+    min-height: 100vh;
 }
 
 ix-menu ix-menu-item {
-    background-color: transparent !important;
-    color: var(--theme-color-std-text) !important;
+    background-color: transparent;
+    color: var(--theme-color-std-text);
 }
 
 ix-menu ix-menu-item:hover {
-    background-color: var(--theme-color-component-2) !important;
+    background-color: var(--theme-color-component-2);
 }
 
 ix-menu ix-menu-item ix-icon {
-    color: var(--theme-color-std-text) !important;
+    color: var(--theme-color-std-text);
 }
 
 .marketplace-container {
@@ -65,50 +65,7 @@ ix-menu ix-menu-item ix-icon {
     border-bottom: 1px solid var(--theme-color-component-1);
 }
 
-/* Native input styling to match IX design */
-.input-field {
-    position: relative;
-    display: flex;
-    align-items: center;
-    width: 100%;
-}
-
-.native-input {
-    width: 100%;
-    height: 36px;
-    padding: 8px 12px;
-    padding-left: 36px; /* Space for icon in search */
-    border: 1px solid var(--theme-color-component-1);
-    border-radius: 4px;
-    background-color: var(--theme-color-component-2);
-    color: var(--theme-color-std-text);
-    font-size: 14px;
-    font-family: inherit;
-    outline: none;
-    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-}
-
-.native-input:focus {
-    border-color: var(--theme-color-primary);
-    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
-}
-
-.native-input::placeholder {
-    color: var(--theme-color-weak-text);
-}
-
-.input-icon {
-    position: absolute;
-    left: 10px;
-    z-index: 1;
-    color: var(--theme-color-weak-text);
-    pointer-events: none;
-}
-
-/* Organization input doesn't need icon padding */
-.organization-selector .native-input {
-    padding-left: 12px;
-}
+/* All inputs now use ix-input component */
 
 .organization-selector {
     padding: 8px 16px 12px 16px;
@@ -118,15 +75,7 @@ ix-menu ix-menu-item ix-icon {
     flex-direction: column;
 }
 
-.organization-selector label {
-    font-size: 12px !important;
-    font-weight: 600 !important;
-    margin-bottom: 4px !important;
-    color: var(--theme-color-std-text) !important;
-    display: block !important;
-}
-
-/* Organization selector uses native input styling above */
+/* Organization selector uses ix-input component */
 
 .organization-selector ix-input[loading] {
     opacity: 0.7;
@@ -493,16 +442,16 @@ ix-menu ix-menu-item ix-icon {
 
 /* Toast container positioning */
 ix-toast-container {
-    position: fixed !important;
-    bottom: 20px !important;
-    left: 20px !important;
-    z-index: 10000 !important;
-    pointer-events: none !important;
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    z-index: 10000;
+    pointer-events: none;
 }
 
 /* Individual toast styling */
 ix-toast-container ix-toast {
-    pointer-events: auto !important;
-    margin-bottom: 8px !important;
-    max-width: 400px !important;
+    pointer-events: auto;
+    margin-bottom: 8px;
+    max-width: 400px;
 }
