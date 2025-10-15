@@ -64,4 +64,9 @@ class MarketplaceClient
     return response.getResponse();
   }
 
+  public string repoPath()
+  {
+    VrpcResponseData response = stub.callFunction("repoPath", nullptr);
+    return response.getResponse();
+  }
 };

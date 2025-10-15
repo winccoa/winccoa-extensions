@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WinCC OA Marketplace</title>
+    
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@siemens/ix@3.2.0/dist/siemens-ix/siemens-ix.css">
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@siemens/ix@3.2.0/dist/siemens-ix/siemens-ix.esm.js"></script>
+    <script nomodule src="https://cdn.jsdelivr.net/npm/@siemens/ix@3.2.0/dist/siemens-ix/siemens-ix.js"></script>
+    
+    <!-- Siemens IX Icons (required for IX 3.0.0+) -->
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@siemens/ix-icons@3.2.0/dist/ix-icons/ix-icons.esm.js"></script>
+    <script nomodule src="https://cdn.jsdelivr.net/npm/@siemens/ix-icons@3.2.0/dist/ix-icons/ix-icons.js"></script>
+    
+    <!-- IX Modal using REAL IX components only -->
+    <script>
+        // Wait for IX components to be loaded 
+        function waitForCustomElements() {
+            return new Promise((resolve) => {
+                // Wait for all IX components to be defined
+                Promise.all([
+                    customElements.whenDefined('ix-modal'),
+                    customElements.whenDefined('ix-button'),
+                    customElements.whenDefined('ix-modal-header'),
+                    customElements.whenDefined('ix-modal-content'),
+                    customElements.whenDefined('ix-modal-footer')
+                ]).then(() => {
+                    resolve();
+                }).catch((err) => {
+                    console.error('⚠️ Some IX components not found, using fallback timeout:', err);
+                    // Fallback - wait a bit more
+                    setTimeout(resolve, 2000);
+                });
+            });
+        }
+        
+        // Define the modal function immediately (not waiting for DOMContentLoaded)
+        
+        window.ixShowMessage = async (config) => {
+            // Wait for IX components to be ready when the function is actually called
+            await waitForCustomElements();
+            
+            return new Promise(async (resolve) => {
+                // Create the actual ix-modal element
+                const modal = document.createElement('ix-modal');
+                
+                // Set modal properties using JavaScript properties (not attributes)
+                modal.size = 'medium';
+                modal.closeOnBackdropClick = false;
+                modal.centered = true;
+                
+                // Create modal header
+                const header = document.createElement('ix-modal-header');
+                header.textContent = config.title || 'Question';
+                
+                // Create modal content
+                const content = document.createElement('ix-modal-content');
+                
+                // Handle message with proper line breaks
+                if (config.message) {
+                    const messageLines = config.message.split('\n');
+                    messageLines.forEach((line, index) => {
+                        if (line.trim()) {
+                            const paragraph = document.createElement('p');
+                            paragraph.textContent = line;
+                            paragraph.style.margin = index === 0 ? '0 0 8px 0' : '8px 0';
+                            content.appendChild(paragraph);
+                        } else if (index < messageLines.length - 1) {
+                            // Empty line - add spacing
+                            const spacer = document.createElement('div');
+                            spacer.style.height = '8px';
+                            content.appendChild(spacer);
+                        }
+                    });
+                }
+                
+                // Create modal footer with buttons
+                const footer = document.createElement('ix-modal-footer');
+                const buttons = (config.actions || []).map((action, index) => {
+                    const button = document.createElement('ix-button');
+                    button.id = `ix-action-${index}`;
+                    button.variant = index === config.actions.length - 1 ? 'primary' : 'secondary';
+                    if (index !== config.actions.length - 1) {
+                        button.outline = true;
+                    }
+                    button.textContent = action.text;
+                    return button;
+                });
+                
+                buttons.forEach(btn => footer.appendChild(btn));
+                
+                // Assemble modal structure
+                modal.appendChild(header);
+                modal.appendChild(content);
+                modal.appendChild(footer);
+                
+                // Add to DOM
+                document.body.appendChild(modal);
+                
+                // Listen to dialogDismiss event to handle when modal is dismissed
+                modal.addEventListener('dialogDismiss', (event) => {
+                    // Remove from DOM after IX animation completes
+                    setTimeout(() => {
+                        if (modal.parentNode) {
+                            modal.parentNode.removeChild(modal);
+                        }
+                    }, 300);
+                    
+                    // Resolve with the result
+                    if (event.detail && event.detail.actionIndex !== undefined) {
+                        resolve(event.detail);
+                    }
+                });
+                
+                // Wait a moment for the modal to be hydrated
+                setTimeout(async () => {
+                    // Add event listeners to IX buttons
+                    buttons.forEach((button, index) => {
+                        button.addEventListener('click', async () => {
+                            // Close IX modal using the official dismissModal method
+                            await modal.dismissModal({ actionIndex: index, action: config.actions[index].text });
+                        });
+                    });
+                    
+                    // Open the IX modal using the official showModal() method
+                    try {
+                        await modal.showModal();
+                    } catch (error) {
+                        console.error('Failed to open IX modal:', error);
+                    }
+                }, 200);
+            });
+        };
+        
+        // Create IX input modal function for text input (like prompts)
+        window.ixShowInput = async (config) => {
+            // Wait for IX components to be ready
+            await waitForCustomElements();
+            
+            console.log('🔧 Creating IX input modal component');
+            
+            return new Promise(async (resolve) => {
+                // Create the actual ix-modal element
+                const modal = document.createElement('ix-modal');
+                
+                // Set modal properties using JavaScript properties (not attributes)
+                modal.size = 'medium';
+                modal.closeOnBackdropClick = false;
+                modal.centered = true;
+                
+                // Create modal header
+                const header = document.createElement('ix-modal-header');
+                header.textContent = config.title || 'Enter Information';
+                
+                // Create modal content
+                const content = document.createElement('ix-modal-content');
+                const paragraph = document.createElement('p');
+                paragraph.textContent = config.message || 'Please enter the required information:';
+                content.appendChild(paragraph);
+                
+                // Create IX input field (using proper ix-input component)
+                const inputField = document.createElement('ix-input');
+                inputField.id = 'ix-input-field';
+                inputField.value = config.defaultValue || '';
+                inputField.placeholder = config.placeholder || '';
+                inputField.label = config.label || 'Input:';
+                // Web components need explicit width to fill container
+                inputField.style.width = '100%';
+                
+                content.appendChild(inputField);
+                
+                // Create modal footer with buttons
+                const footer = document.createElement('ix-modal-footer');
+                
+                const cancelBtn = document.createElement('ix-button');
+                cancelBtn.id = 'ix-input-cancel';
+                cancelBtn.variant = 'secondary';
+                cancelBtn.outline = true;
+                cancelBtn.textContent = 'Cancel';
+                
+                const okBtn = document.createElement('ix-button');
+                okBtn.id = 'ix-input-ok';
+                okBtn.variant = 'primary';
+                okBtn.textContent = 'OK';
+                
+                footer.appendChild(cancelBtn);
+                footer.appendChild(okBtn);
+                
+                // Assemble modal structure
+                modal.appendChild(header);
+                modal.appendChild(content);
+                modal.appendChild(footer);
+                
+                // Add to DOM
+                document.body.appendChild(modal);
+                
+                // Listen to dialogDismiss event
+                modal.addEventListener('dialogDismiss', (event) => {
+                    // Remove from DOM after IX animation completes
+                    setTimeout(() => {
+                        if (modal.parentNode) {
+                            modal.parentNode.removeChild(modal);
+                        }
+                    }, 300);
+                    
+                    // Resolve with the result (null if cancelled, value if OK clicked)
+                    if (event.detail !== undefined && event.detail !== null) {
+                        resolve(event.detail);
+                    }
+                });
+                
+                // Wait a moment for the modal to be hydrated
+                setTimeout(async () => {
+                    // Focus the input field using IX method
+                    await inputField.focusInput();
+                    
+                    // Listen for Enter key on the IX input component
+                    const nativeInput = await inputField.getNativeInputElement();
+                    nativeInput.addEventListener('keydown', async (e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            okBtn.click();
+                        } else if (e.key === 'Escape') {
+                            e.preventDefault();
+                            cancelBtn.click();
+                        }
+                    });
+                    
+                    // Cancel button
+                    cancelBtn.addEventListener('click', async () => {
+                        // Close modal using official dismissModal method with null result
+                        await modal.dismissModal(null);
+                    });
+                    
+                    // OK button
+                    okBtn.addEventListener('click', async () => {
+                        const value = inputField.value;
+                        
+                        // Close modal using official dismissModal method with input value
+                        await modal.dismissModal(value);
+                    });
+                    
+                    // Open the modal using official showModal() method
+                    try {
+                        await modal.showModal();
+                    } catch (error) {
+                        console.error('Failed to open IX input modal:', error);
+                    }
+                }, 200);
+            });
+        };
+        
+        // Create IX unregister confirmation modal with delete checkbox
+        window.ixShowUnregisterConfirm = async (repositoryName) => {
+            
+            // Wait for IX components to be ready
+            await waitForCustomElements();
+            
+            return new Promise(async (resolve) => {
+                // Create the actual ix-modal element
+                const modal = document.createElement('ix-modal');
+                
+                // Set modal properties
+                modal.size = 'medium';
+                modal.closeOnBackdropClick = false;
+                modal.centered = true;
+                
+                // Create modal header
+                const header = document.createElement('ix-modal-header');
+                header.textContent = 'Confirm Unregister';
+                
+                // Create modal content
+                const content = document.createElement('ix-modal-content');
+                
+                const paragraph = document.createElement('p');
+                paragraph.textContent = `Are you sure you want to unregister "${repositoryName}"?`;
+                paragraph.style.marginBottom = '16px';
+                content.appendChild(paragraph);
+                
+                // Create checkbox for delete option
+                const checkboxContainer = document.createElement('div');
+                checkboxContainer.style.display = 'flex';
+                checkboxContainer.style.alignItems = 'center';
+                checkboxContainer.style.gap = '8px';
+                checkboxContainer.style.padding = '12px';
+                checkboxContainer.style.backgroundColor = 'var(--theme-color-component-1)';
+                checkboxContainer.style.borderRadius = '4px';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = 'delete-checkbox';
+                checkbox.checked = true; // Default: delete
+                checkbox.style.cursor = 'pointer';
+                
+                const checkboxLabel = document.createElement('label');
+                checkboxLabel.htmlFor = 'delete-checkbox';
+                checkboxLabel.textContent = 'Also delete the cloned repository from disk';
+                checkboxLabel.style.cursor = 'pointer';
+                checkboxLabel.style.color = 'var(--theme-color-std-text)';
+                
+                checkboxContainer.appendChild(checkbox);
+                checkboxContainer.appendChild(checkboxLabel);
+                content.appendChild(checkboxContainer);
+                
+                // Create modal footer with buttons
+                const footer = document.createElement('ix-modal-footer');
+                
+                const cancelBtn = document.createElement('ix-button');
+                cancelBtn.id = 'ix-unregister-cancel';
+                cancelBtn.variant = 'secondary';
+                cancelBtn.outline = true;
+                cancelBtn.textContent = 'Cancel';
+                
+                const confirmBtn = document.createElement('ix-button');
+                confirmBtn.id = 'ix-unregister-confirm';
+                confirmBtn.variant = 'primary';
+                confirmBtn.textContent = 'Unregister';
+                
+                footer.appendChild(cancelBtn);
+                footer.appendChild(confirmBtn);
+                
+                // Assemble modal structure
+                modal.appendChild(header);
+                modal.appendChild(content);
+                modal.appendChild(footer);
+                
+                // Add to DOM
+                document.body.appendChild(modal);
+                
+                // Listen to dialogDismiss event
+                modal.addEventListener('dialogDismiss', (event) => {
+                    // Remove from DOM after IX animation completes
+                    setTimeout(() => {
+                        if (modal.parentNode) {
+                            modal.parentNode.removeChild(modal);
+                        }
+                    }, 300);
+                    
+                    // Resolve with the result
+                    if (event.detail !== undefined && event.detail !== null) {
+                        resolve(event.detail);
+                    } else {
+                        resolve(null); // Cancelled
+                    }
+                });
+                
+                // Wait a moment for the modal to be hydrated
+                setTimeout(async () => {
+                    // Cancel button
+                    cancelBtn.addEventListener('click', async () => {
+                        await modal.dismissModal(null);
+                    });
+                    
+                    // Confirm button
+                    confirmBtn.addEventListener('click', async () => {
+                        const shouldDelete = checkbox.checked;
+                        
+                        // Close modal and return whether to delete
+                        await modal.dismissModal({ confirmed: true, deleteRepository: shouldDelete });
+                    });
+                    
+                    // Open the modal using official showModal() method
+                    try {
+                        await modal.showModal();
+                    } catch (error) {
+                        console.error('Failed to open IX unregister modal:', error);
+                    }
+                }, 200);
+            });
+        };
+    </script>
+
+    
+    <!-- Custom styles -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="theme-classic-light" data-theme="light">
+    <ix-application>
+        <ix-menu>
+            <ix-menu-item id="marketplace-menu-item" icon="home">
+                Marketplace
+            </ix-menu-item>
+            <ix-menu-item id="registered-projects-menu-item" icon="applications">
+                Registered Projects
+            </ix-menu-item>
+        </ix-menu>
+        
+        <ix-content>
+            <div class="marketplace-container">
+                <!-- Left sidebar - Repository list -->
+                <div class="repository-sidebar">
+                    <div class="sidebar-header">
+                        <h3 id="repositories-title">Available Repositories</h3>
+                        <ix-button 
+                            id="refresh-btn" 
+                            variant="ghost" 
+                            size="small"
+                            title="Refresh repositories">
+                            <ix-icon name="refresh"></ix-icon>
+                        </ix-button>
+                    </div>
+                    
+                    <div class="organization-selector">
+                        <ix-select
+                            id="organization-select"
+                            editable
+                            placeholder="All organizations"
+                            label="Organization"
+                            style="width: 100%;">
+                        </ix-select>
+                    </div>
+                    
+                    <div class="search-container">
+                        <ix-input
+                            id="search-input"
+                            type="text"
+                            placeholder="Search repositories..."
+                            style="width: 100%;">
+                            <ix-icon slot="icon-start" name="search" size="16"></ix-icon>
+                        </ix-input>
+                    </div>
+                    
+                    <div id="repository-list" class="repository-list">
+                        <div class="loading-spinner">
+                            <ix-spinner></ix-spinner>
+                            <span>Loading repositories...</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Main content - Repository details -->
+                <div class="repository-details">
+                    <div id="empty-state" class="empty-state">
+                        <ix-icon name="folder" size="48"></ix-icon>
+                        <h2>Select a repository</h2>
+                        <p>Choose a repository from the list to view its details and available actions.</p>
+                    </div>
+                    
+                    <div id="repository-detail" class="repository-detail" style="display: none;">
+                        <div class="detail-header">
+                            <div class="repo-info">
+                                <h1 id="repo-name"></h1>
+                                <p id="repo-description"></p>
+                                <div class="repo-meta">
+                                    <ix-pill id="repo-visibility" variant="outline" icon="lock">
+                                        <span id="repo-visibility-text">Private</span>
+                                    </ix-pill>
+                                    <ix-pill id="repo-stars" variant="outline" icon="star-filled">
+                                        <span id="repo-stars-text">0 stars</span>
+                                    </ix-pill>
+                                    <ix-pill id="repo-forks" variant="outline" icon="split">
+                                        <span id="repo-forks-text">0 forks</span>
+                                    </ix-pill>
+                                </div>
+                            </div>
+                            
+                            <div class="action-buttons">
+                                <ix-button
+                                    id="clone-btn"
+                                    variant="primary"
+                                    icon="download">
+                                    Clone
+                                </ix-button>
+                                
+                                <ix-button
+                                    id="pull-btn"
+                                    variant="primary"
+                                    icon="download-add"
+                                    disabled>
+                                    Pull
+                                </ix-button>
+                                
+                                <ix-button
+                                    id="register-btn"
+                                    variant="primary"
+                                    icon="add-application"
+                                    disabled>
+                                    Register
+                                </ix-button>
+                                
+                                <ix-button
+                                    id="unregister-btn"
+                                    variant="danger"
+                                    icon="remove-application"
+                                    disabled>
+                                    Unregister
+                                </ix-button>
+                                
+                                <ix-spinner 
+                                    id="action-loading-spinner" 
+                                    size="small"
+                                    style="display: none; margin-left: 12px;">
+                                </ix-spinner>
+                            </div>
+                        </div>
+                        
+                        <ix-tabs>
+                            <ix-tab-item>Overview</ix-tab-item>
+                            <ix-tab-item>README</ix-tab-item>
+                            <ix-tab-item>Files</ix-tab-item>
+                        </ix-tabs>
+                        
+                        <div class="tab-content">
+                            <div id="overview-tab" class="tab-pane active">
+                                <div class="overview-grid">
+                                    <div class="overview-card">
+                                        <h4>Repository Stats</h4>
+                                        <div class="stat-item">
+                                            <span class="stat-label">Size:</span>
+                                            <span id="repo-size">-</span>
+                                        </div>
+                                        <div class="stat-item">
+                                            <span class="stat-label">Created:</span>
+                                            <span id="repo-created">-</span>
+                                        </div>
+                                        <div class="stat-item">
+                                            <span class="stat-label">Updated:</span>
+                                            <span id="repo-updated">-</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="overview-card">
+                                        <h4>Local Status</h4>
+                                        <div id="local-status" class="status-info">
+                                            <ix-icon name="info" class="status-icon"></ix-icon>
+                                            <span>Not cloned locally</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div id="metadata-card" class="overview-card" style="display: none;">
+                                        <h4>Repository Metadata</h4>
+                                        <pre id="file-content-json" class="json-display"></pre>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div id="readme-tab" class="tab-pane">
+                                <div id="readme-content" class="readme-content">
+                                    <div class="loading-spinner">
+                                        <ix-spinner></ix-spinner>
+                                        <span>Loading README...</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div id="files-tab" class="tab-pane">
+                                <div id="files-content" class="files-content">
+                                    <p>File browser functionality would be implemented here.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </ix-content>
+        
+        <!-- Toast notifications -->
+        <ix-toast-container></ix-toast-container>
+        
+        <!-- Theme Toggle -->
+        <ix-button 
+            id="theme-toggle"
+            variant="ghost"
+            size="small"
+            style="position: fixed; top: 10px; right: 10px; z-index: 1000;"
+            title="Toggle Theme">
+            <ix-icon name="sun"></ix-icon>
+        </ix-button>
+        
+        <!-- Modals will be created programmatically -->
+    </ix-application>
+    
+    <script type="module" src="init.js"></script>
+</body>
+</html>
