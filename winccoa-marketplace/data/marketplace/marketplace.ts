@@ -23,6 +23,7 @@ export class MarketplaceUI {
     private repositories: Repository[] = [];
     private registeredProjects: string[] = [];
     private fetchOptions: FetchOptions;
+    private currentMode: 'marketplace' | 'registered' = 'marketplace';
 
     constructor() {
         // Auto-detect backend URL based on current frontend URL
@@ -270,6 +271,18 @@ export class MarketplaceUI {
         // Tab switching
         this.initializeTabs();
         
+        // Menu item listeners
+        document.getElementById('marketplace-menu-item')?.addEventListener('click', () => {
+            this.switchToMarketplaceMode();
+        });
+        
+        document.getElementById('registered-projects-menu-item')?.addEventListener('click', () => {
+            this.switchToRegisteredProjectsMode();
+        });
+        
+        // Set marketplace as selected by default
+        document.getElementById('marketplace-menu-item')?.setAttribute('selected', '');
+        
         // Theme toggle button
         document.getElementById('theme-toggle')?.addEventListener('click', () => {
             this.toggleTheme();
@@ -277,6 +290,109 @@ export class MarketplaceUI {
         
         // Initialize theme
         this.initializeTheme();
+    }
+
+    /**
+     * Switch to marketplace mode (show all repositories from organization)
+     */
+    private switchToMarketplaceMode(): void {
+        this.currentMode = 'marketplace';
+        this.updateMenuSelection();
+        this.updateTitle();
+        
+        // Load organization repositories
+        const orgInput = document.getElementById('organization-input') as HTMLInputElement | null;
+        const currentOrg = orgInput?.value?.trim() || 'winccoa';
+        this.loadRepositories(currentOrg);
+    }
+
+    /**
+     * Switch to registered projects mode (show only registered repositories)
+     */
+    private switchToRegisteredProjectsMode(): void {
+        this.currentMode = 'registered';
+        this.updateMenuSelection();
+        this.updateTitle();
+        this.showRegisteredRepositories();
+    }
+
+    /**
+     * Update menu item selection visual state
+     */
+    private updateMenuSelection(): void {
+        const marketplaceItem = document.getElementById('marketplace-menu-item');
+        const registeredItem = document.getElementById('registered-projects-menu-item');
+        
+        // Remove selected state from both
+        marketplaceItem?.removeAttribute('selected');
+        registeredItem?.removeAttribute('selected');
+        
+        // Add selected state to current mode
+        if (this.currentMode === 'marketplace') {
+            marketplaceItem?.setAttribute('selected', '');
+        } else {
+            registeredItem?.setAttribute('selected', '');
+        }
+    }
+
+    /**
+     * Update the title based on current mode
+     */
+    private updateTitle(): void {
+        const title = document.getElementById('repositories-title');
+        const orgContainer = document.querySelector('.organization-selector');
+        
+        if (title) {
+            if (this.currentMode === 'marketplace') {
+                const orgInput = document.getElementById('organization-input') as HTMLInputElement | null;
+                const currentOrg = orgInput?.value?.trim() || 'winccoa';
+                title.textContent = `${currentOrg} Repositories`;
+                // Show organization input in marketplace mode
+                if (orgContainer) {
+                    (orgContainer as HTMLElement).style.display = '';
+                }
+            } else {
+                title.textContent = 'Registered Projects';
+                // Hide organization input in registered projects mode
+                if (orgContainer) {
+                    (orgContainer as HTMLElement).style.display = 'none';
+                }
+            }
+        }
+    }
+
+    /**
+     * Show only registered repositories in the list
+     */
+    private showRegisteredRepositories(): void {
+        // Filter repositories to show only registered ones
+        const registeredRepos = this.repositories.filter(repo => 
+            this.registeredProjects.includes(repo.name)
+        );
+        
+        // Temporarily store all repositories and replace with filtered ones
+        const allRepositories = [...this.repositories];
+        this.repositories = registeredRepos;
+        
+        // Render the filtered list
+        this.renderRepositoryList();
+        
+        // Restore all repositories for future use
+        this.repositories = allRepositories;
+        
+        // Show appropriate message if no registered projects
+        if (registeredRepos.length === 0) {
+            const container = document.getElementById('repository-list');
+            if (container) {
+                container.innerHTML = `
+                    <div class="empty-state" style="padding: 48px 16px; text-align: center;">
+                        <ix-icon name="shopping-cart" size="32" style="color: var(--theme-color-weak-text);"></ix-icon>
+                        <p style="margin: 16px 0 0 0; color: var(--theme-color-weak-text);">No registered projects yet</p>
+                        <p style="margin: 8px 0 0 0; color: var(--theme-color-weak-text); font-size: 14px;">Switch to Marketplace to find and register repositories</p>
+                    </div>
+                `;
+            }
+        }
     }
 
     /**
