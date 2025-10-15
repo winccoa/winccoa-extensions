@@ -25,15 +25,50 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     serverContext: Vrpc.ServerContext,
     request: Vrpc.Variant,
   ): Promise<Vrpc.Variant> {
-    const paths = request.getStringArray();
+    try {
+      console.log("check if request is mapping:", request.isMapping());
+      const requestMapping = request.getMapping();
 
-   for (const path of paths) {
-      console.log("Registering sub-project at path:", path);
-      const result = await this._addOnHandler.registerSubProject(path);
-      console.log(`Sub-project ${path} registered with result code:`, result);
+      // Convert mapping to JavaScript object for easier access
+      const requestObject = requestMapping.convertToObject() as any;
+
+      console.log("requestObject:", requestObject);
+
+      // Extract repositoryPath using requestMapping for the keys
+      const repositoryPathVariant = requestMapping.get(
+        Vrpc.Variant.createString("repositoryPath"),
+      );
+      if (!repositoryPathVariant) {
+        throw new Error(
+          'Missing required "repositoryPath" parameter in mapping',
+        );
+      }
+      const repositoryPath = repositoryPathVariant.getString();
+      console.log("-------- repositoryPath:", repositoryPath);
+
+      // Extract fileContent using requestMapping for the keys
+      const fileContentVariant = requestMapping.get(
+        Vrpc.Variant.createString("fileContent"),
+      );
+      if (!fileContentVariant) {
+        throw new Error('Missing required "fileContent" parameter in mapping');
+      }
+      const fileContent = fileContentVariant.getString();
+      console.log("-------- fileContent:", fileContent);
+
+      const result =
+        await this._addOnHandler.registerSubProject(repositoryPath);
+
+      console.log(
+        `Sub-project ${repositoryPath} registered with result code:`,
+        result,
+      );
+
+      return Vrpc.Variant.createBool(true);
+    } catch (error) {
+      console.error("Error in registerSubProjects:", error);
+      throw error;
     }
-
-    return Vrpc.Variant.createBool(true);
   }
 
   private async unregisterSubProjects(
@@ -45,7 +80,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       console.log("Unregistering sub-project at path:", path);
       const result = await this._addOnHandler.unregisterSubProject(path);
       console.log(`Sub-project ${path} unregistered with result code:`, result);
-    };
+    }
     return Vrpc.Variant.createBool(true);
   }
 
@@ -114,7 +149,9 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     repositoryURL = urlVariant.getString();
 
     // Extract optional parameters targetDirectory and branch from mapping
-    const branchVariant = requestMapping.get(Vrpc.Variant.createString("branch"));
+    const branchVariant = requestMapping.get(
+      Vrpc.Variant.createString("branch"),
+    );
     const targetDirVariant = requestMapping.get(
       Vrpc.Variant.createString("targetDirectory"),
     );
@@ -129,11 +166,11 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     );
 
     const resultMapping = new Vrpc.Mapping();
-    
+
     resultMapping.set(
       Vrpc.Variant.createString("repositoryPath"),
       Vrpc.Variant.createString(result.path),
-    ); 
+    );
 
     resultMapping.set(
       Vrpc.Variant.createString("fileContent"),

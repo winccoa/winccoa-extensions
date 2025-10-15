@@ -46,9 +46,9 @@ class MarketplaceClient
     return response.getResponse();
   }
 
-  public bool registerSubProjects(dyn_string paths)
+  public bool registerSubProjects(mapping request)
   {
-    VrpcResponseData response = stub.callFunction("register", paths);
+    VrpcResponseData response = stub.callFunction("register", request);
     return response.getResponse();
   }
 

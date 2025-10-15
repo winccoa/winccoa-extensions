@@ -33,7 +33,11 @@ void main()
   // pull existing repo
   DebugTN("result of 'pull existing repo'", client.pull("D:/test/winccoa-ae-js-mcpserver"));
 
-  DebugTN("result of 'register project'", client.registerSubProjects(makeDynString("D:/test/winccoa-ae-js-mcpserver/MqttExplorerAndImporterTool")));
+  mapping mRepo;
+  mRepo.insert("repositoryPath", "D:/test/winccoa-ae-js-mcpserver/MqttExplorerAndImporterTool");
+  mRepo.insert("fileContent", "{\"name\":\"myAddon\",\"keywords\":[\"javascript\"],\"subproject\":\"mysubprojectlocation\",\"dplists\":[\"myDplist.dpl\",\"mySecond.dpl\"],\"installScripts\":[\"update.js/ts\",\"update_2.ctl\"],\"managers\":[{\"name\":\"WCCOAopcua\",\"options\":\"-num 2\",\"startMode\":\"once\"},{\"name\":\"WCCOActrl\",\"options\":\"-num 3 testScript\",\"startMode\":\"always\"}],\"version\":\"v1.0.0\",\"description\":\"...\",\"oaVersion\":\"^3.21.0\"}");
+
+  DebugTN("result of 'register project'", client.registerSubProjects(mRepo)); // makeDynString("D:/test/winccoa-ae-js-mcpserver/MqttExplorerAndImporterTool")));
 
   DebugTN("result of 'unregister project'", client.unregisterSubProjects(makeDynString("D:/test/winccoa-ae-js-mcpserver/MqttExplorerAndImporterTool")));
 }
