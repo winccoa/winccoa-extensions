@@ -389,15 +389,21 @@ bool addManager(string manager, string startMode, string options, string user, s
     return (await this.ctrlScript.start("listSubProjs")) as string[];
   }
 
-  async listLocalAddOns(): Promise<{addon: string, fileContent: string}[]> {
-    const localAddOns: {addon: string, fileContent: string}[] = [];
+  async listLocalAddOns(): Promise<{ addon: string; fileContent: string }[]> {
+    const localAddOns: { addon: string; fileContent: string }[] = [];
     if (!fs.existsSync(this._defaultDirectory)) {
       return localAddOns;
     }
-    const entries = await fs.promises.readdir(this._defaultDirectory, { withFileTypes: true });
+    const entries = await fs.promises.readdir(this._defaultDirectory, {
+      withFileTypes: true,
+    });
     for (const entry of entries) {
       if (entry.isDirectory()) {
-        const addonJsonPath = path.join(this._defaultDirectory, entry.name, "package.winccoa.json");
+        const addonJsonPath = path.join(
+          this._defaultDirectory,
+          entry.name,
+          "package.winccoa.json",
+        );
         if (fs.existsSync(addonJsonPath)) {
           const fileContent = fs.readFileSync(addonJsonPath, "utf-8");
           localAddOns.push({ addon: entry.name, fileContent });
@@ -878,7 +884,10 @@ bool addManager(string manager, string startMode, string options, string user, s
   listCustomRepositories(): object[] {
     // Read repositories.config.json and return an array of repository info objects
     try {
-      const configPath = path.resolve(__dirname, "../../../config/repositories.config.json");
+      const configPath = path.resolve(
+        __dirname,
+        "../../../config/repositories.config.json",
+      );
       if (!fs.existsSync(configPath)) {
         console.warn(
           `[listCustomRepositories] repositories.config.json not found at ${configPath}`,

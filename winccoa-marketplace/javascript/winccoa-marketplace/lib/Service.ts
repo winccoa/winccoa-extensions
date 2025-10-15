@@ -312,7 +312,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     return Vrpc.Variant.createMapping(resultMapping);
   }
 
-    private async getDefaultAddonPath(
+  private async getDefaultAddonPath(
     serverContext: Vrpc.ServerContext,
     request: Vrpc.Variant,
   ): Promise<Vrpc.Variant> {
