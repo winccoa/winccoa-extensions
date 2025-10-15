@@ -45,9 +45,19 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       }
       const repositoryPath = repositoryPathVariant.getString();
       console.log("-------- repositoryPath:", repositoryPath);
-
+      const config: import("./AddonConfig").AddonConfig = {
+        RepoName: "",
+        Keywords: [],
+        Subproject: "",
+        Version: "1.0.0",
+        Description: "",
+        OaVersion: "",
+        Managers: [],
+        Dplists: [],
+        UpdateScripts: []
+      };
       // Extract fileContent using requestMapping for the keys
-      const fileContentVariant = requestMapping.get(
+      const result = await this._addOnHandler.registerSubProject(path);
         Vrpc.Variant.createString("fileContent"),
       );
       if (!fileContentVariant) {
