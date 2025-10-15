@@ -9,7 +9,7 @@ export class NodeInstaller {
     static async findPackageDirs(dir: string, found: string[] = []): Promise<string[]> {
         if (!fs.existsSync(dir))
           return [];
-        const entries = await fs.readdir(dir, { withFileTypes: true });
+        const entries = await fs.promises.readdir(dir, { withFileTypes: true });
         const hasPackageJson = entries.some(e => e.isFile() && e.name === 'package.json');
         if (hasPackageJson) {
             console.log(`Found package.json in ${dir}`);

@@ -29,7 +29,18 @@ export class MarketplaceService extends Vrpc.ServiceBase {
 
    for (const path of paths) {
       console.log("Registering sub-project at path:", path);
-      const result = await this._addOnHandler.registerSubProject(path);
+      const config: import("./AddonConfig").AddonConfig = {
+        RepoName: "",
+        Keywords: [],
+        Subproject: "",
+        Version: "1.0.0",
+        Description: "",
+        OaVersion: "",
+        Managers: [],
+        Dplists: [],
+        UpdateScripts: []
+      };
+      const result = await this._addOnHandler.registerSubProject(path, config);
       console.log(`Sub-project ${path} registered with result code:`, result);
     }
 

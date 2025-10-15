@@ -7,6 +7,7 @@ import * as os from "os";
 import { WinccoaCtrlScript, WinccoaCtrlType, WinccoaManager } from "winccoa-manager";
 import { AsciiManager } from "./AsciiManager";
 import { NodeInstaller } from "./NodeInstaller";
+import { AddonConfig, ManagerConfig } from "./AddonConfig";
 
 
 // Export the class for use in other modules
@@ -233,12 +234,34 @@ dyn_dyn_string listSubProjs()
 
   return makeDynAnytype(projects, paths);
 }
+
+int gTcpFileDescriptor2;
+string host;
+string port;
+bool addManager(string manager, string startMode, string options, string user, string pwd)
+{
+  paGetProjHostPort(PROJ, host, port);
+  gTcpFileDescriptor2 = tcpOpen(host, port);
+  ProjEnvProject proj  = new ProjEnvProject(PROJ);
+  dyn_anytype managers = proj.getListOfManagersStati();
+  bool err;
+  
+  pmonInsertManager(err, PROJ, dynlen(managers), makeDynString(manager, startMode, 2, 2, 30, options), user, pwd);
+  return err;
+}
   `
 );
 
-async registerSubProject(path: string): Promise<number> {
+async registerSubProject(path: string, config: AddonConfig): Promise<number> {
   const ret = await this.ctrlScript.start("registerSubProj", [path], [WinccoaCtrlType.string]) as number;
   await NodeInstaller.installAndBuild(path);
+
+  for (const manager of config.Managers || []) {
+    console.log(`Adding manager ${manager.Name} with start mode ${manager.StartMode} and options ${manager.Options}`);
+    // eslint-disable-next-line no-await-in-loop
+    await this.ctrlScript.start("addManager", [manager.Name, manager.StartMode, manager.Options, "", ""], 
+      [WinccoaCtrlType.string, WinccoaCtrlType.string, WinccoaCtrlType.string, WinccoaCtrlType.string, WinccoaCtrlType.string]);
+  }
   return ret;
 }
 
