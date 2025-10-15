@@ -907,110 +907,67 @@ export class MarketplaceUI {
      */
     private async showCloneModal(): Promise<void> {
         console.log('🔧 showCloneModal called');
-        console.log('🔧 window.ixShowMessage type:', typeof window.ixShowMessage);
-        console.log('🔧 window.ixShowMessage value:', window.ixShowMessage);
         
-        // Check if IX showMessage is available from our import
-        if (typeof window.ixShowMessage !== 'function') {
-            console.error('❌ IX showMessage not available - falling back to IX input');
-            // Fallback to IX input modal
-            if (typeof window.ixShowInput === 'function') {
-                const path = await window.ixShowInput({
-                    title: 'Clone Repository',
-                    message: 'Enter the local path where you want to clone the repository:',
-                    label: 'Local Path:',
-                    placeholder: 'Leave empty for default location',
-                    defaultValue: ''
-                });
-                if (path !== null) {
-                    await this.performClone(path || '');
-                }
-            } else {
-                // Final fallback to native prompt
-                const path = prompt('Enter local path for cloning (or leave empty for default):');
-                if (path !== null) {
-                    await this.performClone(path || '');
-                }
-            }
+        if (!this.currentRepository) {
+            this.showError('No repository selected');
             return;
         }
         
         try {
-            console.log('🔧 Using IX showMessage for clone dialog');
+            // Fetch the default addon path from the backend
+            const response = await this.makeApiCall('/marketplace/getDefaultAddonPath');
             
-            // Use IX showMessage API correctly - it returns a promise that resolves when user clicks an action
-            const result = await window.ixShowMessage({
-                message: 'Choose where to clone the repository',
-                actions: [
-                    {
-                        text: 'Cancel'
-                    },
-                    {
-                        text: 'Clone to Default'
-                    },
-                    {
-                        text: 'Choose Path'
-                    }
-                ]
-            });
+            if (!response.ok) {
+                throw new Error('Failed to fetch default addon path');
+            }
             
-            console.log('🔧 IX showMessage result:', result);
+            const pathData = await response.json();
+            console.log('🔧 Default addon path response:', pathData);
             
-            // Handle the result based on which action was clicked
-            if (result && result.actionIndex !== undefined) {
-                switch (result.actionIndex) {
-                    case 0: // Cancel
-                        console.log('🔧 Clone cancelled');
-                        break;
-                    case 1: // Clone to Default
-                        console.log('🔧 Clone to default path');
-                        await this.performClone('');
-                        break;
-                    case 2: // Choose Path
-                        console.log('🔧 Choose custom path');
-                        if (typeof window.ixShowInput === 'function') {
-                            const path = await window.ixShowInput({
-                                title: 'Choose Clone Path',
-                                message: 'Enter the local path where you want to clone the repository:',
-                                label: 'Local Path:',
-                                placeholder: 'e.g., /path/to/directory or C:\\projects\\repo',
-                                defaultValue: ''
-                            });
-                            if (path !== null) {
-                                await this.performClone(path);
-                            }
-                        } else {
-                            // Fallback to native prompt
-                            const path = prompt('Enter local path:');
-                            if (path !== null) {
-                                await this.performClone(path);
-                            }
+            // Extract the path from the array response
+            const defaultPath = Array.isArray(pathData) && pathData.length > 0 
+                ? pathData[0] 
+                : 'Unknown path';
+            
+            // Calculate the full clone path
+            const fullClonePath = `${defaultPath}${this.currentRepository.name}`;
+            
+            // Show confirmation dialog with the path
+            if (typeof window.ixShowMessage === 'function') {
+                const result = await window.ixShowMessage({
+                    title: 'Clone Repository',
+                    message: `Repository "${this.currentRepository.name}" will be cloned to\n\n${fullClonePath}`,
+                    actions: [
+                        {
+                            text: 'Cancel'
+                        },
+                        {
+                            text: 'Clone'
                         }
-                        break;
+                    ]
+                });
+                
+                console.log('🔧 IX showMessage result:', result);
+                
+                // Handle the result based on which action was clicked
+                if (result && result.actionIndex === 1) {
+                    // User clicked "Clone"
+                    console.log('🔧 User confirmed clone to:', fullClonePath);
+                    await this.performClone(defaultPath);
+                } else {
+                    console.log('🔧 Clone cancelled');
+                }
+            } else {
+                // Fallback to native confirm
+                const confirmed = confirm(`Clone repository "${this.currentRepository.name}" to:\n\n${fullClonePath}\n\nContinue?`);
+                if (confirmed) {
+                    await this.performClone(defaultPath);
                 }
             }
             
         } catch (error) {
-            console.error('❌ Failed to open IX showMessage:', error);
-            // Fallback to IX input modal
-            if (typeof window.ixShowInput === 'function') {
-                const path = await window.ixShowInput({
-                    title: 'Clone Repository',
-                    message: 'Enter the local path where you want to clone the repository:',
-                    label: 'Local Path:',
-                    placeholder: 'Leave empty for default location',
-                    defaultValue: ''
-                });
-                if (path !== null) {
-                    await this.performClone(path || '');
-                }
-            } else {
-                // Final fallback to native prompt
-                const path = prompt('Enter local path for cloning (or leave empty for default):');
-                if (path !== null) {
-                    await this.performClone(path || '');
-                }
-            }
+            console.error('❌ Failed to fetch default addon path:', error);
+            this.showError('Failed to get default clone path: ' + (error as Error).message);
         }
     }
     

@@ -9,6 +9,7 @@ export interface IxModalAction {
 }
 
 export interface IxModalConfig {
+    title?: string;
     message: string;
     actions: IxModalAction[];
 }

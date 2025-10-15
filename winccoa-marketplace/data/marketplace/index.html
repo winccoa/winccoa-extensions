@@ -59,13 +59,28 @@
                 
                 // Create modal header
                 const header = document.createElement('ix-modal-header');
-                header.textContent = config.message || 'Question';
+                header.textContent = config.title || 'Question';
                 
                 // Create modal content
                 const content = document.createElement('ix-modal-content');
-                const paragraph = document.createElement('p');
-                paragraph.textContent = 'Choose your action:';
-                content.appendChild(paragraph);
+                
+                // Handle message with proper line breaks
+                if (config.message) {
+                    const messageLines = config.message.split('\n');
+                    messageLines.forEach((line, index) => {
+                        if (line.trim()) {
+                            const paragraph = document.createElement('p');
+                            paragraph.textContent = line;
+                            paragraph.style.margin = index === 0 ? '0 0 8px 0' : '8px 0';
+                            content.appendChild(paragraph);
+                        } else if (index < messageLines.length - 1) {
+                            // Empty line - add spacing
+                            const spacer = document.createElement('div');
+                            spacer.style.height = '8px';
+                            content.appendChild(spacer);
+                        }
+                    });
+                }
                 
                 // Create modal footer with buttons
                 const footer = document.createElement('ix-modal-footer');

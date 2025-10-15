@@ -36,6 +36,7 @@ class MarketplaceEndpoints
     httpConnect(registerSubProjects, MARKETPLACE_URL_PREFIX + "/registerSubProjects", "application/json");
     httpConnect(unregisterSubProjects, MARKETPLACE_URL_PREFIX + "/unregisterSubProjects", "application/json");
     httpConnect(listProjects, MARKETPLACE_URL_PREFIX + "/listProjects", "application/json");
+    httpConnect(getDefaultAddonPath, MARKETPLACE_URL_PREFIX + "/getDefaultAddonPath", "application/json");
   }
 
 
@@ -204,6 +205,20 @@ class MarketplaceEndpoints
     else
     {
       return makeDynString(jsonEncode(makeMapping("error", "No subproject registered")), "Status: 404 Not Found");
+    }
+  }
+
+  //--------------------------------------------------------------------------------
+  public static dyn_string getDefaultAddonPath()
+  {
+    string response = client.repoPath();
+    if (response != "")
+    {
+      return makeDynString(jsonEncode(response), "Status: 200 OK");
+    }
+    else
+    {
+      return makeDynString(jsonEncode(makeMapping("error", "Could not find default addon path")), "Status: 404 Not Found");
     }
   }
 
