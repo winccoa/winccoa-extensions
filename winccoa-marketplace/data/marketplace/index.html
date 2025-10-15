@@ -373,49 +373,47 @@
                                 <h1 id="repo-name"></h1>
                                 <p id="repo-description"></p>
                                 <div class="repo-meta">
-                                    <ix-chip id="repo-visibility" variant="outline">
-                                        <ix-icon name="lock" slot="start"></ix-icon>
+                                    <ix-pill id="repo-visibility" variant="outline" icon="lock">
                                         <span id="repo-visibility-text">Private</span>
-                                    </ix-chip>
-                                    <ix-chip variant="outline">
-                                        <ix-icon name="star" slot="start"></ix-icon>
-                                        <span id="repo-stars">0</span>
-                                    </ix-chip>
-                                    <ix-chip variant="outline">
-                                        <span id="repo-forks">0 forks</span>
-                                    </ix-chip>
+                                    </ix-pill>
+                                    <ix-pill id="repo-stars" variant="outline" icon="star-filled">
+                                        <span id="repo-stars-text">0 stars</span>
+                                    </ix-pill>
+                                    <ix-pill id="repo-forks" variant="outline" icon="split">
+                                        <span id="repo-forks-text">0 forks</span>
+                                    </ix-pill>
                                 </div>
                             </div>
                             
                             <div class="action-buttons">
                                 <ix-button
                                     id="clone-btn"
-                                    variant="primary">
-                                    <ix-icon name="folder" slot="start"></ix-icon>
+                                    variant="primary"
+                                    icon="download">
                                     Clone
                                 </ix-button>
                                 
                                 <ix-button
                                     id="pull-btn"
                                     variant="primary"
+                                    icon="download-add"
                                     disabled>
-                                    <ix-icon name="chevron-down" slot="start"></ix-icon>
                                     Pull
                                 </ix-button>
                                 
                                 <ix-button
                                     id="register-btn"
                                     variant="primary"
+                                    icon="add-application"
                                     disabled>
-                                    <ix-icon name="star" slot="start"></ix-icon>
                                     Register
                                 </ix-button>
                                 
                                 <ix-button
                                     id="unregister-btn"
                                     variant="danger"
+                                    icon="remove-application"
                                     disabled>
-                                    <ix-icon name="x" slot="start"></ix-icon>
                                     Unregister
                                 </ix-button>
                             </div>
@@ -432,10 +430,6 @@
                                 <div class="overview-grid">
                                     <div class="overview-card">
                                         <h4>Repository Stats</h4>
-                                        <div class="stat-item">
-                                            <span class="stat-label">Language:</span>
-                                            <span id="repo-language">-</span>
-                                        </div>
                                         <div class="stat-item">
                                             <span class="stat-label">Size:</span>
                                             <span id="repo-size">-</span>

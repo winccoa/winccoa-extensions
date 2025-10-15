@@ -96,11 +96,11 @@ export class MarketplaceUI {
         if (theme === 'dark') {
             body.classList.add('theme-classic-dark');
             body.setAttribute('data-theme', 'dark');
-            if (themeIcon) themeIcon.setAttribute('name', 'sun');
+            if (themeIcon) themeIcon.setAttribute('name', 'moon');
         } else {
             body.classList.add('theme-classic-light');
             body.setAttribute('data-theme', 'light');
-            if (themeIcon) themeIcon.setAttribute('name', 'moon');
+            if (themeIcon) themeIcon.setAttribute('name', 'sun');
         }
         
         console.log(`🎨 Theme set to: ${theme}`);
@@ -430,17 +430,17 @@ export class MarketplaceUI {
                     <div class="repository-status ${statusClass}"></div>
                     <div class="repository-item-header">
                         <div class="repository-item-name">${repo.name}</div>
-                        <ix-chip class="repository-item-visibility" variant="outline" size="small">
+                        <ix-pill class="repository-item-visibility" variant="outline" size="small">
                             <ix-icon name="${repo.private ? 'lock' : 'unlock'}" slot="start"></ix-icon>
                             ${repo.private ? 'Private' : 'Public'}
-                        </ix-chip>
+                        </ix-pill>
                     </div>
                     <div class="repository-item-description">
                         ${repo.description || 'No description available'}
                     </div>
                     <div class="repository-item-meta">
                         <div class="repository-item-meta-item" title="${repo.stars} star${repo.stars !== 1 ? 's' : ''}">
-                            <ix-icon name="star" size="12"></ix-icon>
+                            <ix-icon name="star-filled" size="12"></ix-icon>
                             <span>${repo.stars || 0}&nbsp;${repo.stars !== 1 ? 'stars' : 'star'}</span>
                         </div>
                         <div class="repository-item-meta-item" title="${repo.forks} fork${repo.forks !== 1 ? 's' : ''}">
@@ -529,25 +529,22 @@ export class MarketplaceUI {
         
         // Update meta information
         const visibilityChip = document.getElementById('repo-visibility');
-        const visibilityIcon = visibilityChip?.querySelector('ix-icon');
         const visibilityText = document.getElementById('repo-visibility-text');
         
-        if (visibilityIcon) visibilityIcon.setAttribute('name', repo.private ? 'lock' : 'unlock');
+        if (visibilityChip) visibilityChip.setAttribute('icon', repo.private ? 'lock-filled' : 'unlock-filled');
         if (visibilityText) visibilityText.textContent = repo.private ? 'Private' : 'Public';
         
-        const repoStars = document.getElementById('repo-stars');
-        const repoForks = document.getElementById('repo-forks');
-        
-        if (repoStars) repoStars.innerHTML = `${repo.stars || 0}&nbsp;${repo.stars !== 1 ? 'stars' : 'star'}`;
-        if (repoForks) repoForks.innerHTML = `${repo.forks || 0}&nbsp;${repo.forks !== 1 ? 'forks' : 'fork'}`;
-        
+        const repoStarsText = document.getElementById('repo-stars-text');
+        const repoForksText = document.getElementById('repo-forks-text');
+
+        if (repoStarsText) repoStarsText.textContent = `${repo.stars || 0} ${repo.stars !== 1 ? 'stars' : 'star'}`;
+        if (repoForksText) repoForksText.textContent = `${repo.forks || 0} ${repo.forks !== 1 ? 'forks' : 'fork'}`;
+
         // Update overview tab
-        const repoLanguage = document.getElementById('repo-language');
         const repoSize = document.getElementById('repo-size');
         const repoCreated = document.getElementById('repo-created');
         const repoUpdated = document.getElementById('repo-updated');
         
-        if (repoLanguage) repoLanguage.textContent = repo.language || 'Unknown';
         if (repoSize) repoSize.textContent = this.formatSize(repo.size);
         if (repoCreated) repoCreated.textContent = this.formatExactDate(repo.createdAt);
         if (repoUpdated) repoUpdated.textContent = this.formatRelativeTime(repo.updatedAt, false);
