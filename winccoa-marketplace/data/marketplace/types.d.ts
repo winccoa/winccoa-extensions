@@ -51,15 +51,8 @@ export interface Repository {
 }
 
 export interface ApiError extends Error {
-    isCORSError?: boolean;
     isSSLError?: boolean;
     isConnectionError?: boolean;
-}
-
-export interface FetchOptions extends RequestInit {
-    mode: RequestMode;
-    credentials: RequestCredentials;
-    headers: Record<string, string>;
 }
 
 // Utility types

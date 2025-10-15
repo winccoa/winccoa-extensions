@@ -6,7 +6,6 @@
 import type {
     Repository,
     ApiError,
-    FetchOptions,
     IxModalConfig,
     IxModalResult,
     IxInputModalConfig,
@@ -22,25 +21,12 @@ export class MarketplaceUI {
     private currentRepository: Repository | null = null;
     private repositories: Repository[] = [];
     private registeredProjects: string[] = [];
-    private fetchOptions: FetchOptions;
     private currentMode: 'marketplace' | 'registered' = 'marketplace';
     private predefinedOrganizations: string[] = ['winccoa'];
 
     constructor() {
         // Auto-detect backend URL based on current frontend URL
-        // For development, you can override this by setting a specific URL
         this.baseUrl = window.location.origin;
-        
-        // Configure fetch for CORS and SSL handling
-        this.fetchOptions = {
-            mode: 'cors',
-            // Use 'omit' for cross-origin requests to avoid CORS credential issues
-            credentials: 'omit',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json'
-            }
-        };
         
         // Show connection info to user
         this.showConnectionInfo();
@@ -149,29 +135,13 @@ export class MarketplaceUI {
      */
     private async makeApiCall(endpoint: string, options: Partial<RequestInit> = {}): Promise<Response> {
         const url = `${this.baseUrl}${endpoint}`;
-        const fetchOptions: RequestInit = {
-            ...this.fetchOptions,
-            ...options
-        };
 
         try {
-            const response = await fetch(url, fetchOptions);
+            const response = await fetch(url, options);
             return response;
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             console.error(`❌ API Call failed: ${url}`, error);
-            
-            // Handle different types of network errors
-            if (errorMessage.includes('CORS') || errorMessage.includes('cors')) {
-                const corsError = new Error(
-                    `CORS Error: Cannot connect to ${this.baseUrl}. ` +
-                    `Solutions: 1) Enable CORS on your WinCC OA server, ` +
-                    `2) Use same origin (${window.location.origin}), or ` +
-                    `3) Use a proxy or browser with disabled CORS for development.`
-                ) as ApiError;
-                corsError.isCORSError = true;
-                throw corsError;
-            }
             
             // Handle SSL certificate errors
             if (errorMessage.includes('net::ERR_CERT') || 
@@ -510,9 +480,7 @@ export class MarketplaceUI {
             let errorMessage = 'Failed to connect to marketplace service';
             
             const apiError = error as ApiError;
-            if (apiError.isCORSError) {
-                errorMessage = 'CORS Issue: ' + apiError.message;
-            } else if (apiError.isSSLError) {
+            if (apiError.isSSLError) {
                 errorMessage = 'SSL Certificate Issue: ' + apiError.message;
             } else if (apiError.isConnectionError) {
                 errorMessage = 'Connection Issue: ' + apiError.message;
@@ -542,9 +510,7 @@ export class MarketplaceUI {
             }
         } catch (error: unknown) {
             const apiError = error as ApiError;
-            if (apiError.isCORSError) {
-                console.warn('CORS Issue loading registered projects:', apiError.message);
-            } else if (apiError.isSSLError) {
+            if (apiError.isSSLError) {
                 console.warn('SSL Certificate Issue loading registered projects:', apiError.message);
             } else if (apiError.isConnectionError) {
                 console.warn('Connection Issue loading registered projects:', apiError.message);
