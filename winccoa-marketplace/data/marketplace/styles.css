@@ -444,9 +444,10 @@ ix-menu ix-menu-item ix-icon {
 ix-toast-container {
     position: fixed;
     bottom: 20px;
-    left: 20px;
+    right: 20px;
     z-index: 10000;
     pointer-events: none;
+    width: 400px;
 }
 
 /* Individual toast styling */

@@ -1278,12 +1278,6 @@ export class MarketplaceUI {
         }
     }
 
-    /**
-     * Format date for display (kept for compatibility)
-     */
-    private formatDate(dateString: string): string {
-        return this.formatExactDate(dateString);
-    }
 
     /**
      * Format exact date and time
