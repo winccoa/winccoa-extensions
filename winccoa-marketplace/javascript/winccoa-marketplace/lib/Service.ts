@@ -1,6 +1,7 @@
 import { Vrpc } from "winccoa-manager";
 import { AddOnHandler, Manager } from "./AddOnHandler";
 import * as pathModule from "path";
+import { AddonConfig } from "./AddonConfig";
 
 export class MarketplaceService extends Vrpc.ServiceBase {
   private _addOnHandler: AddOnHandler;
@@ -70,24 +71,8 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       }
 
       // Map each parsed config to AddonConfig interface
-      const configs: import("./AddonConfig").AddonConfig[] = addonConfigs.map(
-        (jsonConfig: any) => ({
-          RepoName: jsonConfig.RepoName,
-          Keywords: jsonConfig.Keywords,
-          Subproject: jsonConfig.Subproject,
-          Version: jsonConfig.Version,
-          Description: jsonConfig.Description,
-          OaVersion: jsonConfig.OaVersion,
-          Managers: jsonConfig.Managers
-            ? jsonConfig.Managers.map((manager: any) => ({
-                Name: manager.Name || "",
-                StartMode: manager.StartMode || "Unknown",
-                Options: manager.Options || "",
-              }))
-            : [],
-          Dplists: jsonConfig.Dplists || [],
-          UpdateScripts: jsonConfig.UpdateScripts || [],
-        }),
+      const configs: AddonConfig[] = addonConfigs.map(
+        (jsonConfig: any) => (this._addOnHandler.mapPackageJsonToAddonConfig(jsonConfig)),
       );
 
       console.log("--------- Parsed addon configurations:", configs);
@@ -164,24 +149,8 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     }
 
     // Map each parsed config to AddonConfig interface
-    const configs: import("./AddonConfig").AddonConfig[] = addonConfigs.map(
-      (jsonConfig: any) => ({
-        RepoName: jsonConfig.RepoName,
-        Keywords: jsonConfig.Keywords,
-        Subproject: jsonConfig.Subproject,
-        Version: jsonConfig.Version,
-        Description: jsonConfig.Description,
-        OaVersion: jsonConfig.OaVersion,
-        Managers: jsonConfig.Managers
-          ? jsonConfig.Managers.map((manager: any) => ({
-              Name: manager.Name || "",
-              StartMode: manager.StartMode || "Unknown",
-              Options: manager.Options || "",
-            }))
-          : [],
-        Dplists: jsonConfig.Dplists || [],
-        UpdateScripts: jsonConfig.UpdateScripts || [],
-      }),
+    const configs: AddonConfig[] = addonConfigs.map(
+      (jsonConfig: any) => (this._addOnHandler.mapPackageJsonToAddonConfig(jsonConfig)),
     );
 
     for (const config of configs) {
