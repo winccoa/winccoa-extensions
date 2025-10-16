@@ -1,7 +1,9 @@
-import { Vrpc } from "winccoa-manager";
+import { Vrpc, WinccoaManager } from "winccoa-manager";
 import { AddOnHandler, Manager } from "./AddOnHandler";
 import * as pathModule from "path";
 import { AddonConfig } from "./AddonConfig";
+
+const winccoa = new WinccoaManager();
 
 export class MarketplaceService extends Vrpc.ServiceBase {
   private _addOnHandler: AddOnHandler;
@@ -33,7 +35,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     request: Vrpc.Variant,
   ): Promise<Vrpc.Variant> {
     try {
-      console.log("check if request is mapping:", request.isMapping());
+      winccoa.logDebugF("addonHandler","check if request is mapping:", request.isMapping());
       const requestMapping = request.getMapping();
 
       // Extract repositoryPath using requestMapping for the keys
@@ -46,7 +48,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
         );
       }
       const repositoryPath = repositoryPathVariant.getString();
-      console.log("-------- repositoryPath:", repositoryPath);
+      winccoa.logDebugF("addonHandler","-------- repositoryPath:", repositoryPath);
 
       // Extract fileContent using requestMapping for the keys
       const fileContentVariant = requestMapping.get(
@@ -56,7 +58,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
         throw new Error('Missing required "fileContent" parameter in mapping');
       }
       const fileContent = fileContentVariant.getString();
-      console.log("-------- fileContent:", fileContent);
+      winccoa.logDebugF("addonHandler","-------- fileContent:", fileContent);
 
       // Parse the JSON string to get addon configurations
       let addonConfigs: any[];
@@ -75,7 +77,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
         (jsonConfig: any) => (this._addOnHandler.mapPackageJsonToAddonConfig(jsonConfig)),
       );
 
-      console.log("--------- Parsed addon configurations:", configs);
+      winccoa.logDebugF("addonHandler","--------- Parsed addon configurations:", configs);
 
       // Register each addon configuration
       const results: any[] = [];
@@ -86,16 +88,16 @@ export class MarketplaceService extends Vrpc.ServiceBase {
           config,
         );
         results.push(result);
-        console.log(
+        winccoa.logDebugF("addonHandler",
           `Sub-project ${config.RepoName || "unnamed"} at ${repositoryPath} registered with result code:`,
           result,
         );
       }
 
-      console.log(`All ${configs.length} sub-projects registered successfully`);
+      winccoa.logDebugF("addonHandler",`All ${configs.length} sub-projects registered successfully`);
       return Vrpc.Variant.createBool(true);
     } catch (error) {
-      console.error("Error in registerSubProjects:", error);
+      winccoa.logWarning("Error in registerSubProjects:", error);
       throw error;
     }
   }
@@ -114,7 +116,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       throw new Error('Missing required "repositoryPath" parameter in mapping');
     }
     const repositoryPath = repositoryPathVariant.getString();
-    console.log("-------- repositoryPath:", repositoryPath);
+    winccoa.logDebugF("addonHandler","-------- repositoryPath:", repositoryPath);
 
     // Extract if files shall be deleted
     const deleteFileVariant = requestMapping.get(
@@ -124,7 +126,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       throw new Error('Missing required "deleteFiles" parameter in mapping');
     }
     const deleteFiles = deleteFileVariant.getBool();
-    console.log("-------- deleteFiles:", deleteFiles);
+    winccoa.logDebugF("addonHandler","-------- deleteFiles:", deleteFiles);
 
     // Extract fileContent using requestMapping for the keys
     const fileContentVariant = requestMapping.get(
@@ -134,7 +136,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       throw new Error('Missing required "fileContent" parameter in mapping');
     }
     const fileContent = fileContentVariant.getString();
-    console.log("-------- fileContent:", fileContent);
+    winccoa.logDebugF("addonHandler","-------- fileContent:", fileContent);
 
     // Parse the JSON string to get addon configurations
     let addonConfigs: any[];
@@ -159,7 +161,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
         config.Subproject,
         deleteFiles,
       );
-      console.log(
+      winccoa.logDebugF("addonHandler",
         `Sub-project ${config.Subproject} unregistered with result code:`,
         result,
       );
@@ -172,9 +174,9 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     serverContext: Vrpc.ServerContext,
     request: Vrpc.Variant,
   ): Promise<Vrpc.Variant> {
-    console.log("Listing registered sub-projects");
+    winccoa.logDebugF("addonHandler","Listing registered sub-projects");
     const result = await this._addOnHandler.listSubProjects();
-    console.log("Registered sub-projects listed with result code:", result);
+    winccoa.logDebugF("addonHandler","Registered sub-projects listed with result code:", result);
     return Vrpc.Variant.createStringArray(result);
   }
 

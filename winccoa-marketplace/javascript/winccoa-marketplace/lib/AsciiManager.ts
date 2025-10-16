@@ -55,13 +55,11 @@ export class AsciiManager {
         noVerbose,
       );
       if (!command?.trim()) {
-        console.error(
+        winccoa.logWarning(
           `[AsciiManager.import] Invalid import command generated for file: "${fileName}".`,
         );
         return false;
       }
-
-      console.log(`[AsciiManager.import] Executing command: ${command}`);
 
       const result = await CommandExecutor.execute(command);
       const exitCode = Number(result.exitCode);
@@ -89,10 +87,10 @@ Stdout:            ${result.stdout || "None"}`;
       }
 
       // Only log errors for non-warning, non-success exit codes
-      console.error(`[AsciiManager.import] Import failed.\n${logDetails}`);
+      winccoa.logWarning(`[AsciiManager.import] Import failed.\n${logDetails}`);
       return false;
     } catch (err) {
-      console.error(
+      winccoa.logWarning(
         `[AsciiManager.import] Exception during import of "${fileName}":`,
         err,
       );
@@ -120,7 +118,7 @@ Stdout:            ${result.stdout || "None"}`;
           .pop() ?? ""
       );
     } catch (err) {
-      console.error(
+      winccoa.logWarning(
         `[AsciiManager.getProjectName] Failed to extract project name:`,
         err,
       );
@@ -156,7 +154,7 @@ Stdout:            ${result.stdout || "None"}`;
         return "";
       }
       if (!fileName?.trim()) {
-        console.error(
+        winccoa.logWarning(
           `[AsciiManager.prepareImportCommand] Invalid or empty fileName provided.`,
         );
         return "";
@@ -173,7 +171,7 @@ Stdout:            ${result.stdout || "None"}`;
         ])
       ).map((path) => path?.trim());
 
-      console.log(
+      winccoa.logDebugF( "addonHandler",
         "Resolved Paths:",
         asciiManagerPath,
         importFilePath,
@@ -181,14 +179,14 @@ Stdout:            ${result.stdout || "None"}`;
       );
 
       if (!asciiManagerPath || !importFilePath || !runningProjectName) {
-        console.error(
+        winccoa.logWarning(
           `[AsciiManager.prepareImportCommand] Invalid paths: asciiManagerPath="${asciiManagerPath}", importFilePath="${importFilePath}", runningProjectName="${runningProjectName}".`,
         );
         return "";
       }
 
       if (!(await File.exists(importFilePath))) {
-        console.error(
+        winccoa.logWarning(
           `[AsciiManager.prepareImportCommand] Import file does not exist: "${importFilePath}".`,
         );
         return "";
@@ -207,7 +205,7 @@ Stdout:            ${result.stdout || "None"}`;
       ];
       return args.filter(Boolean).join(" ");
     } catch (err) {
-      console.error(
+      winccoa.logWarning(
         `[AsciiManager.prepareImportCommand] Exception while preparing import command:`,
         err,
       );
