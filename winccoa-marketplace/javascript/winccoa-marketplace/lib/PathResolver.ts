@@ -6,6 +6,8 @@ import {
 
 import * as path from "path";
 
+const winccoa = new WinccoaManager();
+
 /**
  * @enum ComponentId
  * Represents component identifiers used in the system.
@@ -71,7 +73,7 @@ export class PathResolver {
       }
       return normalizedPath;
     } catch (err) {
-      console.error(
+      winccoa.logWarning(
         `[PathResolver.getComponentPath] Failed to resolve component path for componentId=${componentId}:`,
         err,
       );
@@ -103,7 +105,7 @@ export class PathResolver {
     }
 
     if (!fileName?.trim()) {
-      console.error(
+      winccoa.logWarning(
         `[PathResolver.getFilePath] Invalid or empty fileName provided.`,
       );
       return "";
@@ -136,7 +138,7 @@ export class PathResolver {
 
       return path.normalize(pathResult);
     } catch (err) {
-      console.error(
+      winccoa.logWarning(
         `[PathResolver.getFilePath] Failed to resolve file path for fileName="${fileName}":`,
         err,
       );
@@ -161,7 +163,7 @@ export class PathResolver {
 
     const paths = winccoa.getPaths();
     if (!Array.isArray(paths) || paths.length < 2) {
-      console.error(
+      winccoa.logWarning(
         `[PathResolver.getProjectPath] Invalid or incomplete paths array returned from WinCC OA manager.`,
       );
       return "";
@@ -187,7 +189,7 @@ export class PathResolver {
 
     const paths = winccoa.getPaths();
     if (!Array.isArray(paths) || paths.length < 2) {
-      console.error(
+      winccoa.logWarning(
         `[PathResolver.getInstallationPath] Invalid or incomplete paths array returned from WinCC OA manager.`,
       );
       return "";
