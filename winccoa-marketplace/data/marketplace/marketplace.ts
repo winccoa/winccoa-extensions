@@ -411,10 +411,9 @@ export class MarketplaceUI {
     private showRegisteredRepositories(): void {
         // Filter repositories to show only registered ones
         // Use subproject name (if available) or repository name for comparison
-        const registeredRepos = this.repositories.filter(repo => {
-            const nameToCheck = repo.subprojectName || repo.name;
-            return this.registeredProjects.includes(nameToCheck);
-        });
+        const registeredRepos = this.repositories.filter(repo => 
+            this.registeredProjects.includes(this.getRepositoryIdentifier(repo))
+        );
         
         // Temporarily store all repositories and replace with filtered ones
         const allRepositories = [...this.repositories];
@@ -559,6 +558,27 @@ export class MarketplaceUI {
     }
 
     /**
+     * Get the identifier name for a repository (subproject name or repo name)
+     */
+    private getRepositoryIdentifier(repo: Repository): string {
+        return repo.subprojectName || repo.name;
+    }
+
+    /**
+     * Set button enabled/disabled state
+     */
+    private setButtonState(button: HTMLElement | null, enabled: boolean, title?: string): void {
+        if (!button) return;
+        
+        if (enabled) {
+            button.removeAttribute('disabled');
+        } else {
+            button.setAttribute('disabled', '');
+        }
+        if (title) button.setAttribute('title', title);
+    }
+
+    /**
      * Load repositories from all predefined organizations
      */
     private async loadAllOrganizations(): Promise<void> {
@@ -655,10 +675,6 @@ export class MarketplaceUI {
             }
             this.repositories = [];
             // Don't render here - will be rendered after all status info is loaded
-        } finally {
-            // Remove loading state from organization input
-            const orgInput = document.getElementById('organization-input');
-            orgInput?.removeAttribute('loading');
         }
     }
 
@@ -745,9 +761,6 @@ export class MarketplaceUI {
     }
 
     /**
-     * Fetch latest versions from remote repositories to compare with local versions
-     */
-    /**
      * Render the repository list
      */
     private renderRepositoryList(): void {
@@ -766,8 +779,7 @@ export class MarketplaceUI {
 
         const repositoryItems = this.repositories.map(repo => {
             // Check if registered by comparing subproject name (if available) or repository name
-            const nameToCheck = repo.subprojectName || repo.name;
-            const isRegistered = this.registeredProjects.includes(nameToCheck);
+            const isRegistered = this.registeredProjects.includes(this.getRepositoryIdentifier(repo));
             const statusClass = isRegistered ? 'registered' : (repo.cloned ? 'cloned' : '');
             const statusTooltip = isRegistered ? 'Registered' : (repo.cloned ? 'Cloned' : 'Not cloned');
             const isLoading = repo.loadingAction != null;
@@ -1039,8 +1051,7 @@ export class MarketplaceUI {
      */
     private updateLocalStatus(repo: Repository): void {
         // Check if registered by comparing subproject name (if available) or repository name
-        const nameToCheck = repo.subprojectName || repo.name;
-        const isRegistered = this.registeredProjects.includes(nameToCheck);
+        const isRegistered = this.registeredProjects.includes(this.getRepositoryIdentifier(repo));
         const isCloned = repo.cloned || false;
         const hasMetadata = !!repo.fileContent;
         const isLoading = !!repo.loadingAction;
@@ -1262,9 +1273,6 @@ export class MarketplaceUI {
         }
     }
 
-    /**
-     * Show loading state for action buttons
-     */
     /**
      * Show loading state for current repository only
      */

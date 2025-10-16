@@ -65,20 +65,12 @@ ix-menu ix-menu-item ix-icon {
     border-bottom: 1px solid var(--theme-color-component-1);
 }
 
-/* All inputs now use ix-input component */
-
 .organization-selector {
     padding: 8px 16px 12px 16px;
     border-bottom: 1px solid var(--theme-color-component-1);
     min-height: 60px;
     display: flex;
     flex-direction: column;
-}
-
-/* Organization selector uses ix-input component */
-
-.organization-selector ix-input[loading] {
-    opacity: 0.7;
 }
 
 .keyword-filter {
