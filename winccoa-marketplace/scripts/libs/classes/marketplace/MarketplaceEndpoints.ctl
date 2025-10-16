@@ -95,23 +95,24 @@ class MarketplaceEndpoints
   //--------------------------------------------------------------------------------
   public static dyn_string pull(const dyn_string &names, const dyn_string &values)
   {
-    int idx = names.indexOf("repo");
+    int idx = names.indexOf("repoName");
     if (idx < 0)
     {
-      return makeDynString("Missing required parameter: repo", "Status: 400 Bad Request");
+      return makeDynString("Missing required parameter: repoName", "Status: 400 Bad Request");
     }
-    string repo = values.at(idx);
+    string repoName = values.at(idx);
 
 
     try
     {
-      mapping result = client.pull(repo);
-      result.insert("message", "Successfully pulled repository " + repo);
+      string path = client.repoPath() + repoName;
+      mapping result = client.pull(path);
+      result.insert("message", "Successfully pulled repository " + repoName);
       return makeDynString(jsonEncode(result), "Status: 200 OK");
     }
     catch
     {
-      return makeDynString(jsonEncode(makeMapping("error", "Couldn't pull repository " + repo)), "Status: 500 Internal Server Error");
+      return makeDynString(jsonEncode(makeMapping("error", "Couldn't pull repository " + repoName)), "Status: 500 Internal Server Error");
     }
   }
 

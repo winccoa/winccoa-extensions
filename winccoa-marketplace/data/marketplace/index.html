@@ -442,6 +442,15 @@
                         <div class="detail-header">
                             <div class="repo-info">
                                 <h1 id="repo-name"></h1>
+                                <div class="repo-status-pills" id="repo-status-pills">
+                                    <!-- Status pills will be inserted here dynamically -->
+                                </div>
+                                <div class="repo-tags-section" id="repo-tags-section">
+                                    <span class="tags-label">Tags:</span>
+                                    <div class="repo-tags-pills" id="repo-tags-pills">
+                                        <!-- Tag pills will be inserted here dynamically -->
+                                    </div>
+                                </div>
                                 <p id="repo-description"></p>
                                 <div class="repo-meta">
                                     <ix-pill id="repo-visibility" variant="outline" icon="lock">
@@ -469,7 +478,7 @@
                                     variant="primary"
                                     icon="download-add"
                                     disabled>
-                                    Pull
+                                    Update
                                 </ix-button>
                                 
                                 <ix-button

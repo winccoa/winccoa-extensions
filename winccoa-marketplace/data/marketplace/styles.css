@@ -238,6 +238,40 @@ ix-menu ix-menu-item ix-icon {
     color: var(--theme-color-std-text);
 }
 
+.repo-status-pills {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.repo-tags-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.tags-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--theme-color-std-text);
+    white-space: nowrap;
+}
+
+.repo-tags-pills {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    flex: 1;
+}
+
+.no-tags-text {
+    font-size: 13px;
+    color: var(--theme-color-weak-text);
+    font-style: italic;
+}
+
 .repo-info p {
     margin: 0 0 16px 0;
     font-size: 14px;

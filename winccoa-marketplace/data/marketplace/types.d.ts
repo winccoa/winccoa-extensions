@@ -53,6 +53,7 @@ export interface Repository {
     currentVersion?: string; // Currently installed version (from local repo)
     latestVersion?: string; // Latest version from GitHub
     hasUpdate?: boolean; // Whether an update is available
+    keywords?: string[]; // Keywords/tags from winccoaPackage
 }
 
 export interface ApiError extends Error {

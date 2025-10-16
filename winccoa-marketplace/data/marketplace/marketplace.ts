@@ -591,6 +591,10 @@ export class MarketplaceUI {
                         if (packageData.Version) {
                             repo.latestVersion = packageData.Version;
                         }
+                        
+                        if (packageData.Keywords && Array.isArray(packageData.Keywords)) {
+                            repo.keywords = packageData.Keywords;
+                        }
                     } catch (e) {
                         console.warn(`Failed to parse winccoaPackage for ${repo.name}`);
                     }
@@ -641,6 +645,10 @@ export class MarketplaceUI {
                             
                             if (packageData.Version) {
                                 repo.latestVersion = packageData.Version;
+                            }
+                            
+                            if (packageData.Keywords && Array.isArray(packageData.Keywords)) {
+                                repo.keywords = packageData.Keywords;
                             }
                         } catch (e) {
                             console.warn(`Failed to parse winccoaPackage for ${repo.name}`);
@@ -911,6 +919,12 @@ export class MarketplaceUI {
         if (repoName) repoName.textContent = repo.name;
         if (repoDescription) repoDescription.textContent = repo.description || 'No description available';
         
+        // Update status pills
+        this.updateStatusPills(repo);
+        
+        // Update tags pills
+        this.updateTagsPills(repo);
+        
         // Update meta information
         const visibilityChip = document.getElementById('repo-visibility');
         const visibilityText = document.getElementById('repo-visibility-text');
@@ -984,6 +998,9 @@ export class MarketplaceUI {
         
         // Update version information display
         this.updateVersionInfo(repo);
+        
+        // Update status pills
+        this.updateStatusPills(repo);
         
         // If repository is loading, disable all buttons
         if (isLoading) {
@@ -1086,6 +1103,88 @@ export class MarketplaceUI {
             if (versionInfoContainer) {
                 versionInfoContainer.style.display = 'none';
             }
+        }
+    }
+
+    /**
+     * Update status pills between repo name and description
+     */
+    private updateStatusPills(repo: Repository): void {
+        const pillsContainer = document.getElementById('repo-status-pills');
+        if (!pillsContainer) return;
+        
+        // Clear existing pills
+        pillsContainer.innerHTML = '';
+        
+        // Determine status
+        const nameToCheck = repo.subprojectName || repo.name;
+        const isRegistered = this.registeredProjects.includes(nameToCheck);
+        const isCloned = repo.cloned || false;
+        
+        // Add version pill (if available)
+        if (repo.currentVersion) {
+            const versionPill = document.createElement('ix-pill');
+            versionPill.setAttribute('variant', 'info');
+            versionPill.setAttribute('icon', 'info');
+            versionPill.innerHTML = `Version ${repo.currentVersion}`;
+            pillsContainer.appendChild(versionPill);
+        }
+        
+        // Add status pill
+        const statusPill = document.createElement('ix-pill');
+        
+        if (isRegistered) {
+            statusPill.setAttribute('variant', 'success');
+            statusPill.setAttribute('icon', 'success');
+            statusPill.innerHTML = `Registered as subproject`;
+        } else if (isCloned) {
+            statusPill.setAttribute('variant', 'info');
+            statusPill.setAttribute('icon', 'download');
+            statusPill.innerHTML = `Cloned locally`;
+        } else {
+            statusPill.setAttribute('variant', 'neutral');
+            statusPill.setAttribute('icon', 'info');
+            statusPill.innerHTML = `Not cloned`;
+        }
+        
+        pillsContainer.appendChild(statusPill);
+        
+        // Add update available pill (if applicable)
+        if (repo.hasUpdate && repo.latestVersion) {
+            const updatePill = document.createElement('ix-pill');
+            updatePill.setAttribute('variant', 'warning');
+            updatePill.setAttribute('icon', 'arrow-up');
+            updatePill.innerHTML = `Update available (${repo.latestVersion})`;
+            pillsContainer.appendChild(updatePill);
+        }
+    }
+
+    /**
+     * Update tags/keywords pills below status pills
+     */
+    private updateTagsPills(repo: Repository): void {
+        const tagsSection = document.getElementById('repo-tags-section');
+        const pillsContainer = document.getElementById('repo-tags-pills');
+        if (!tagsSection || !pillsContainer) return;
+        
+        // Clear existing pills/text
+        pillsContainer.innerHTML = '';
+        
+        // Check if keywords exist and are not empty
+        if (repo.keywords && repo.keywords.length > 0) {
+            // Create pills for each keyword
+            repo.keywords.forEach(keyword => {
+                const tagPill = document.createElement('ix-pill');
+                tagPill.setAttribute('variant', 'neutral');
+                tagPill.textContent = keyword;
+                pillsContainer.appendChild(tagPill);
+            });
+        } else {
+            // Show "No tags available" as text (not as pill)
+            const noTagsText = document.createElement('span');
+            noTagsText.className = 'no-tags-text';
+            noTagsText.textContent = 'No tags available';
+            pillsContainer.appendChild(noTagsText);
         }
     }
 
@@ -1395,12 +1494,9 @@ export class MarketplaceUI {
         this.showActionLoading();
         
         try {
-            const repoPath = repositoryBeingPulled.localPath;
-            if (!repoPath) {
-                this.showError('Cannot pull: Repository local path not available. Please clone the repository first.');
-                return;
-            }
-            const response = await this.makeApiCall(`/marketplace/pull?repo=${encodeURIComponent(repoPath)}`);
+            const repoName = repositoryBeingPulled.name;
+            
+            const response = await this.makeApiCall(`/marketplace/pull?repoName=${encodeURIComponent(repoName)}`);
             
             if (response.ok) {
                 // Parse the JSON response with changes and fileContent
