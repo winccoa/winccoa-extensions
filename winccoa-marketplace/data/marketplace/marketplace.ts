@@ -601,7 +601,10 @@ export class MarketplaceUI {
             
             this.showToast(`Loaded ${this.repositories.length} repositories from all organizations`, 'success');
         } catch (error) {
-            this.showError('Failed to load repositories from all organizations');
+            // Don't show error if request was aborted
+            if ((error as Error).name !== 'AbortError') {
+                this.showError('Failed to load repositories from all organizations');
+            }
             this.repositories = [];
             // Don't render here - will be rendered after all status info is loaded
         }
@@ -656,18 +659,22 @@ export class MarketplaceUI {
                 // Don't render here - will be rendered after all status info is loaded
             }
         } catch (error: unknown) {
-            let errorMessage = 'Failed to connect to marketplace service';
-            
             const apiError = error as ApiError;
-            if (apiError.isSSLError) {
-                errorMessage = 'SSL Certificate Issue: ' + apiError.message;
-            } else if (apiError.isConnectionError) {
-                errorMessage = 'Connection Issue: ' + apiError.message;
-            } else {
-                errorMessage = 'Network Error: ' + (apiError.message || 'Unknown error');
-            }
             
-            this.showError(errorMessage);
+            // Don't show error if request was aborted
+            if (apiError.name !== 'AbortError') {
+                let errorMessage = 'Failed to connect to marketplace service';
+                
+                if (apiError.isSSLError) {
+                    errorMessage = 'SSL Certificate Issue: ' + apiError.message;
+                } else if (apiError.isConnectionError) {
+                    errorMessage = 'Connection Issue: ' + apiError.message;
+                } else {
+                    errorMessage = 'Network Error: ' + (apiError.message || 'Unknown error');
+                }
+                
+                this.showError(errorMessage);
+            }
             this.repositories = [];
             // Don't render here - will be rendered after all status info is loaded
         } finally {
