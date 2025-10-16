@@ -392,7 +392,7 @@
                 <!-- Left sidebar - Repository list -->
                 <div class="repository-sidebar">
                     <div class="sidebar-header">
-                        <h3 id="repositories-title">Available Repositories</h3>
+                        <h3 id="repositories-title">Marketplace</h3>
                         <ix-button 
                             id="refresh-btn" 
                             variant="ghost" 
@@ -482,7 +482,7 @@
                                 
                                 <ix-button
                                     id="unregister-btn"
-                                    variant="danger"
+                                    variant="primary"
                                     icon="remove-application"
                                     disabled>
                                     Unregister
@@ -499,7 +499,6 @@
                         <ix-tabs>
                             <ix-tab-item>Overview</ix-tab-item>
                             <ix-tab-item>README</ix-tab-item>
-                            <ix-tab-item>Files</ix-tab-item>
                         </ix-tabs>
                         
                         <div class="tab-content">
@@ -527,6 +526,16 @@
                                             <ix-icon name="info" class="status-icon"></ix-icon>
                                             <span>Not cloned locally</span>
                                         </div>
+                                        <div id="version-info" class="version-info" style="display: none; margin-top: 12px;">
+                                            <div class="stat-item">
+                                                <span class="stat-label">Current Version:</span>
+                                                <span id="current-version">-</span>
+                                            </div>
+                                            <div id="update-available" class="stat-item" style="display: none;">
+                                                <span class="stat-label">Latest Version:</span>
+                                                <span id="latest-version" style="color: var(--theme-color-success); font-weight: 600;">-</span>
+                                            </div>
+                                        </div>
                                     </div>
                                     
                                     <div id="metadata-card" class="overview-card" style="display: none;">
@@ -544,12 +553,7 @@
                                     </div>
                                 </div>
                             </div>
-                            
-                            <div id="files-tab" class="tab-pane">
-                                <div id="files-content" class="files-content">
-                                    <p>File browser functionality would be implemented here.</p>
-                                </div>
-                            </div>
+
                         </div>
                     </div>
                 </div>
