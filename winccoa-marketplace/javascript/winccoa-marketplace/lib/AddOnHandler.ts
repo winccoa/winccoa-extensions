@@ -278,6 +278,11 @@ class AddOnHandler {
 #uses "CtrlPv2Admin"
 #uses "classes/projectEnvironment/ProjEnvProject"
 
+string getProjectName()
+{
+  return PROJ;
+}
+
 int registerSubProj(string path, string projName)
 {
   int ret = paRegProj(projName, path, "", 0, true);
@@ -939,8 +944,9 @@ bool addManager(string manager, string startMode, string options, string user, s
       winccoa.logDebugF("addonHandler","Git pull completed successfully!");
 
       // Read version after pull and compare
-      const versionAfterPull =
-        this.extractVersionFromPackageJson(repositoryDirectory);
+      const versionAfterPull = this.extractVersionFromPackageJson(repositoryDirectory);
+      // TEMP: hardcoded for testing
+      // const versionAfterPull = "2.0.1"
       let updatedAddonConfig: AddonConfig | null = null;
 
       if (
@@ -977,10 +983,32 @@ bool addManager(string manager, string startMode, string options, string user, s
               winccoa.logDebugF("addonHandler",
                 `Executing ${updatedAddonConfig.UpdateScripts.length} update script(s)...`,
               );
-              await this.executeUpdateScripts(
-                repositoryDirectory,
-                updatedAddonConfig.UpdateScripts,
-              );
+              
+              // Create a timeout promise that rejects after 5 minutes
+              const timeoutPromise = new Promise<void>((_, reject) => {
+                setTimeout(() => {
+                  reject(new Error("Update scripts execution timed out after 5 minutes"));
+                }, 5 * 60 * 1000); // 5 minutes in milliseconds
+              });
+
+              // Race the execution against the timeout
+              try {
+                await Promise.race([
+                  this.executeUpdateScripts(
+                    repositoryDirectory,
+                    updatedAddonConfig.UpdateScripts,
+                  ),
+                  timeoutPromise
+                ]);
+                winccoa.logDebugF("addonHandler","Update scripts completed successfully");
+              } catch (error) {
+                if (error instanceof Error && error.message.includes("timed out")) {
+                  winccoa.logWarning("Update scripts execution timed out after 5 minutes");
+                } else {
+                  winccoa.logWarning("Error executing update scripts:", error);
+                }
+                throw error;
+              }
             } else {
               winccoa.logDebugF("addonHandler","No update scripts to execute");
             }
@@ -1264,6 +1292,44 @@ bool addManager(string manager, string startMode, string options, string user, s
   }
 
   /**
+   * Execute a JavaScript file using WinCC OA bootstrap
+   * @param scriptFile The JavaScript file to execute
+   * @param scriptType The type of script (for logging purposes)
+   */
+  private async startWinCCOAnodeManager(
+    scriptFile: string,
+    scriptType: string,
+  ): Promise<void> {
+    winccoa.logDebugF("addonHandler",`Executing ${scriptType} script: ${scriptFile}`);
+    
+    // Get current project name from WinCC OA
+    const projectName = (await this.ctrlScript.start("getProjectName")) as string;
+    winccoa.logDebugF("addonHandler",`Current project name: ${projectName}`);
+    
+    const installDir = getWinCCOAInstallDir(winccoa);
+    if (installDir) {
+      const bootstrapPath = path.join(
+        installDir,
+        "javascript",
+        "winccoa-manager",
+        "lib",
+        "bootstrap.js",
+      );
+      const command = `node.exe -- "${bootstrapPath}" -num 99 -pmonIndex 100 -proj ${projectName} ${scriptFile}`;
+      winccoa.logDebugF("addonHandler",`Executing JavaScript command: ${command}`);
+
+      const result = await CommandExecutor.execute(command);
+      if (result.exitCode === 0) {
+        winccoa.logDebugF("addonHandler",`Successfully executed ${scriptType} script: ${scriptFile}`);
+      } else {
+        winccoa.logWarning(`Failed to execute ${scriptType} script ${scriptFile}. Exit code: ${result.exitCode}, Error: ${result.stderr}`);
+      }
+    } else {
+      winccoa.logWarning(`Could not determine WinCC OA installation directory for ${scriptType} script: ${scriptFile}`);
+    }
+  }
+
+  /**
    * Execute update scripts based on their file extensions
    * @param repositoryPath The path to the repository
    * @param updateScripts Array of update script filenames
@@ -1274,9 +1340,7 @@ bool addManager(string manager, string startMode, string options, string user, s
   ): Promise<void> {
     for (const scriptFile of updateScripts) {
       try {
-        const scriptPath = path.join(repositoryPath, scriptFile);
         const fileExtension = path.extname(scriptFile).toLowerCase();
-
         winccoa.logDebugF("addonHandler", `Executing update script: ${scriptFile}`);
 
         switch (fileExtension) {
@@ -1292,45 +1356,18 @@ bool addManager(string manager, string startMode, string options, string user, s
             break;
 
           case ".ts":
-            // For .ts files, use NodeInstaller.installAndBuild
+            // For .ts files, build TypeScript project and execute the transpiled JS file
             winccoa.logDebugF("addonHandler",`Building TypeScript project for: ${scriptFile}`);
             await NodeInstaller.installAndBuild(repositoryPath);
-            winccoa.logWarning("currently not implemented - skipping");
+            
+            // Execute the transpiled JavaScript file
+            const jsScriptFile = scriptFile.replace(/\.ts$/, '.js');
+            await this.startWinCCOAnodeManager(jsScriptFile, "TypeScript");
             break;
 
           case ".js":
-            // TODO: clarify why pmonIndex is needed to start a javascript file
-            /*
             // For .js files, execute with Node.js using WinCC OA bootstrap
-            winccoa.logDebugF("addonHandler",`Executing JavaScript script: ${scriptFile}`);
-            const installDir = getWinCCOAInstallDir(winccoa);
-            if (installDir) {
-              const bootstrapPath = path.join(
-                installDir,
-                "javascript",
-                "winccoa-manager",
-                "lib",
-                "bootstrap.js",
-              );
-              const command = `node.exe -- "${bootstrapPath}" -currentproj ${scriptFile}`;
-              winccoa.logDebugF("addonHandler",`Executing JavaScript command: ${command}`);
-
-              const result = await CommandExecutor.execute(command);
-              if (result.exitCode === 0) {
-                winccoa.logDebugF("addonHandler",
-                  `Successfully executed JavaScript script: ${scriptFile}`,
-                );
-              } else {
-                winccoa.logWarning(
-                  `Failed to execute JavaScript script ${scriptFile}. Exit code: ${result.exitCode}, Error: ${result.stderr}`,
-                );
-              }
-            } else {
-              winccoa.logWarning(
-                `Could not determine WinCC OA installation directory for JavaScript script: ${scriptFile}`,
-              );
-            }*/
-            winccoa.logWarning("currently not implemented - skipping");
+            await this.startWinCCOAnodeManager(scriptFile, "JavaScript");
             break;
 
           default:
