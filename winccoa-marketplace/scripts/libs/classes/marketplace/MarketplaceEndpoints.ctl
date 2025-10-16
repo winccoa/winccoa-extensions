@@ -37,6 +37,7 @@ class MarketplaceEndpoints
     httpConnect(unregisterSubProjects, MARKETPLACE_URL_PREFIX + "/unregisterSubProjects", "application/json");
     httpConnect(listSubProjects, MARKETPLACE_URL_PREFIX + "/listProjects", "application/json");
     httpConnect(getDefaultAddonPath, MARKETPLACE_URL_PREFIX + "/getDefaultAddonPath", "application/json");
+    httpConnect(listLocalRepos, MARKETPLACE_URL_PREFIX + "/listLocalRepos", "application/json");
   }
 
 
@@ -118,12 +119,12 @@ class MarketplaceEndpoints
   //--------------------------------------------------------------------------------
   public static dyn_string registerSubProjects(const dyn_string &names, const dyn_string &values)
   {
-    int idx = names.indexOf("path");
+    int idx = names.indexOf("repoName");
     if (idx < 0)
     {
-      return makeDynString("Missing required parameter: path", "Status: 400 Bad Request");
+      return makeDynString("Missing required parameter: repoName", "Status: 400 Bad Request");
     }
-    string path = values.at(idx);
+    string repoName = values.at(idx);
 
     idx = names.indexOf("fileContent");
     if (idx < 0)
@@ -133,6 +134,7 @@ class MarketplaceEndpoints
     string fileContent = values.at(idx);
 
     mapping requestMapping;
+    string path = client.repoPath() + repoName;
     requestMapping.insert("repositoryPath", path);
     requestMapping.insert("fileContent", fileContent);
 
@@ -151,12 +153,12 @@ class MarketplaceEndpoints
   //--------------------------------------------------------------------------------
   public static dyn_string unregisterSubProjects(const dyn_string &names, const dyn_string &values)
   {
-    int idx = names.indexOf("path");
+    int idx = names.indexOf("repoName");
     if (idx < 0)
     {
-      return makeDynString("Missing required parameter: path", "Status: 400 Bad Request");
+      return makeDynString("Missing required parameter: repoName", "Status: 400 Bad Request");
     }
-    string path = values.at(idx);
+    string repoName = values.at(idx);
 
 
     idx = names.indexOf("fileContent");
@@ -174,6 +176,7 @@ class MarketplaceEndpoints
     }
 
     mapping requestMapping;
+    string path = client.repoPath() + repoName;
     requestMapping.insert("repositoryPath", path);
     requestMapping.insert("fileContent", fileContent);
     requestMapping.insert("deleteFiles", deleteFiles);
@@ -219,6 +222,20 @@ class MarketplaceEndpoints
     else
     {
       return makeDynString(jsonEncode(makeMapping("error", "Could not find default addon path")), "Status: 404 Not Found");
+    }
+  }
+
+  //--------------------------------------------------------------------------------
+  public static dyn_string listLocalRepos()
+  {
+    string response = client.listLocalRepos();
+    if (response != "")
+    {
+      return makeDynString(response, "Status: 200 OK");
+    }
+    else
+    {
+      return makeDynString(jsonEncode(makeMapping("error", "Could not find local repos")), "Status: 404 Not Found");
     }
   }
 

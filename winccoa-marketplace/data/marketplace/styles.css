@@ -331,6 +331,22 @@ ix-menu ix-menu-item ix-icon {
     color: var(--theme-color-primary);
 }
 
+.version-info {
+    padding: 8px 0 0 0;
+}
+
+.version-info .stat-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 13px;
+}
+
+.version-info .stat-label {
+    color: var(--theme-color-weak-text);
+    font-weight: 500;
+}
+
 /* README Tab */
 .readme-content {
     background-color: var(--theme-color-component-1);

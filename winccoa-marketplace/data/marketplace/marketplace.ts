@@ -396,10 +396,14 @@ export class MarketplaceUI {
      * Load initial data
      */
     private async loadInitialData(): Promise<void> {
+        // Load repositories and status information in sequence to ensure proper state
+        await this.loadAllOrganizations(); // Load all organizations by default (don't render yet)
         await Promise.all([
-            this.loadAllOrganizations(), // Load all organizations by default
-            this.loadRegisteredProjects()
+            this.loadRegisteredProjects(),
+            this.loadLocalRepositories() // Load local repository states
         ]);
+        // Re-render with all status information loaded
+        this.renderRepositoryList();
     }
 
     /**
@@ -426,13 +430,31 @@ export class MarketplaceUI {
             
             // Combine all repositories
             this.repositories = results.flat();
-            this.renderRepositoryList();
+            
+            // Extract latest version from winccoaPackage field for all repos
+            this.repositories.forEach(repo => {
+                if ((repo as any).winccoaPackage) {
+                    try {
+                        const packageData = typeof (repo as any).winccoaPackage === 'string' 
+                            ? JSON.parse((repo as any).winccoaPackage)
+                            : (repo as any).winccoaPackage;
+                        
+                        if (packageData.Version) {
+                            repo.latestVersion = packageData.Version;
+                        }
+                    } catch (e) {
+                        console.warn(`Failed to parse winccoaPackage for ${repo.name}`);
+                    }
+                }
+            });
+            
+            // Don't render here - will be rendered after all status info is loaded
             
             this.showToast(`Loaded ${this.repositories.length} repositories from all organizations`, 'success');
         } catch (error) {
             this.showError('Failed to load repositories from all organizations');
             this.repositories = [];
-            this.renderRepositoryList();
+            // Don't render here - will be rendered after all status info is loaded
         }
     }
 
@@ -454,6 +476,24 @@ export class MarketplaceUI {
             
             if (response.ok) {
                 this.repositories = Array.isArray(data) ? data : [];
+                
+                // Extract latest version from winccoaPackage field
+                this.repositories.forEach(repo => {
+                    if ((repo as any).winccoaPackage) {
+                        try {
+                            const packageData = typeof (repo as any).winccoaPackage === 'string' 
+                                ? JSON.parse((repo as any).winccoaPackage)
+                                : (repo as any).winccoaPackage;
+                            
+                            if (packageData.Version) {
+                                repo.latestVersion = packageData.Version;
+                            }
+                        } catch (e) {
+                            console.warn(`Failed to parse winccoaPackage for ${repo.name}`);
+                        }
+                    }
+                });
+                
                 this.renderRepositoryList();
                 
                 // Update the title to show current organization
@@ -522,6 +562,58 @@ export class MarketplaceUI {
     }
 
     /**
+     * Load local repositories and merge with remote repository data
+     */
+    private async loadLocalRepositories(): Promise<void> {
+        try {
+            const response = await this.makeApiCall('/marketplace/listLocalRepos');
+            if (response.ok) {
+                const localRepos: Array<{ addon: string; fileContent: any }> = await response.json();
+                
+                // Update repositories array with local information
+                if (Array.isArray(localRepos)) {
+                    localRepos.forEach(localRepo => {
+                        // Find repository by name (addon name should match repository name)
+                        const repo = this.repositories.find(r => r.name === localRepo.addon);
+                        if (repo) {
+                            // Mark as cloned
+                            repo.cloned = true;
+                            
+                            // Store local file content as JSON string
+                            repo.fileContent = JSON.stringify(localRepo.fileContent);
+                            
+                            // Extract subproject name from local content (for registration check)
+                            if (localRepo.fileContent && localRepo.fileContent.Subproject) {
+                                repo.subprojectName = localRepo.fileContent.Subproject;
+                            }
+                            
+                            // Extract current version from local content
+                            if (localRepo.fileContent && localRepo.fileContent.Version) {
+                                repo.currentVersion = localRepo.fileContent.Version;
+                                
+                                // Compare with latest version from GitHub (if available)
+                                if (repo.latestVersion) {
+                                    repo.hasUpdate = repo.currentVersion !== repo.latestVersion;
+                                } else {
+                                    repo.hasUpdate = false;
+                                }
+                            }
+                        }
+                    });
+                    
+                    // Don't render here - will be rendered after all status info is loaded
+                }
+            }
+        } catch (error: unknown) {
+            const apiError = error as ApiError;
+            console.warn('Could not load local repositories:', apiError.message || 'Unknown error');
+        }
+    }
+
+    /**
+     * Fetch latest versions from remote repositories to compare with local versions
+     */
+    /**
      * Render the repository list
      */
     private renderRepositoryList(): void {
@@ -539,7 +631,9 @@ export class MarketplaceUI {
         }
 
         const repositoryItems = this.repositories.map(repo => {
-            const isRegistered = this.registeredProjects.includes(repo.name);
+            // Check if registered by comparing subproject name (if available) or repository name
+            const nameToCheck = repo.subprojectName || repo.name;
+            const isRegistered = this.registeredProjects.includes(nameToCheck);
             const statusClass = isRegistered ? 'registered' : (repo.cloned ? 'cloned' : '');
             const statusTooltip = isRegistered ? 'Registered' : (repo.cloned ? 'Cloned' : 'Not cloned');
             const isLoading = repo.loadingAction != null;
@@ -718,16 +812,22 @@ export class MarketplaceUI {
      * Update local status and action button states
      */
     private updateLocalStatus(repo: Repository): void {
-        const isRegistered = this.registeredProjects.includes(repo.name);
+        // Check if registered by comparing subproject name (if available) or repository name
+        const nameToCheck = repo.subprojectName || repo.name;
+        const isRegistered = this.registeredProjects.includes(nameToCheck);
         const isCloned = repo.cloned || false;
         const hasMetadata = !!repo.fileContent;
         const isLoading = !!repo.loadingAction;
+        const hasUpdate = repo.hasUpdate || false;
         
         const statusElement = document.getElementById('local-status');
         const cloneBtn = document.getElementById('clone-btn');
         const pullBtn = document.getElementById('pull-btn');
         const registerBtn = document.getElementById('register-btn');
         const unregisterBtn = document.getElementById('unregister-btn');
+        
+        // Update version information display
+        this.updateVersionInfo(repo);
         
         // If repository is loading, disable all buttons
         if (isLoading) {
@@ -746,7 +846,12 @@ export class MarketplaceUI {
                 `;
             }
             cloneBtn?.setAttribute('disabled', '');
-            pullBtn?.removeAttribute('disabled');
+            // Only show pull button if there's an update available
+            if (hasUpdate) {
+                pullBtn?.removeAttribute('disabled');
+            } else {
+                pullBtn?.setAttribute('disabled', '');
+            }
             registerBtn?.setAttribute('disabled', '');
             unregisterBtn?.removeAttribute('disabled');
         } else if (isCloned) {
@@ -757,7 +862,12 @@ export class MarketplaceUI {
                 `;
             }
             cloneBtn?.setAttribute('disabled', '');
-            pullBtn?.removeAttribute('disabled');
+            // Only show pull button if there's an update available
+            if (hasUpdate) {
+                pullBtn?.removeAttribute('disabled');
+            } else {
+                pullBtn?.setAttribute('disabled', '');
+            }
             
             // Only enable register button if metadata is available
             if (hasMetadata) {
@@ -778,6 +888,48 @@ export class MarketplaceUI {
             pullBtn?.setAttribute('disabled', '');
             registerBtn?.setAttribute('disabled', '');
             unregisterBtn?.setAttribute('disabled', '');
+        }
+    }
+
+    /**
+     * Update version information display
+     */
+    private updateVersionInfo(repo: Repository): void {
+        const versionInfoContainer = document.getElementById('version-info');
+        const currentVersionElement = document.getElementById('current-version');
+        const latestVersionElement = document.getElementById('latest-version');
+        const updateAvailableContainer = document.getElementById('update-available');
+        
+        if (repo.cloned && repo.currentVersion) {
+            // Show version info
+            if (versionInfoContainer) {
+                versionInfoContainer.style.display = 'block';
+            }
+            
+            // Display current version
+            if (currentVersionElement) {
+                currentVersionElement.textContent = repo.currentVersion;
+            }
+            
+            // Display latest version if an update is available
+            if (repo.hasUpdate && repo.latestVersion) {
+                if (updateAvailableContainer) {
+                    updateAvailableContainer.style.display = 'flex';
+                }
+                if (latestVersionElement) {
+                    latestVersionElement.textContent = repo.latestVersion;
+                }
+            } else {
+                // No update available, hide latest version
+                if (updateAvailableContainer) {
+                    updateAvailableContainer.style.display = 'none';
+                }
+            }
+        } else {
+            // Not cloned, hide version info
+            if (versionInfoContainer) {
+                versionInfoContainer.style.display = 'none';
+            }
         }
     }
 
@@ -1166,9 +1318,9 @@ export class MarketplaceUI {
             return;
         }
         
-        // Check if localPath is available
-        if (!repositoryBeingRegistered.localPath) {
-            this.showError('Cannot register: Repository local path not available. Please clone the repository first.');
+        // Check if repository is cloned
+        if (!repositoryBeingRegistered.cloned) {
+            this.showError('Cannot register: Repository is not cloned. Please clone the repository first.');
             return;
         }
         
@@ -1187,7 +1339,7 @@ export class MarketplaceUI {
         
         try {
             const params = new URLSearchParams({
-                path: repositoryBeingRegistered.localPath,
+                repoName: repositoryBeingRegistered.name,
                 fileContent: repositoryBeingRegistered.fileContent
             });
             
@@ -1197,7 +1349,12 @@ export class MarketplaceUI {
             
             if (response.ok) {
                 this.showSuccess('Subproject registered successfully');
-                this.registeredProjects.push(repositoryBeingRegistered.name);
+                
+                // Add the subproject name (not repository name) to registered projects
+                const subprojectName = repositoryBeingRegistered.subprojectName || repositoryBeingRegistered.name;
+                if (!this.registeredProjects.includes(subprojectName)) {
+                    this.registeredProjects.push(subprojectName);
+                }
                 
                 // Clear loading state
                 if (repoIndex !== -1) {
@@ -1246,9 +1403,9 @@ export class MarketplaceUI {
             return;
         }
         
-        // Check if localPath is available
-        if (!repositoryBeingUnregistered.localPath) {
-            this.showError('Cannot unregister: Repository local path not available.');
+        // Check if repository is cloned
+        if (!repositoryBeingUnregistered.cloned) {
+            this.showError('Cannot unregister: Repository is not cloned.');
             return;
         }
         
@@ -1276,7 +1433,7 @@ export class MarketplaceUI {
         try {
             // Pass the delete parameter and fileContent to the API
             const params = new URLSearchParams({
-                path: repositoryBeingUnregistered.localPath,
+                repoName: repositoryBeingUnregistered.name,
                 fileContent: repositoryBeingUnregistered.fileContent,
                 deleteFiles: result.deleteRepository ? 'true' : 'false'
             });
@@ -1289,7 +1446,10 @@ export class MarketplaceUI {
                     ? 'Subproject unregistered and repository deleted successfully'
                     : 'Subproject unregistered successfully';
                 this.showSuccess(successMsg);
-                const index = this.registeredProjects.indexOf(repositoryBeingUnregistered.name);
+                
+                // Remove the subproject name (not repository name) from registered projects
+                const subprojectName = repositoryBeingUnregistered.subprojectName || repositoryBeingUnregistered.name;
+                const index = this.registeredProjects.indexOf(subprojectName);
                 if (index > -1) {
                     this.registeredProjects.splice(index, 1);
                 }
