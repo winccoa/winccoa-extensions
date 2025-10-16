@@ -406,8 +406,20 @@
                         <ix-select
                             id="organization-select"
                             editable
-                            placeholder="All organizations"
+                            i-1-8n-placeholder-editable="Choose an Organization"
+                            allow-clear
                             label="Organization"
+                            style="width: 100%;">
+                        </ix-select>
+                    </div>
+                    
+                    <div class="keyword-filter">
+                        <ix-select
+                            id="keyword-filter"
+                            mode="multiple"
+                            allow-clear
+                            placeholder="All keywords"
+                            label="Filter by keywords"
                             style="width: 100%;">
                         </ix-select>
                     </div>

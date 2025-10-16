@@ -81,6 +81,14 @@ ix-menu ix-menu-item ix-icon {
     opacity: 0.7;
 }
 
+.keyword-filter {
+    padding: 8px 16px 12px 16px;
+    border-bottom: 1px solid var(--theme-color-component-1);
+    min-height: 60px;
+    display: flex;
+    flex-direction: column;
+}
+
 .repository-list {
     flex: 1;
     overflow-y: auto;

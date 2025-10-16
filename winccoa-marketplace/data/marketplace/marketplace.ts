@@ -24,6 +24,7 @@ export class MarketplaceUI {
     private currentMode: 'marketplace' | 'registered' = 'marketplace';
     private predefinedOrganizations: string[] = ['winccoa'];
     private currentLoadController: AbortController | null = null; // Track ongoing load requests
+    private selectedKeywords: string[] = []; // Track selected keywords for filtering (empty = all)
 
     constructor() {
         // Auto-detect backend URL based on current frontend URL
@@ -226,6 +227,7 @@ export class MarketplaceUI {
                     ]);
                     
                     this.renderRepositoryList();
+                    this.populateKeywordFilter();
                 }
             } catch (error: unknown) {
                 // Ignore abort errors (user cancelled by clicking refresh again)
@@ -242,6 +244,14 @@ export class MarketplaceUI {
         searchInput?.addEventListener('input', (e: Event) => {
             const target = e.target as HTMLInputElement;
             this.filterRepositories(target.value);
+        });
+
+        // Keyword filter
+        const keywordFilter = document.getElementById('keyword-filter') as any;
+        keywordFilter?.addEventListener('valueChange', (e: CustomEvent) => {
+            // e.detail contains the array of selected values
+            this.selectedKeywords = e.detail || [];
+            this.applyFilters();
         });
 
         // Organization select with change event
@@ -271,6 +281,7 @@ export class MarketplaceUI {
                     this.loadLocalRepositories()
                 ]);
                 this.renderRepositoryList();
+                this.populateKeywordFilter();
             } catch (error: unknown) {
                 // Ignore abort errors (user changed organization while loading)
                 if ((error as Error).name === 'AbortError') {
@@ -357,6 +368,7 @@ export class MarketplaceUI {
             ]);
             
             this.renderRepositoryList();
+            this.populateKeywordFilter();
         } catch (error: unknown) {
             // Ignore abort errors (user cancelled by switching modes)
             if ((error as Error).name === 'AbortError') {
@@ -532,6 +544,7 @@ export class MarketplaceUI {
             ]);
             // Re-render with all status information loaded
             this.renderRepositoryList();
+            this.populateKeywordFilter();
         } catch (error: unknown) {
             // Ignore abort errors (user cancelled by switching modes)
             if ((error as Error).name === 'AbortError') {
@@ -867,18 +880,78 @@ export class MarketplaceUI {
      * Filter repositories based on search term
      */
     private filterRepositories(searchTerm: string): void {
+        this.applyFilters();
+    }
+
+    /**
+     * Apply all active filters (search + keywords)
+     */
+    private applyFilters(): void {
         const items = document.querySelectorAll('.repository-item');
-        const term = searchTerm.toLowerCase();
+        const searchInput = document.getElementById('search-input') as HTMLInputElement;
+        const searchTerm = (searchInput?.value || '').toLowerCase();
 
         items.forEach(item => {
             const repoData = item.getAttribute('data-repo');
             if (repoData) {
                 const repo: Repository = JSON.parse(repoData);
-                const matches = repo.name.toLowerCase().includes(term) ||
-                              (repo.description && repo.description.toLowerCase().includes(term));
                 
-                (item as HTMLElement).style.display = matches ? 'block' : 'none';
+                // Check search term match
+                const matchesSearch = !searchTerm || 
+                    repo.name.toLowerCase().includes(searchTerm) ||
+                    (repo.description && repo.description.toLowerCase().includes(searchTerm));
+                
+                // Check keyword filter match
+                let matchesKeywords = true;
+                if (this.selectedKeywords.length > 0) {
+                    // If keywords are selected, repo must have ALL selected keywords
+                    // Repos without keywords should be hidden when filter is active
+                    if (repo.keywords && repo.keywords.length > 0) {
+                        // Check if repo has ALL selected keywords
+                        matchesKeywords = this.selectedKeywords.every(selectedKeyword => 
+                            repo.keywords!.includes(selectedKeyword)
+                        );
+                    } else {
+                        // No keywords on repo = don't match when filter is active
+                        matchesKeywords = false;
+                    }
+                }
+                
+                // Show only if matches both filters
+                (item as HTMLElement).style.display = (matchesSearch && matchesKeywords) ? 'block' : 'none';
             }
+        });
+    }
+
+    /**
+     * Populate keyword filter with all unique keywords from repositories
+     */
+    private populateKeywordFilter(): void {
+        const keywordFilter = document.getElementById('keyword-filter') as any;
+        if (!keywordFilter) return;
+        
+        // Clear existing options
+        keywordFilter.innerHTML = '';
+        
+        // Collect all unique keywords
+        const allKeywords = new Set<string>();
+        this.repositories.forEach(repo => {
+            if (repo.keywords && repo.keywords.length > 0) {
+                repo.keywords.forEach(keyword => allKeywords.add(keyword));
+            }
+        });
+        
+        // Sort keywords alphabetically
+        const sortedKeywords = Array.from(allKeywords).sort((a, b) => 
+            a.toLowerCase().localeCompare(b.toLowerCase())
+        );
+        
+        // Add options to the select
+        sortedKeywords.forEach(keyword => {
+            const option = document.createElement('ix-select-item');
+            option.setAttribute('label', keyword);
+            option.setAttribute('value', keyword);
+            keywordFilter.appendChild(option);
         });
     }
 
