@@ -8,6 +8,7 @@ import {
   WinccoaCtrlScript,
   WinccoaCtrlType,
   WinccoaManager,
+  WinccoaVersionDetails,
 } from "winccoa-manager";
 import { AsciiManager } from "./AsciiManager";
 import { CommandExecutor } from "./CommandExecutor";
@@ -205,6 +206,7 @@ class AddOnHandler {
   private octokit: Octokit;
   private isAuthenticated: boolean = false;
   private _defaultDirectory: string;
+  private _oaVersion: string;
 
   constructor(authToken?: string) {
     if (authToken) {
@@ -220,9 +222,13 @@ class AddOnHandler {
       console.log("No authentication - limited to public repositories");
     }
 
+    // Get WinCC OA version
+    const details = winccoa.getVersionInfo();
+    this._oaVersion = details.winccoa.major + "." + details.winccoa.minor + "." + details.winccoa.patch;
+    console.log(`Detected WinCC OA version: ${this._oaVersion}`);
+
+    // Get WinCC OA default project directory
     this._defaultDirectory = getDefaultProjDir();
-    // Log the target directory being used
-    console.log(`Target clone directory: ${this._defaultDirectory}`);
   }
 
   getDefaultAddonPath(): string {
@@ -666,6 +672,72 @@ bool addManager(string manager, string startMode, string options, string user, s
   }
 
   /**
+   * Check if the current WinCC OA version is compatible with the required version
+   * @param requiredVersion Version requirement string (e.g., "^3.21.0", ">=3.20.0")
+   * @returns True if the current version is compatible
+   */
+  private isVersionCompatible(requiredVersion: string): boolean {
+    try {
+      if (!requiredVersion || !this._oaVersion) {
+        return true; // If no version specified, assume compatible
+      }
+
+      // Remove whitespace and convert to lowercase
+      const requirement = requiredVersion.trim();
+      
+      // Handle caret notation (^3.21.0 means >=3.21.0)
+      if (requirement.startsWith('^')) {
+        const baseVersion = requirement.substring(1);
+        const currentVersion = this._oaVersion;
+        
+        // Parse versions
+        const baseParts = baseVersion.split('.').map(v => parseInt(v, 10) || 0);
+        const currentParts = currentVersion.split('.').map(v => parseInt(v, 10) || 0);
+        
+        // Normalize to same length
+        const maxLength = Math.max(baseParts.length, currentParts.length);
+        while (baseParts.length < maxLength) baseParts.push(0);
+        while (currentParts.length < maxLength) currentParts.push(0);
+        
+        // Check if current version is >= base version
+        for (let i = 0; i < maxLength; i++) {
+          if (currentParts[i] > baseParts[i]) return true;
+          if (currentParts[i] < baseParts[i]) return false;
+        }
+        
+        // If major version differs, not compatible
+        if (baseParts[0] !== currentParts[0]) return false;
+        
+        return true; // Versions are equal
+      }
+      
+      // Handle other operators (>=, >, <=, <, =)
+      if (requirement.startsWith('>=')) {
+        const baseVersion = requirement.substring(2);
+        return !this.isVersionHigher(baseVersion, this._oaVersion);
+      } else if (requirement.startsWith('>')) {
+        const baseVersion = requirement.substring(1);
+        return this.isVersionHigher(this._oaVersion, baseVersion);
+      } else if (requirement.startsWith('<=')) {
+        const baseVersion = requirement.substring(2);
+        return !this.isVersionHigher(this._oaVersion, baseVersion);
+      } else if (requirement.startsWith('<')) {
+        const baseVersion = requirement.substring(1);
+        return this.isVersionHigher(baseVersion, this._oaVersion);
+      } else if (requirement.startsWith('=')) {
+        const baseVersion = requirement.substring(1);
+        return baseVersion === this._oaVersion;
+      }
+      
+      // Default: treat as exact match requirement
+      return requirement === this._oaVersion;
+    } catch (error) {
+      console.error(`Error checking version compatibility: ${error}`);
+      return true; // If error, assume compatible to be safe
+    }
+  }
+
+  /**
    * Compare two version strings to determine if the first is higher than the second
    * @param version1 First version string (e.g., "1.2.0")
    * @param version2 Second version string (e.g., "1.1.0")
@@ -1026,11 +1098,25 @@ bool addManager(string manager, string startMode, string options, string user, s
               ).toString("utf-8");
               try {
                 const packageJson = JSON.parse(content);
-                (repo as any).winccoaPackage = packageJson;
-                validRepos.push(repo); // Only add repos with valid package.winccoa.json
-                console.log(
-                  `Found package.winccoa.json for ${repo.fullName} - added to results`,
-                );
+                
+                // Check version compatibility if OaVersion is specified
+                let isCompatible = true;
+                if (packageJson.OaVersion && this._oaVersion) {
+                  isCompatible = this.isVersionCompatible(packageJson.OaVersion);
+                  
+                  if (!isCompatible) {
+                    console.log(`Skipping repository ${repo.fullName}: requires OaVersion ${packageJson.OaVersion}, current version is ${this._oaVersion}`);
+                  }
+                }
+                
+                // Only add to valid repos if compatible
+                if (isCompatible) {
+                  (repo as any).winccoaPackage = packageJson;
+                  validRepos.push(repo); // Only add repos with valid and compatible package.winccoa.json
+                  console.log(
+                    `Found package.winccoa.json for ${repo.fullName} - added to results`,
+                  );
+                }
               } catch (parseError) {
                 console.warn(
                   `Invalid JSON in package.winccoa.json for ${repo.fullName}:`,
