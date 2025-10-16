@@ -184,7 +184,7 @@ export class MarketplaceUI {
         const refreshBtn = document.getElementById('refresh-btn');
         refreshBtn?.addEventListener('click', () => {
             const orgSelect = document.getElementById('organization-select') as any;
-            const selectedValue = orgSelect?.value?.trim() || '';
+            const selectedValue = (orgSelect?.value || '').toString().trim();
             
             if (selectedValue) {
                 // Single organization selected
@@ -271,7 +271,7 @@ export class MarketplaceUI {
         
         // Load organization repositories
         const orgSelect = document.getElementById('organization-select') as any;
-        const selectedValue = orgSelect?.value?.trim() || '';
+        const selectedValue = (orgSelect?.value || '').toString().trim();
         
         if (selectedValue) {
             this.loadRepositories(selectedValue);
