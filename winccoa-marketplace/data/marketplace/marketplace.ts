@@ -192,37 +192,11 @@ export class MarketplaceUI {
                 // Check current mode and refresh accordingly
                 if (this.currentMode === 'registered') {
                     // In registered mode, reload all data and show registered repos
-                    const orgSelect = document.getElementById('organization-select') as any;
-                    const selectedValue = (orgSelect?.value || '').toString().trim();
-                    
-                    if (selectedValue) {
-                        await this.loadRepositories(selectedValue);
-                    } else {
-                        await this.loadAllOrganizations();
-                    }
-                    
-                    await Promise.all([
-                        this.loadRegisteredProjects(),
-                        this.loadLocalRepositories()
-                    ]);
-                    
+                    await this.loadAllData();
                     this.showRegisteredRepositories();
                 } else {
                     // In marketplace mode, load and show all repos
-                    const orgSelect = document.getElementById('organization-select') as any;
-                    const selectedValue = (orgSelect?.value || '').toString().trim();
-                    
-                    if (selectedValue) {
-                        await this.loadRepositories(selectedValue);
-                    } else {
-                        await this.loadAllOrganizations();
-                    }
-                    
-                    await Promise.all([
-                        this.loadRegisteredProjects(),
-                        this.loadLocalRepositories()
-                    ]);
-                    
+                    await this.loadAllData();
                     this.renderRepositoryList();
                     this.populateKeywordFilter();
                 }
@@ -262,22 +236,7 @@ export class MarketplaceUI {
             this.currentLoadController = new AbortController();
             
             try {
-                // Ensure value is a string and trim it
-                const trimmedValue = (value || '').toString().trim();
-                
-                if (trimmedValue) {
-                    // Single organization selected or custom value entered
-                    await this.loadRepositories(trimmedValue);
-                } else {
-                    // Empty = load all predefined organizations
-                    await this.loadAllOrganizations();
-                }
-                
-                // Reload status information and render
-                await Promise.all([
-                    this.loadRegisteredProjects(),
-                    this.loadLocalRepositories()
-                ]);
+                await this.loadAllData();
                 this.renderRepositoryList();
                 this.populateKeywordFilter();
             } catch (error: unknown) {
@@ -363,22 +322,7 @@ export class MarketplaceUI {
         this.updateTitle(); // Update title immediately before loading
         
         try {
-            // Load organization repositories
-            const orgSelect = document.getElementById('organization-select') as any;
-            const selectedValue = (orgSelect?.value || '').toString().trim();
-            
-            if (selectedValue) {
-                await this.loadRepositories(selectedValue);
-            } else {
-                await this.loadAllOrganizations();
-            }
-            
-            // Load status information and render
-            await Promise.all([
-                this.loadRegisteredProjects(),
-                this.loadLocalRepositories()
-            ]);
-            
+            await this.loadAllData();
             this.renderRepositoryList();
             this.populateKeywordFilter();
         } catch (error: unknown) {
@@ -406,21 +350,7 @@ export class MarketplaceUI {
         this.updateTitle(); // Update title immediately before loading
         
         try {
-            // Load all repositories and status first
-            const orgSelect = document.getElementById('organization-select') as any;
-            const selectedValue = (orgSelect?.value || '').toString().trim();
-            
-            if (selectedValue) {
-                await this.loadRepositories(selectedValue);
-            } else {
-                await this.loadAllOrganizations();
-            }
-            
-            await Promise.all([
-                this.loadRegisteredProjects(),
-                this.loadLocalRepositories()
-            ]);
-            
+            await this.loadAllData();
             this.showRegisteredRepositories();
         } catch (error: unknown) {
             // Ignore abort errors (user cancelled by switching modes)
@@ -578,6 +508,57 @@ export class MarketplaceUI {
     }
 
     /**
+     * Get selected organization value from the dropdown
+     */
+    private getSelectedOrganization(): string {
+        const orgSelect = document.getElementById('organization-select') as any;
+        return (orgSelect?.value || '').toString().trim();
+    }
+
+    /**
+     * Load repositories based on organization selection and update status
+     */
+    private async loadAllData(): Promise<void> {
+        const selectedOrg = this.getSelectedOrganization();
+        
+        // Load repositories
+        if (selectedOrg) {
+            await this.loadRepositories(selectedOrg);
+        } else {
+            await this.loadAllOrganizations();
+        }
+        
+        // Load status information in parallel
+        await Promise.all([
+            this.loadRegisteredProjects(),
+            this.loadLocalRepositories()
+        ]);
+    }
+
+    /**
+     * Extract version and keywords from winccoaPackage field
+     */
+    private extractPackageData(repo: Repository): void {
+        if ((repo as any).winccoaPackage) {
+            try {
+                const packageData = typeof (repo as any).winccoaPackage === 'string' 
+                    ? JSON.parse((repo as any).winccoaPackage)
+                    : (repo as any).winccoaPackage;
+                
+                if (packageData.Version) {
+                    repo.latestVersion = packageData.Version;
+                }
+                
+                if (packageData.Keywords && Array.isArray(packageData.Keywords)) {
+                    repo.keywords = packageData.Keywords;
+                }
+            } catch (e) {
+                console.warn(`Failed to parse winccoaPackage for ${repo.name}`);
+            }
+        }
+    }
+
+    /**
      * Load repositories from all predefined organizations
      */
     private async loadAllOrganizations(): Promise<void> {
@@ -606,25 +587,7 @@ export class MarketplaceUI {
             this.repositories = results.flat();
             
             // Extract latest version from winccoaPackage field for all repos
-            this.repositories.forEach(repo => {
-                if ((repo as any).winccoaPackage) {
-                    try {
-                        const packageData = typeof (repo as any).winccoaPackage === 'string' 
-                            ? JSON.parse((repo as any).winccoaPackage)
-                            : (repo as any).winccoaPackage;
-                        
-                        if (packageData.Version) {
-                            repo.latestVersion = packageData.Version;
-                        }
-                        
-                        if (packageData.Keywords && Array.isArray(packageData.Keywords)) {
-                            repo.keywords = packageData.Keywords;
-                        }
-                    } catch (e) {
-                        console.warn(`Failed to parse winccoaPackage for ${repo.name}`);
-                    }
-                }
-            });
+            this.repositories.forEach(repo => this.extractPackageData(repo));
             
             // Don't render here - will be rendered after all status info is loaded
             
@@ -661,25 +624,7 @@ export class MarketplaceUI {
                 this.repositories = Array.isArray(data) ? data : [];
                 
                 // Extract latest version from winccoaPackage field
-                this.repositories.forEach(repo => {
-                    if ((repo as any).winccoaPackage) {
-                        try {
-                            const packageData = typeof (repo as any).winccoaPackage === 'string' 
-                                ? JSON.parse((repo as any).winccoaPackage)
-                                : (repo as any).winccoaPackage;
-                            
-                            if (packageData.Version) {
-                                repo.latestVersion = packageData.Version;
-                            }
-                            
-                            if (packageData.Keywords && Array.isArray(packageData.Keywords)) {
-                                repo.keywords = packageData.Keywords;
-                            }
-                        } catch (e) {
-                            console.warn(`Failed to parse winccoaPackage for ${repo.name}`);
-                        }
-                    }
-                });
+                this.repositories.forEach(repo => this.extractPackageData(repo));
                 
                 // Don't render here - will be rendered after all status info is loaded
                 
