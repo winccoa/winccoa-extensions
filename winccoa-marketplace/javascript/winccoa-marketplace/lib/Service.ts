@@ -20,6 +20,10 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     this.registerFunction("listRepos", this.listRemoteRepositories.bind(this));
     this.registerFunction("repoPath", this.getDefaultAddonPath.bind(this));
     this.registerFunction("localRepos", this.listLocalAddOns.bind(this));
+    this.registerFunction(
+      "setPmonCredentials",
+      this.setPmonCredentials.bind(this),
+    );
     this._addOnHandler = new AddOnHandler();
   }
 
@@ -326,5 +330,27 @@ export class MarketplaceService extends Vrpc.ServiceBase {
   ): Promise<Vrpc.Variant> {
     const result = await this._addOnHandler.listLocalAddOns();
     return Vrpc.Variant.createString(JSON.stringify(result));
+  }
+
+  // eslint-disable-next-line require-await
+  private async setPmonCredentials(
+    serverContext: Vrpc.ServerContext,
+    request: Vrpc.Variant,
+  ): Promise<Vrpc.Variant> {
+    const requestMapping = request.getMapping();
+    const userVariant = requestMapping.get(Vrpc.Variant.createString("user"));
+    const passwordVariant = requestMapping.get(
+      Vrpc.Variant.createString("password"),
+    );
+
+    if (!userVariant || !passwordVariant) {
+      throw new Error(
+        'Missing required "user" or "password" parameter in mapping',
+      );
+    }
+
+    this._addOnHandler.setPmonUser(userVariant.getString());
+    this._addOnHandler.setPmonPassword(passwordVariant.getString());
+    return Vrpc.Variant.createBool(true);
   }
 }

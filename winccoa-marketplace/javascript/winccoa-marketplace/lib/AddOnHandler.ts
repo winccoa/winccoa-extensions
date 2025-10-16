@@ -207,6 +207,8 @@ class AddOnHandler {
   private isAuthenticated: boolean = false;
   private _defaultDirectory: string;
   private _oaVersion: string;
+  private pmonUser: string = "";
+  private pmonPassword: string = "";
 
   constructor(authToken?: string) {
     if (authToken) {
@@ -238,6 +240,14 @@ class AddOnHandler {
 
   getDefaultAddonPath(): string {
     return this._defaultDirectory;
+  }
+
+  setPmonUser(user: string): void {
+    this.pmonUser = user;
+  }
+
+  setPmonPassword(password: string): void {
+    this.pmonPassword = password;
   }
 
   /**
@@ -370,8 +380,8 @@ bool addManager(string manager, string startMode, string options, string user, s
           manager.Name,
           manager.StartMode.toLowerCase(),
           manager.Options,
-          "",
-          "",
+          this.pmonUser,
+          this.pmonPassword,
         ],
         [
           WinccoaCtrlType.string,
@@ -427,7 +437,8 @@ bool addManager(string manager, string startMode, string options, string user, s
         );
         if (fs.existsSync(addonJsonPath)) {
           const fileContent = fs.readFileSync(addonJsonPath, "utf-8");
-          localAddOns.push({ addon: entry.name, fileContent });
+          const jsonContent = JSON.parse(fileContent);
+          localAddOns.push({ addon: entry.name, fileContent: jsonContent });
         }
       }
     }
