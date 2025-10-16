@@ -48,6 +48,7 @@ export interface Repository {
     cloned?: boolean;
     fileContent?: string; // JSON content from .winccoa-marketplace.json file
     localPath?: string; // Local filesystem path where repository is cloned
+    loadingAction?: 'clone' | 'pull' | 'register' | 'unregister' | null; // Track which action is in progress
 }
 
 export interface ApiError extends Error {
