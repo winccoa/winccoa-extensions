@@ -5,7 +5,6 @@
 // Interface definitions for IX modals and components
 export interface IxModalAction {
     text: string;
-    handler?: () => void;
 }
 
 export interface IxModalConfig {
@@ -17,14 +16,6 @@ export interface IxModalConfig {
 export interface IxModalResult {
     actionIndex: number;
     action: string;
-}
-
-export interface IxInputModalConfig {
-    title?: string;
-    message?: string;
-    label?: string;
-    placeholder?: string;
-    defaultValue?: string;
 }
 
 export interface IxUnregisterConfirmResult {
@@ -69,7 +60,6 @@ export type ToastType = 'info' | 'success' | 'error' | 'warning';
 declare global {
     interface Window {
         ixShowMessage?: (config: IxModalConfig) => Promise<IxModalResult>;
-        ixShowInput?: (config: IxInputModalConfig) => Promise<string | null>;
         ixShowUnregisterConfirm?: (repositoryName: string) => Promise<IxUnregisterConfirmResult | null>;
         ixShowDeleteConfirm?: (repositoryName: string) => Promise<boolean>;
         marketplaceUI?: import('./marketplace').MarketplaceUI;

@@ -6,9 +6,6 @@
 import type {
     Repository,
     ApiError,
-    IxModalConfig,
-    IxModalResult,
-    IxInputModalConfig,
     Theme,
     ToastType
 } from './types';
@@ -1376,49 +1373,17 @@ export class MarketplaceUI {
         
         switch (tabIndex) {
             case 1: // README tab
-                await this.loadReadme();
+                // README loading functionality can be implemented here when needed
+                const readmeContent = document.getElementById('readme-content');
+                if (readmeContent) {
+                    readmeContent.innerHTML = `
+                        <div style="text-align: center; padding: 48px; color: var(--theme-color-weak-text);">
+                            <ix-icon name="info" size="32"></ix-icon>
+                            <p style="margin: 16px 0 0 0;">README view not yet implemented</p>
+                        </div>
+                    `;
+                }
                 break;
-            case 2: // Files tab
-                // Files functionality would be implemented here
-                break;
-        }
-    }
-
-    /**
-     * Load repository README
-     */
-    private async loadReadme(): Promise<void> {
-        const readmeContent = document.getElementById('readme-content');
-        if (!readmeContent || !this.currentRepository) return;
-        
-        try {
-            readmeContent.innerHTML = `
-                <div class="loading-spinner">
-                    <ix-spinner></ix-spinner>
-                    <span>Loading README...</span>
-                </div>
-            `;
-            
-            // In a real implementation, you would fetch the README from GitHub API
-            // For now, we'll simulate it
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            readmeContent.innerHTML = `
-                <h1>${this.currentRepository.name}</h1>
-                <p>${this.currentRepository.description || 'No description available'}</p>
-                <h2>Installation</h2>
-                <p>Clone this repository and follow the setup instructions.</p>
-                <pre><code>git clone ${this.currentRepository.cloneUrl || this.currentRepository.sshUrl}</code></pre>
-                <h2>Usage</h2>
-                <p>Detailed usage instructions would be shown here from the actual README file.</p>
-            `;
-        } catch (error) {
-            readmeContent.innerHTML = `
-                <div style="text-align: center; padding: 48px; color: var(--theme-color-weak-text);">
-                    <ix-icon name="alert-triangle" size="32"></ix-icon>
-                    <p style="margin: 16px 0 0 0;">Failed to load README</p>
-                </div>
-            `;
         }
     }
 
@@ -1426,8 +1391,6 @@ export class MarketplaceUI {
      * Show clone modal using IX showMessage API
      */
     private async showCloneModal(): Promise<void> {
-        console.log('🔧 showCloneModal called');
-        
         if (!this.currentRepository) {
             this.showError('No repository selected');
             return;
@@ -1452,31 +1415,23 @@ export class MarketplaceUI {
             const fullClonePath = `${defaultPath}${this.currentRepository.name}`;
             
             // Show confirmation dialog with the path
-            if (typeof window.ixShowMessage === 'function') {
-                const result = await window.ixShowMessage({
-                    title: 'Download Repository',
-                    message: `Repository "${this.currentRepository.name}" will be downloaded to\n\n${fullClonePath}`,
-                    actions: [
-                        {
-                            text: 'Cancel'
-                        },
-                        {
-                            text: 'Download'
-                        }
-                    ]
-                });
-                
-                // Handle the result based on which action was clicked
-                if (result && result.actionIndex === 1) {
-                    // User clicked "Clone"
-                    await this.performClone(defaultPath);
-                }
-            } else {
-                // Fallback to native confirm
-                const confirmed = confirm(`Download repository "${this.currentRepository.name}" to:\n\n${fullClonePath}\n\nContinue?`);
-                if (confirmed) {
-                    await this.performClone(defaultPath);
-                }
+            const result = await window.ixShowMessage!({
+                title: 'Download Repository',
+                message: `Repository "${this.currentRepository.name}" will be downloaded to\n\n${fullClonePath}`,
+                actions: [
+                    {
+                        text: 'Cancel'
+                    },
+                    {
+                        text: 'Download'
+                    }
+                ]
+            });
+            
+            // Handle the result based on which action was clicked
+            if (result && result.actionIndex === 1) {
+                // User clicked "Download"
+                await this.performCloneOperation(this.currentRepository, defaultPath);
             }
             
         } catch (error) {
@@ -1485,46 +1440,7 @@ export class MarketplaceUI {
         }
     }
     
-    /**
-     * Perform the actual clone operation
-     */
-    private async performClone(path: string): Promise<void> {
-        if (!this.currentRepository) return;
-        
-        // Use the extracted performCloneOperation method
-        await this.performCloneOperation(this.currentRepository, path);
-    }
-    
-    /**
-     * Wait for IX component to be ready
-     */
-    private async waitForComponentReady(element: HTMLElement): Promise<void> {
-        // Wait for the element to be defined as a custom element
-        if (element.tagName.toLowerCase().startsWith('ix-')) {
-            await customElements.whenDefined(element.tagName.toLowerCase());
-        }
-        
-        // Additional wait for hydration
-        return new Promise(resolve => {
-            if (element.classList.contains('hydrated')) {
-                resolve();
-            } else {
-                const observer = new MutationObserver(() => {
-                    if (element.classList.contains('hydrated')) {
-                        observer.disconnect();
-                        resolve();
-                    }
-                });
-                observer.observe(element, { attributes: true, attributeFilter: ['class'] });
-                
-                // Timeout fallback
-                setTimeout(() => {
-                    observer.disconnect();
-                    resolve();
-                }, 1000);
-            }
-        });
-    }
+
 
     /**
      * Pull repository updates
@@ -1611,9 +1527,6 @@ export class MarketplaceUI {
      * Register subproject
      */
     private async registerSubProject(): Promise<void> {
-        console.log('🔧 registerSubProject called');
-        console.log('🔧 currentRepository:', this.currentRepository);
-        
         if (!this.currentRepository) {
             return;
         }
@@ -1623,8 +1536,6 @@ export class MarketplaceUI {
         
         // If repository is not cloned yet, clone it first
         if (!repositoryBeingRegistered.cloned) {
-            console.log('🔧 Repository not cloned, will clone first before registering');
-            
             // Show the clone modal with path confirmation
             const cloneSuccess = await this.cloneForRegistration(repositoryBeingRegistered);
             
@@ -1746,27 +1657,20 @@ export class MarketplaceUI {
             const fullClonePath = `${defaultPath}${repository.name}`;
             
             // Show confirmation dialog with the path
-            let userConfirmed = false;
+            const result = await window.ixShowMessage!({
+                title: 'Download Repository',
+                message: `Repository "${repository.name}" will be downloaded to\n\n${fullClonePath}`,
+                actions: [
+                    {
+                        text: 'Cancel'
+                    },
+                    {
+                        text: 'Download'
+                    }
+                ]
+            });
             
-            if (typeof window.ixShowMessage === 'function') {
-                const result = await window.ixShowMessage({
-                    title: 'Download Repository',
-                    message: `Repository "${repository.name}" will be downloaded to\n\n${fullClonePath}`,
-                    actions: [
-                        {
-                            text: 'Cancel'
-                        },
-                        {
-                            text: 'Download'
-                        }
-                    ]
-                });
-                
-                userConfirmed = result && result.actionIndex === 1;
-            } else {
-                // Fallback to native confirm
-                userConfirmed = confirm(`Download repository "${repository.name}" to:\n\n${fullClonePath}\n\nContinue?`);
-            }
+            const userConfirmed = result && result.actionIndex === 1;
             
             if (!userConfirmed) {
                 return false; // User cancelled
