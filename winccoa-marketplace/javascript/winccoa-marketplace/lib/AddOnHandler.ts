@@ -813,7 +813,7 @@ bool addManager(string manager, string startMode, string options, string user, s
    * @param packageJson Parsed package.winccoa.json content
    * @returns AddonConfig object
    */
-  private mapPackageJsonToAddonConfig(packageJson: any): AddonConfig {
+  mapPackageJsonToAddonConfig(packageJson: any): AddonConfig {
     return {
       RepoName: packageJson.RepoName,
       Keywords: packageJson.Keywords,
