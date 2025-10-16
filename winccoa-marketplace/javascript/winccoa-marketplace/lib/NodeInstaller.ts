@@ -3,7 +3,7 @@ import * as path from "path";
 import { CommandExecutor } from "./CommandExecutor";
 import { WinccoaManager } from "winccoa-manager";
 
-const winccoa = new WinccoaManager(); 
+const winccoa = new WinccoaManager();
 
 export class NodeInstaller {
   constructor(private rootDir: string) {}
@@ -19,7 +19,7 @@ export class NodeInstaller {
       (e) => e.isFile() && e.name === "package.json",
     );
     if (hasPackageJson) {
-      winccoa.logDebugF("addonHandler",`Found package.json in ${dir}`);
+      winccoa.logDebugF("addonHandler", `Found package.json in ${dir}`);
       found.push(dir);
     }
     for (const entry of entries) {
@@ -36,7 +36,10 @@ export class NodeInstaller {
     args: string[],
     cwd: string,
   ): Promise<void> {
-    winccoa.logDebugF("addonHandler",`Running command: ${cmd} ${args.join(" ")} in ${cwd}`);
+    winccoa.logDebugF(
+      "addonHandler",
+      `Running command: ${cmd} ${args.join(" ")} in ${cwd}`,
+    );
     const result = await CommandExecutor.execute([cmd, ...args].join(" "), cwd);
     if (result.exitCode !== 0) {
       throw new Error(
@@ -49,7 +52,7 @@ export class NodeInstaller {
   static async installAndBuild(projDir: string): Promise<void> {
     const dirs = await this.findPackageDirs(projDir + "/javascript");
     for (const dir of dirs) {
-      winccoa.logDebugF("addonHandler",`Installing and building in ${dir}`);
+      winccoa.logDebugF("addonHandler", `Installing and building in ${dir}`);
       await this.runCommand("npm", ["install"], dir);
       await this.runCommand("npx", ["tsc"], dir);
     }

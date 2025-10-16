@@ -10,7 +10,7 @@ async function main() {
     winccoa.logInfo("Starting Marketplace Service...");
 
     container.registerService(marketplaceService);
-    container.startAllServices();
+    await container.startAllServices();
 
     winccoa.logInfo("Marketplace Service created and registered successfully");
   } catch (error) {
