@@ -224,7 +224,12 @@ class AddOnHandler {
 
     // Get WinCC OA version
     const details = winccoa.getVersionInfo();
-    this._oaVersion = details.winccoa.major + "." + details.winccoa.minor + "." + details.winccoa.patch;
+    this._oaVersion =
+      details.winccoa.major +
+      "." +
+      details.winccoa.minor +
+      "." +
+      details.winccoa.patch;
     console.log(`Detected WinCC OA version: ${this._oaVersion}`);
 
     // Get WinCC OA default project directory
@@ -346,7 +351,10 @@ bool addManager(string manager, string startMode, string options, string user, s
       config.Dplists.length > 0
     ) {
       console.log(`Importing ${config.Dplists.length} dplist file(s)...`);
-      await this.importAsciiFiles(config.Dplists, path.join(repoPath, projectName, "dplist"));
+      await this.importAsciiFiles(
+        config.Dplists,
+        path.join(repoPath, projectName, "dplist"),
+      );
     } else {
       console.log("No dplist files to import");
     }
@@ -358,7 +366,13 @@ bool addManager(string manager, string startMode, string options, string user, s
       // eslint-disable-next-line no-await-in-loop
       await this.ctrlScript.start(
         "addManager",
-        [manager.Name, manager.StartMode, manager.Options, "", ""],
+        [
+          manager.Name,
+          manager.StartMode.toLowerCase(),
+          manager.Options,
+          "",
+          "",
+        ],
         [
           WinccoaCtrlType.string,
           WinccoaCtrlType.string,
@@ -685,51 +699,55 @@ bool addManager(string manager, string startMode, string options, string user, s
 
       // Remove whitespace and convert to lowercase
       const requirement = requiredVersion.trim();
-      
+
       // Handle caret notation (^3.21.0 means >=3.21.0)
-      if (requirement.startsWith('^')) {
+      if (requirement.startsWith("^")) {
         const baseVersion = requirement.substring(1);
         const currentVersion = this._oaVersion;
-        
+
         // Parse versions
-        const baseParts = baseVersion.split('.').map(v => parseInt(v, 10) || 0);
-        const currentParts = currentVersion.split('.').map(v => parseInt(v, 10) || 0);
-        
+        const baseParts = baseVersion
+          .split(".")
+          .map((v) => parseInt(v, 10) || 0);
+        const currentParts = currentVersion
+          .split(".")
+          .map((v) => parseInt(v, 10) || 0);
+
         // Normalize to same length
         const maxLength = Math.max(baseParts.length, currentParts.length);
         while (baseParts.length < maxLength) baseParts.push(0);
         while (currentParts.length < maxLength) currentParts.push(0);
-        
+
         // Check if current version is >= base version
         for (let i = 0; i < maxLength; i++) {
           if (currentParts[i] > baseParts[i]) return true;
           if (currentParts[i] < baseParts[i]) return false;
         }
-        
+
         // If major version differs, not compatible
         if (baseParts[0] !== currentParts[0]) return false;
-        
+
         return true; // Versions are equal
       }
-      
+
       // Handle other operators (>=, >, <=, <, =)
-      if (requirement.startsWith('>=')) {
+      if (requirement.startsWith(">=")) {
         const baseVersion = requirement.substring(2);
         return !this.isVersionHigher(baseVersion, this._oaVersion);
-      } else if (requirement.startsWith('>')) {
+      } else if (requirement.startsWith(">")) {
         const baseVersion = requirement.substring(1);
         return this.isVersionHigher(this._oaVersion, baseVersion);
-      } else if (requirement.startsWith('<=')) {
+      } else if (requirement.startsWith("<=")) {
         const baseVersion = requirement.substring(2);
         return !this.isVersionHigher(this._oaVersion, baseVersion);
-      } else if (requirement.startsWith('<')) {
+      } else if (requirement.startsWith("<")) {
         const baseVersion = requirement.substring(1);
         return this.isVersionHigher(baseVersion, this._oaVersion);
-      } else if (requirement.startsWith('=')) {
+      } else if (requirement.startsWith("=")) {
         const baseVersion = requirement.substring(1);
         return baseVersion === this._oaVersion;
       }
-      
+
       // Default: treat as exact match requirement
       return requirement === this._oaVersion;
     } catch (error) {
@@ -933,7 +951,14 @@ bool addManager(string manager, string startMode, string options, string user, s
               this.mapPackageJsonToAddonConfig(parsedPackage);
 
             if (updatedAddonConfig.Dplists) {
-              this.importAsciiFiles(updatedAddonConfig.Dplists, path.join(repositoryDirectory, updatedAddonConfig.Subproject, "dplist"));
+              this.importAsciiFiles(
+                updatedAddonConfig.Dplists,
+                path.join(
+                  repositoryDirectory,
+                  updatedAddonConfig.Subproject,
+                  "dplist",
+                ),
+              );
             }
 
             // Execute update scripts if any
@@ -1099,17 +1124,21 @@ bool addManager(string manager, string startMode, string options, string user, s
               ).toString("utf-8");
               try {
                 const packageJson = JSON.parse(content);
-                
+
                 // Check version compatibility if OaVersion is specified
                 let isCompatible = true;
                 if (packageJson.OaVersion && this._oaVersion) {
-                  isCompatible = this.isVersionCompatible(packageJson.OaVersion);
-                  
+                  isCompatible = this.isVersionCompatible(
+                    packageJson.OaVersion,
+                  );
+
                   if (!isCompatible) {
-                    console.log(`Skipping repository ${repo.fullName}: requires OaVersion ${packageJson.OaVersion}, current version is ${this._oaVersion}`);
+                    console.log(
+                      `Skipping repository ${repo.fullName}: requires OaVersion ${packageJson.OaVersion}, current version is ${this._oaVersion}`,
+                    );
                   }
                 }
-                
+
                 // Only add to valid repos if compatible
                 if (isCompatible) {
                   (repo as any).winccoaPackage = packageJson;
@@ -1199,14 +1228,19 @@ bool addManager(string manager, string startMode, string options, string user, s
     }
   }
 
-  public async importAsciiFiles(fileList: string | string[], dplPath: string): Promise<void> {
+  public async importAsciiFiles(
+    fileList: string | string[],
+    dplPath: string,
+  ): Promise<void> {
     // Convert single file to array for uniform processing
     const files = Array.isArray(fileList) ? fileList : [fileList];
 
     for (const file of files) {
       try {
         // eslint-disable-next-line no-await-in-loop
-        if (!(await AsciiManager.import(winccoa, file, path.join(dplPath, file)))) {
+        if (
+          !(await AsciiManager.import(winccoa, file, path.join(dplPath, file)))
+        ) {
           console.error(`[importAsciiFiles] Failed to import: ${file}`);
         }
       } catch (error) {

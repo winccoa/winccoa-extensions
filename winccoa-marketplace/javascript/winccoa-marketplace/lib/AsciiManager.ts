@@ -166,12 +166,15 @@ Stdout:            ${result.stdout || "None"}`;
       const [asciiManagerPath, importFilePath, runningProjectName] = (
         await Promise.all([
           PathResolver.getComponentPath(winccoa, ComponentId.ASCII_COMPONENT),
-          fullFilePath === "" ? PathResolver.getFilePath(winccoa, fileName, useDbdFiles): fullFilePath,
+          fullFilePath === ""
+            ? PathResolver.getFilePath(winccoa, fileName, useDbdFiles)
+            : fullFilePath,
           this.getProjectName(winccoa),
         ])
       ).map((path) => path?.trim());
 
-      console.log("Resolved Paths:", 
+      console.log(
+        "Resolved Paths:",
         asciiManagerPath,
         importFilePath,
         runningProjectName,
