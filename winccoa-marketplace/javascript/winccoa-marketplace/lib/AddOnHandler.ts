@@ -944,9 +944,9 @@ bool addManager(string manager, string startMode, string options, string user, s
       console.log("Git pull completed successfully!");
 
       // Read version after pull and compare
-      // const versionAfterPull = this.extractVersionFromPackageJson(repositoryDirectory);
+      const versionAfterPull = this.extractVersionFromPackageJson(repositoryDirectory);
       // TEMP: hardcoded for testing
-      const versionAfterPull = "2.0.1"
+      // const versionAfterPull = "2.0.1"
       let updatedAddonConfig: AddonConfig | null = null;
 
       if (
