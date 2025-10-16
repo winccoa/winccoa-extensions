@@ -35,7 +35,7 @@ class MarketplaceEndpoints
     httpConnect(pull, MARKETPLACE_URL_PREFIX + "/pull", "application/json");
     httpConnect(registerSubProjects, MARKETPLACE_URL_PREFIX + "/registerSubProjects", "application/json");
     httpConnect(unregisterSubProjects, MARKETPLACE_URL_PREFIX + "/unregisterSubProjects", "application/json");
-    httpConnect(listProjects, MARKETPLACE_URL_PREFIX + "/listProjects", "application/json");
+    httpConnect(listSubProjects, MARKETPLACE_URL_PREFIX + "/listProjects", "application/json");
     httpConnect(getDefaultAddonPath, MARKETPLACE_URL_PREFIX + "/getDefaultAddonPath", "application/json");
   }
 
@@ -195,9 +195,9 @@ class MarketplaceEndpoints
   }
 
   //--------------------------------------------------------------------------------
-  public static dyn_string listProjects()
+  public static dyn_string listSubProjects()
   {
-    dyn_string response = client.listProjects();
+    dyn_string response = client.listSubProjects();
     if (dynlen(response) > 0)
     {
       return makeDynString(jsonEncode(response), "Status: 200 OK");
