@@ -876,6 +876,7 @@ bool addManager(string manager, string startMode, string options, string user, s
         .filter((repo: any) => !!repo.url)
         .map((repo: any) => ({
           cloneUrl: repo.url,
+          name: repo.name,
         }));
     } catch (error) {
       console.error(
