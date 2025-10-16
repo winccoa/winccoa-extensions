@@ -825,13 +825,13 @@ export class MarketplaceUI {
                         ${repo.description || 'No description available'}
                     </div>
                     <div class="repository-item-meta">
-                        <div class="repository-item-meta-item" title="${repo.stars} star${repo.stars !== 1 ? 's' : ''}">
+                        <div class="repository-item-meta-item">
                             <ix-icon name="star-filled" size="12"></ix-icon>
-                            <span>${repo.stars || 0}&nbsp;${repo.stars !== 1 ? 'stars' : 'star'}</span>
+                            <span>${repo.stars !== undefined && repo.stars !== null ? repo.stars : 'N/A'}&nbsp;${repo.stars !== 1 ? 'stars' : 'star'}</span>
                         </div>
-                        <div class="repository-item-meta-item" title="${repo.forks} fork${repo.forks !== 1 ? 's' : ''}">
+                        <div class="repository-item-meta-item">
                             <ix-icon name="split" size="12"></ix-icon>
-                            <span>${repo.forks || 0}&nbsp;${repo.forks !== 1 ? 'forks' : 'fork'}</span>
+                            <span>${repo.forks !== undefined && repo.forks !== null ? repo.forks : 'N/A'}&nbsp;${repo.forks !== 1 ? 'forks' : 'fork'}</span>
                         </div>
                         <div class="repository-item-meta-item" title="Last updated: ${this.formatExactDate(repo.updatedAt)}">
                             <ix-icon name="clock" size="12"></ix-icon>
@@ -942,8 +942,14 @@ export class MarketplaceUI {
         const repoStarsText = document.getElementById('repo-stars-text');
         const repoForksText = document.getElementById('repo-forks-text');
 
-        if (repoStarsText) repoStarsText.textContent = `${repo.stars || 0} ${repo.stars !== 1 ? 'stars' : 'star'}`;
-        if (repoForksText) repoForksText.textContent = `${repo.forks || 0} ${repo.forks !== 1 ? 'forks' : 'fork'}`;
+        if (repoStarsText) {
+            const starsValue = repo.stars !== undefined && repo.stars !== null ? repo.stars : 'N/A';
+            repoStarsText.textContent = `${starsValue} ${repo.stars !== 1 ? 'stars' : 'star'}`;
+        }
+        if (repoForksText) {
+            const forksValue = repo.forks !== undefined && repo.forks !== null ? repo.forks : 'N/A';
+            repoForksText.textContent = `${forksValue} ${repo.forks !== 1 ? 'forks' : 'fork'}`;
+        }
 
         // Update overview tab
         const repoSize = document.getElementById('repo-size');
@@ -1133,6 +1139,7 @@ export class MarketplaceUI {
             const versionPill = document.createElement('ix-pill');
             versionPill.setAttribute('variant', 'info');
             versionPill.setAttribute('icon', 'info');
+            versionPill.setAttribute('tooltip-text', 'Current local version');
             versionPill.innerHTML = `Version ${repo.currentVersion}`;
             pillsContainer.appendChild(versionPill);
         }
@@ -1183,6 +1190,7 @@ export class MarketplaceUI {
             repo.keywords.forEach(keyword => {
                 const tagPill = document.createElement('ix-pill');
                 tagPill.setAttribute('variant', 'neutral');
+                tagPill.setAttribute('outline', '');
                 tagPill.textContent = keyword;
                 pillsContainer.appendChild(tagPill);
             });
@@ -1821,7 +1829,7 @@ export class MarketplaceUI {
      * Format file size
      */
     private formatSize(sizeInKB?: number): string {
-        if (!sizeInKB) return '0 KB';
+        if (!sizeInKB) return 'Unknown';
         
         if (sizeInKB < 1024) {
             return `${sizeInKB} KB`;
