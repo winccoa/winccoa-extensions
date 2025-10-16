@@ -542,10 +542,20 @@ export class MarketplaceUI {
             const isRegistered = this.registeredProjects.includes(repo.name);
             const statusClass = isRegistered ? 'registered' : (repo.cloned ? 'cloned' : '');
             const statusTooltip = isRegistered ? 'Registered' : (repo.cloned ? 'Cloned' : 'Not cloned');
+            const isLoading = repo.loadingAction != null;
+            const loadingText = repo.loadingAction 
+                ? `${repo.loadingAction.charAt(0).toUpperCase() + repo.loadingAction.slice(1)} in progress...`
+                : '';
             
             return `
-                <div class="repository-item" data-repo='${JSON.stringify(repo)}'>
+                <div class="repository-item ${isLoading ? 'loading' : ''}" data-repo='${JSON.stringify(repo)}'>
                     <div class="repository-status ${statusClass}" title="${statusTooltip}"></div>
+                    ${isLoading ? `
+                        <div class="repository-loading-overlay">
+                            <ix-spinner size="small"></ix-spinner>
+                            <span class="loading-text">${loadingText}</span>
+                        </div>
+                    ` : ''}
                     <div class="repository-item-header">
                         <div class="repository-item-name">${repo.name}</div>
                         <ix-pill class="repository-item-visibility" variant="outline" size="small">
@@ -631,6 +641,12 @@ export class MarketplaceUI {
         // Update repository information
         this.updateRepositoryDetails(repo);
         
+        // Update button spinner visibility based on loading state
+        const spinner = document.getElementById('action-loading-spinner');
+        if (spinner) {
+            spinner.style.display = repo.loadingAction ? 'inline-block' : 'none';
+        }
+        
         // Load tab content
         this.loadTabContent(0); // Load overview tab by default
     }
@@ -705,12 +721,22 @@ export class MarketplaceUI {
         const isRegistered = this.registeredProjects.includes(repo.name);
         const isCloned = repo.cloned || false;
         const hasMetadata = !!repo.fileContent;
+        const isLoading = !!repo.loadingAction;
         
         const statusElement = document.getElementById('local-status');
         const cloneBtn = document.getElementById('clone-btn');
         const pullBtn = document.getElementById('pull-btn');
         const registerBtn = document.getElementById('register-btn');
         const unregisterBtn = document.getElementById('unregister-btn');
+        
+        // If repository is loading, disable all buttons
+        if (isLoading) {
+            cloneBtn?.setAttribute('disabled', '');
+            pullBtn?.setAttribute('disabled', '');
+            registerBtn?.setAttribute('disabled', '');
+            unregisterBtn?.setAttribute('disabled', '');
+            return; // Don't update status text while loading
+        }
         
         if (isRegistered) {
             if (statusElement) {
@@ -758,23 +784,32 @@ export class MarketplaceUI {
     /**
      * Show loading state for action buttons
      */
+    /**
+     * Show loading state for current repository only
+     */
     private showActionLoading(): void {
+        // Only show button spinner if we're viewing the repository that's loading
+        // The repository list overlay will show for all repositories
+        if (!this.currentRepository) return;
+        
         const spinner = document.getElementById('action-loading-spinner');
         const cloneBtn = document.getElementById('clone-btn');
         const pullBtn = document.getElementById('pull-btn');
         const registerBtn = document.getElementById('register-btn');
         const unregisterBtn = document.getElementById('unregister-btn');
         
-        // Show spinner
-        if (spinner) {
+        // Show spinner only if we're viewing a repository with a loading action
+        if (spinner && this.currentRepository.loadingAction) {
             spinner.style.display = 'inline-block';
         }
         
-        // Disable all buttons
-        cloneBtn?.setAttribute('disabled', '');
-        pullBtn?.setAttribute('disabled', '');
-        registerBtn?.setAttribute('disabled', '');
-        unregisterBtn?.setAttribute('disabled', '');
+        // Disable all buttons only if current repository has a loading action
+        if (this.currentRepository.loadingAction) {
+            cloneBtn?.setAttribute('disabled', '');
+            pullBtn?.setAttribute('disabled', '');
+            registerBtn?.setAttribute('disabled', '');
+            unregisterBtn?.setAttribute('disabled', '');
+        }
     }
 
     /**
@@ -917,11 +952,25 @@ export class MarketplaceUI {
     private async performClone(path: string): Promise<void> {
         if (!this.currentRepository) return;
         
+        // Capture the repository being cloned to avoid issues if user switches repos during operation
+        const repositoryBeingCloned = this.currentRepository;
+        
+        // Set loading state on the specific repository
+        const repoIndex = this.repositories.findIndex(repo => repo.name === repositoryBeingCloned.name);
+        if (repoIndex !== -1) {
+            this.repositories[repoIndex].loadingAction = 'clone';
+            // Also update currentRepository if it's the same one
+            if (this.currentRepository?.name === repositoryBeingCloned.name) {
+                this.currentRepository.loadingAction = 'clone';
+            }
+            this.renderRepositoryList(); // Re-render to show loading state
+        }
+        
         this.showActionLoading();
         
         try {
             const params = new URLSearchParams({
-                url: this.currentRepository.cloneUrl || this.currentRepository.sshUrl || ''
+                url: repositoryBeingCloned.cloneUrl || repositoryBeingCloned.sshUrl || ''
             });
             
             if (path) {
@@ -935,22 +984,11 @@ export class MarketplaceUI {
                 const data = await response.json();
                 
                 this.showSuccess('Repository cloned successfully');
-                this.currentRepository.cloned = true;
                 
-                // Store the fileContent if available
-                if (data.fileContent) {
-                    this.currentRepository.fileContent = data.fileContent;
-                }
-                
-                // Store the local path if repositoryPath is provided
-                if (data.repositoryPath) {
-                    this.currentRepository.localPath = data.repositoryPath;
-                }
-                
-                // Also update the repository in the repositories array
-                const repoIndex = this.repositories.findIndex(repo => repo.name === this.currentRepository!.name);
+                // Update the repository in the repositories array
                 if (repoIndex !== -1) {
                     this.repositories[repoIndex].cloned = true;
+                    this.repositories[repoIndex].loadingAction = null;
                     if (data.fileContent) {
                         this.repositories[repoIndex].fileContent = data.fileContent;
                     }
@@ -959,8 +997,20 @@ export class MarketplaceUI {
                     }
                 }
                 
-                this.updateLocalStatus(this.currentRepository);
-                this.updateRepositoryDetails(this.currentRepository); // Refresh details to show fileContent
+                // If this is still the current repository, update it and refresh UI
+                if (this.currentRepository?.name === repositoryBeingCloned.name) {
+                    this.currentRepository.cloned = true;
+                    this.currentRepository.loadingAction = null;
+                    if (data.fileContent) {
+                        this.currentRepository.fileContent = data.fileContent;
+                    }
+                    if (data.repositoryPath) {
+                        this.currentRepository.localPath = data.repositoryPath;
+                    }
+                    this.updateLocalStatus(this.currentRepository);
+                    this.updateRepositoryDetails(this.currentRepository); // Refresh details to show fileContent
+                }
+                
                 this.renderRepositoryList(); // Re-render to show updated status
             } else {
                 const errorText = await response.text();
@@ -974,6 +1024,11 @@ export class MarketplaceUI {
                 this.showError('Failed to clone repository: ' + apiError.message);
             }
         } finally {
+            // Clear loading state
+            if (repoIndex !== -1) {
+                this.repositories[repoIndex].loadingAction = null;
+                this.renderRepositoryList();
+            }
             this.hideActionLoading();
         }
     }
@@ -1015,10 +1070,24 @@ export class MarketplaceUI {
     private async pullRepository(): Promise<void> {
         if (!this.currentRepository) return;
         
+        // Capture the repository being pulled to avoid issues if user switches repos during operation
+        const repositoryBeingPulled = this.currentRepository;
+        
+        // Set loading state on the specific repository
+        const repoIndex = this.repositories.findIndex(repo => repo.name === repositoryBeingPulled.name);
+        if (repoIndex !== -1) {
+            this.repositories[repoIndex].loadingAction = 'pull';
+            // Also update currentRepository if it's the same one
+            if (this.currentRepository?.name === repositoryBeingPulled.name) {
+                this.currentRepository.loadingAction = 'pull';
+            }
+            this.renderRepositoryList(); // Re-render to show loading state
+        }
+        
         this.showActionLoading();
         
         try {
-            const repoPath = this.currentRepository.localPath;
+            const repoPath = repositoryBeingPulled.localPath;
             if (!repoPath) {
                 this.showError('Cannot pull: Repository local path not available. Please clone the repository first.');
                 return;
@@ -1029,19 +1098,25 @@ export class MarketplaceUI {
                 // Parse the JSON response with changes and fileContent
                 const data = await response.json();
                 
-                // Store the fileContent if available
-                if (data.fileContent) {
-                    this.currentRepository.fileContent = data.fileContent;
-                    
-                    // Also update in repositories array
-                    const repoIndex = this.repositories.findIndex(repo => repo.name === this.currentRepository!.name);
-                    if (repoIndex !== -1) {
+                // Update in repositories array
+                if (repoIndex !== -1) {
+                    if (data.fileContent) {
                         this.repositories[repoIndex].fileContent = data.fileContent;
                     }
-                    
+                    this.repositories[repoIndex].loadingAction = null;
+                }
+                
+                // If this is still the current repository, update it and refresh UI
+                if (this.currentRepository?.name === repositoryBeingPulled.name) {
+                    if (data.fileContent) {
+                        this.currentRepository.fileContent = data.fileContent;
+                    }
+                    this.currentRepository.loadingAction = null;
                     // Refresh details to show updated fileContent
                     this.updateRepositoryDetails(this.currentRepository);
                 }
+                
+                this.renderRepositoryList(); // Re-render to clear loading state
                 
                 // Show success message with number of changes
                 if (data.changes !== undefined) {
@@ -1062,6 +1137,11 @@ export class MarketplaceUI {
                 this.showError('Failed to update repository: ' + apiError.message);
             }
         } finally {
+            // Clear loading state
+            if (repoIndex !== -1) {
+                this.repositories[repoIndex].loadingAction = null;
+                this.renderRepositoryList();
+            }
             this.hideActionLoading();
         }
     }
@@ -1077,24 +1157,38 @@ export class MarketplaceUI {
             return;
         }
         
+        // Capture the repository being registered to avoid issues if user switches repos during operation
+        const repositoryBeingRegistered = this.currentRepository;
+        
         // Check if fileContent is available
-        if (!this.currentRepository.fileContent) {
+        if (!repositoryBeingRegistered.fileContent) {
             this.showError('Cannot register: Repository metadata not available. Please clone or pull the repository first.');
             return;
         }
         
         // Check if localPath is available
-        if (!this.currentRepository.localPath) {
+        if (!repositoryBeingRegistered.localPath) {
             this.showError('Cannot register: Repository local path not available. Please clone the repository first.');
             return;
+        }
+        
+        // Set loading state on the specific repository
+        const repoIndex = this.repositories.findIndex(repo => repo.name === repositoryBeingRegistered.name);
+        if (repoIndex !== -1) {
+            this.repositories[repoIndex].loadingAction = 'register';
+            // Also update currentRepository if it's the same one
+            if (this.currentRepository?.name === repositoryBeingRegistered.name) {
+                this.currentRepository.loadingAction = 'register';
+            }
+            this.renderRepositoryList(); // Re-render to show loading state
         }
         
         this.showActionLoading();
         
         try {
             const params = new URLSearchParams({
-                path: this.currentRepository.localPath,
-                fileContent: this.currentRepository.fileContent
+                path: repositoryBeingRegistered.localPath,
+                fileContent: repositoryBeingRegistered.fileContent
             });
             
             const response = await this.makeApiCall(`/marketplace/registerSubProjects?${params}`);
@@ -1103,8 +1197,19 @@ export class MarketplaceUI {
             
             if (response.ok) {
                 this.showSuccess('Subproject registered successfully');
-                this.registeredProjects.push(this.currentRepository.name);
-                this.updateLocalStatus(this.currentRepository);
+                this.registeredProjects.push(repositoryBeingRegistered.name);
+                
+                // Clear loading state
+                if (repoIndex !== -1) {
+                    this.repositories[repoIndex].loadingAction = null;
+                }
+                
+                // If this is still the current repository, update UI
+                if (this.currentRepository?.name === repositoryBeingRegistered.name) {
+                    this.currentRepository.loadingAction = null;
+                    this.updateLocalStatus(this.currentRepository);
+                }
+                
                 this.renderRepositoryList(); // Refresh to show status change
             } else {
                 this.showError('Failed to register subproject: ' + result);
@@ -1117,6 +1222,11 @@ export class MarketplaceUI {
                 this.showError('Failed to register subproject: ' + apiError.message);
             }
         } finally {
+            // Clear loading state
+            if (repoIndex !== -1) {
+                this.repositories[repoIndex].loadingAction = null;
+                this.renderRepositoryList();
+            }
             this.hideActionLoading();
         }
     }
@@ -1127,24 +1237,38 @@ export class MarketplaceUI {
     private async unregisterSubProject(): Promise<void> {
         if (!this.currentRepository) return;
         
+        // Capture the repository being unregistered to avoid issues if user switches repos during operation
+        const repositoryBeingUnregistered = this.currentRepository;
+        
         // Check if fileContent is available
-        if (!this.currentRepository.fileContent) {
+        if (!repositoryBeingUnregistered.fileContent) {
             this.showError('Cannot unregister: Repository metadata not available.');
             return;
         }
         
         // Check if localPath is available
-        if (!this.currentRepository.localPath) {
+        if (!repositoryBeingUnregistered.localPath) {
             this.showError('Cannot unregister: Repository local path not available.');
             return;
         }
         
         // Show confirmation modal with delete option
-        const result = await window.ixShowUnregisterConfirm?.(this.currentRepository.name);
+        const result = await window.ixShowUnregisterConfirm?.(repositoryBeingUnregistered.name);
         
         // If user cancelled, return
         if (!result || !result.confirmed) {
             return;
+        }
+        
+        // Set loading state on the specific repository
+        const repoIndex = this.repositories.findIndex(repo => repo.name === repositoryBeingUnregistered.name);
+        if (repoIndex !== -1) {
+            this.repositories[repoIndex].loadingAction = 'unregister';
+            // Also update currentRepository if it's the same one
+            if (this.currentRepository?.name === repositoryBeingUnregistered.name) {
+                this.currentRepository.loadingAction = 'unregister';
+            }
+            this.renderRepositoryList(); // Re-render to show loading state
         }
         
         this.showActionLoading();
@@ -1152,8 +1276,8 @@ export class MarketplaceUI {
         try {
             // Pass the delete parameter and fileContent to the API
             const params = new URLSearchParams({
-                path: this.currentRepository.localPath,
-                fileContent: this.currentRepository.fileContent,
+                path: repositoryBeingUnregistered.localPath,
+                fileContent: repositoryBeingUnregistered.fileContent,
                 deleteFiles: result.deleteRepository ? 'true' : 'false'
             });
             
@@ -1165,27 +1289,33 @@ export class MarketplaceUI {
                     ? 'Subproject unregistered and repository deleted successfully'
                     : 'Subproject unregistered successfully';
                 this.showSuccess(successMsg);
-                const index = this.registeredProjects.indexOf(this.currentRepository.name);
+                const index = this.registeredProjects.indexOf(repositoryBeingUnregistered.name);
                 if (index > -1) {
                     this.registeredProjects.splice(index, 1);
                 }
                 
-                // If repository was deleted, reset the cloned state
-                if (result.deleteRepository) {
-                    this.currentRepository.cloned = false;
-                    this.currentRepository.localPath = undefined;
-                    this.currentRepository.fileContent = undefined;
-                    
-                    // Also update the repository in the repositories array
-                    const repoInArray = this.repositories.find(r => r.name === this.currentRepository!.name);
-                    if (repoInArray) {
-                        repoInArray.cloned = false;
-                        repoInArray.localPath = undefined;
-                        repoInArray.fileContent = undefined;
+                // Update the repository in the repositories array
+                if (repoIndex !== -1) {
+                    // If repository was deleted, reset the cloned state
+                    if (result.deleteRepository) {
+                        this.repositories[repoIndex].cloned = false;
+                        this.repositories[repoIndex].localPath = undefined;
+                        this.repositories[repoIndex].fileContent = undefined;
                     }
+                    this.repositories[repoIndex].loadingAction = null;
                 }
                 
-                this.updateLocalStatus(this.currentRepository);
+                // If this is still the current repository, update it and refresh UI
+                if (this.currentRepository?.name === repositoryBeingUnregistered.name) {
+                    if (result.deleteRepository) {
+                        this.currentRepository.cloned = false;
+                        this.currentRepository.localPath = undefined;
+                        this.currentRepository.fileContent = undefined;
+                    }
+                    this.currentRepository.loadingAction = null;
+                    this.updateLocalStatus(this.currentRepository);
+                }
+                
                 this.renderRepositoryList(); // Refresh to show status change
             } else {
                 this.showError('Failed to unregister subproject: ' + resultText);
@@ -1198,6 +1328,11 @@ export class MarketplaceUI {
                 this.showError('Failed to unregister subproject: ' + apiError.message);
             }
         } finally {
+            // Clear loading state
+            if (repoIndex !== -1) {
+                this.repositories[repoIndex].loadingAction = null;
+                this.renderRepositoryList();
+            }
             this.hideActionLoading();
         }
     }
@@ -1278,12 +1413,6 @@ export class MarketplaceUI {
         }
     }
 
-    /**
-     * Format date for display (kept for compatibility)
-     */
-    private formatDate(dateString: string): string {
-        return this.formatExactDate(dateString);
-    }
 
     /**
      * Format exact date and time
