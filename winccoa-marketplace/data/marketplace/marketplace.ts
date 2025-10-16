@@ -838,6 +838,13 @@ export class MarketplaceUI {
                             <span>${this.formatRelativeTime(repo.updatedAt)}</span>
                         </div>
                     </div>
+                    ${repo.hasUpdate && repo.latestVersion ? `
+                        <div class="repository-item-update-pill">
+                            <ix-pill variant="warning" size="small" icon="arrow-up">
+                                Update available (${repo.latestVersion})
+                            </ix-pill>
+                        </div>
+                    ` : ''}
                 </div>
             `;
         }).join('');

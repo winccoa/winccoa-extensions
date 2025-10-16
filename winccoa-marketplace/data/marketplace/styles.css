@@ -171,6 +171,10 @@ ix-menu ix-menu-item ix-icon {
     gap: 4px;
 }
 
+.repository-item-update-pill {
+    margin-top: 8px;
+}
+
 .repository-status {
     position: absolute;
     top: 8px;
