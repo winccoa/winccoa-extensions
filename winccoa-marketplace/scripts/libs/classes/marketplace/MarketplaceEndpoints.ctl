@@ -38,7 +38,7 @@ class MarketplaceEndpoints
     httpConnect(listSubProjects, MARKETPLACE_URL_PREFIX + "/listProjects", "application/json");
     httpConnect(getDefaultAddonPath, MARKETPLACE_URL_PREFIX + "/getDefaultAddonPath", "application/json");
     httpConnect(listLocalRepos, MARKETPLACE_URL_PREFIX + "/listLocalRepos", "application/json");
-    httpConnect(delete, MARKETPLACE_URL_PREFIX + "/delete", "application/json");
+    httpConnect(remove, MARKETPLACE_URL_PREFIX + "/remove", "application/json");
   }
 
 
@@ -242,7 +242,7 @@ class MarketplaceEndpoints
   }
 
   //--------------------------------------------------------------------------------
-  public static dyn_string delete(const dyn_string &names, const dyn_string &values)
+  public static dyn_string remove(const dyn_string &names, const dyn_string &values)
   {
     int idx = names.indexOf("repoName");
     if (idx < 0)
@@ -254,7 +254,7 @@ class MarketplaceEndpoints
     try
     {
       string path = client.repoPath() + repoName;
-      mapping result = client.delete(path);
+      mapping result = client.remove(path);
       result.insert("message", "Successfully deleted repository " + repoName);
       return makeDynString(jsonEncode(result), "Status: 200 OK");
     }
