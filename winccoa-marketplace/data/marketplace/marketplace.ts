@@ -257,7 +257,7 @@ export class MarketplaceUI {
         // Organization select with change event
         const orgSelect = document.getElementById('organization-select') as any;
         
-        orgSelect?.addEventListener('valueChange', async (e: CustomEvent) => {
+        const handleOrganizationChange = async (value: any) => {
             // Cancel any ongoing load operations
             this.cancelCurrentLoad();
             
@@ -265,11 +265,12 @@ export class MarketplaceUI {
             this.currentLoadController = new AbortController();
             
             try {
-                const value = e.detail?.trim() || '';
+                // Ensure value is a string and trim it
+                const trimmedValue = (value || '').toString().trim();
                 
-                if (value) {
+                if (trimmedValue) {
                     // Single organization selected or custom value entered
-                    await this.loadRepositories(value);
+                    await this.loadRepositories(trimmedValue);
                 } else {
                     // Empty = load all predefined organizations
                     await this.loadAllOrganizations();
@@ -290,6 +291,16 @@ export class MarketplaceUI {
                 }
                 throw error;
             }
+        };
+        
+        orgSelect?.addEventListener('valueChange', async (e: CustomEvent) => {
+            await handleOrganizationChange(e.detail || '');
+        });
+        
+        // Also listen for item selection changes (handles clear button)
+        orgSelect?.addEventListener('itemSelectionChange', async (e: CustomEvent) => {
+            const value = orgSelect.value || '';
+            await handleOrganizationChange(value);
         });
 
         // Action buttons
