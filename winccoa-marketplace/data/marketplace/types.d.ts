@@ -49,7 +49,7 @@ export interface Repository {
     fileContent?: string; // JSON content from .winccoa-marketplace.json file
     localPath?: string; // Local filesystem path where repository is cloned
     subprojectName?: string; // Subproject name from package.winccoa.json (used for registration)
-    loadingAction?: 'clone' | 'pull' | 'register' | 'unregister' | null; // Track which action is in progress
+    loadingAction?: 'download' | 'update' | 'install' | 'uninstall' | 'delete' | null; // Track which action is in progress
     currentVersion?: string; // Currently installed version (from local repo)
     latestVersion?: string; // Latest version from GitHub
     hasUpdate?: boolean; // Whether an update is available
@@ -71,6 +71,7 @@ declare global {
         ixShowMessage?: (config: IxModalConfig) => Promise<IxModalResult>;
         ixShowInput?: (config: IxInputModalConfig) => Promise<string | null>;
         ixShowUnregisterConfirm?: (repositoryName: string) => Promise<IxUnregisterConfirmResult | null>;
+        ixShowDeleteConfirm?: (repositoryName: string) => Promise<boolean>;
         marketplaceUI?: import('./marketplace').MarketplaceUI;
         ixIcons?: any;
     }

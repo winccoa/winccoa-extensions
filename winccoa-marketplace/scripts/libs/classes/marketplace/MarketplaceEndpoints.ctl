@@ -38,6 +38,7 @@ class MarketplaceEndpoints
     httpConnect(listSubProjects, MARKETPLACE_URL_PREFIX + "/listProjects", "application/json");
     httpConnect(getDefaultAddonPath, MARKETPLACE_URL_PREFIX + "/getDefaultAddonPath", "application/json");
     httpConnect(listLocalRepos, MARKETPLACE_URL_PREFIX + "/listLocalRepos", "application/json");
+    httpConnect(delete, MARKETPLACE_URL_PREFIX + "/delete", "application/json");
   }
 
 
@@ -237,6 +238,29 @@ class MarketplaceEndpoints
     else
     {
       return makeDynString(jsonEncode(makeMapping("error", "Could not find local repos")), "Status: 404 Not Found");
+    }
+  }
+
+  //--------------------------------------------------------------------------------
+  public static dyn_string delete(const dyn_string &names, const dyn_string &values)
+  {
+    int idx = names.indexOf("repoName");
+    if (idx < 0)
+    {
+      return makeDynString("Missing required parameter: repoName", "Status: 400 Bad Request");
+    }
+    string repoName = values.at(idx);
+
+    try
+    {
+      string path = client.repoPath() + repoName;
+      mapping result = client.delete(path);
+      result.insert("message", "Successfully deleted repository " + repoName);
+      return makeDynString(jsonEncode(result), "Status: 200 OK");
+    }
+    catch
+    {
+      return makeDynString(jsonEncode(makeMapping("error", "Couldn't delete repository " + repoName)), "Status: 500 Internal Server Error");
     }
   }
 

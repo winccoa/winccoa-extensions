@@ -370,6 +370,99 @@
                 }, 200);
             });
         };
+        
+        // Helper function to show delete confirmation modal
+        window.ixShowDeleteConfirm = async (repositoryName) => {
+            
+            // Wait for IX components to be ready
+            await waitForCustomElements();
+            
+            return new Promise(async (resolve) => {
+                // Create the actual ix-modal element
+                const modal = document.createElement('ix-modal');
+                
+                // Set modal properties
+                modal.size = 'medium';
+                modal.closeOnBackdropClick = false;
+                modal.centered = true;
+                
+                // Create modal header
+                const header = document.createElement('ix-modal-header');
+                header.textContent = 'Confirm Delete';
+                
+                // Create modal content
+                const content = document.createElement('ix-modal-content');
+                
+                const paragraph = document.createElement('p');
+                paragraph.textContent = `Are you sure you want to delete "${repositoryName}"?`;
+                paragraph.style.marginBottom = '8px';
+                content.appendChild(paragraph);
+                
+                const warningParagraph = document.createElement('p');
+                warningParagraph.innerHTML = '<strong>Warning:</strong> This will permanently delete the cloned repository from your local disk. This action cannot be undone.';
+                warningParagraph.style.color = 'var(--theme-color-warning)';
+                warningParagraph.style.marginBottom = '0';
+                content.appendChild(warningParagraph);
+                
+                // Create modal footer with buttons
+                const footer = document.createElement('ix-modal-footer');
+                
+                const cancelBtn = document.createElement('ix-button');
+                cancelBtn.id = 'ix-delete-cancel';
+                cancelBtn.variant = 'secondary';
+                cancelBtn.outline = true;
+                cancelBtn.textContent = 'Cancel';
+                
+                const confirmBtn = document.createElement('ix-button');
+                confirmBtn.id = 'ix-delete-confirm';
+                confirmBtn.variant = 'primary';
+                confirmBtn.textContent = 'Delete';
+                
+                footer.appendChild(cancelBtn);
+                footer.appendChild(confirmBtn);
+                
+                // Assemble modal
+                modal.appendChild(header);
+                modal.appendChild(content);
+                modal.appendChild(footer);
+                
+                // Append to body
+                document.body.appendChild(modal);
+                
+                // Listen to dialogDismiss event
+                modal.addEventListener('dialogDismiss', (event) => {
+                    // Remove from DOM after IX animation completes
+                    setTimeout(() => {
+                        if (modal.parentNode) {
+                            modal.parentNode.removeChild(modal);
+                        }
+                    }, 300);
+                    
+                    // Resolve with the result (true if confirmed, false if cancelled)
+                    resolve(event.detail === true);
+                });
+                
+                // Wait a moment for the modal to be hydrated
+                setTimeout(async () => {
+                    // Cancel button
+                    cancelBtn.addEventListener('click', async () => {
+                        await modal.dismissModal(false);
+                    });
+                    
+                    // Confirm button
+                    confirmBtn.addEventListener('click', async () => {
+                        await modal.dismissModal(true);
+                    });
+                    
+                    // Open the modal using official showModal() method
+                    try {
+                        await modal.showModal();
+                    } catch (error) {
+                        console.error('Failed to open IX delete modal:', error);
+                    }
+                }, 200);
+            });
+        };
     </script>
 
     
@@ -478,27 +571,13 @@
                             </div>
                             
                             <div class="action-buttons">
-                                <ix-button
-                                    id="clone-btn"
-                                    variant="primary"
-                                    icon="download">
-                                    Clone
-                                </ix-button>
-                                
-                                <ix-button
-                                    id="pull-btn"
-                                    variant="primary"
-                                    icon="download-add"
-                                    disabled>
-                                    Update
-                                </ix-button>
-                                
+
                                 <ix-button
                                     id="register-btn"
                                     variant="primary"
                                     icon="add-application"
                                     disabled>
-                                    Register
+                                    Install
                                 </ix-button>
                                 
                                 <ix-button
@@ -506,7 +585,30 @@
                                     variant="primary"
                                     icon="remove-application"
                                     disabled>
-                                    Unregister
+                                    Uninstall
+                                </ix-button>
+
+                                <ix-button
+                                    id="pull-btn"
+                                    variant="primary"
+                                    icon="download-add"
+                                    disabled>
+                                    Update
+                                </ix-button>
+
+                                <ix-button
+                                    id="clone-btn"
+                                    variant="primary"
+                                    icon="download">
+                                    Download
+                                </ix-button>
+                                
+                                <ix-button
+                                    id="delete-btn"
+                                    variant="primary"
+                                    icon="trashcan"
+                                    disabled>
+                                    Delete
                                 </ix-button>
                                 
                                 <ix-spinner 
