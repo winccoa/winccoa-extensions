@@ -889,6 +889,19 @@ export class MarketplaceUI {
                 }
             });
         });
+        
+        // Restore selection if there's a current repository
+        if (this.currentRepository) {
+            document.querySelectorAll('.repository-item').forEach(item => {
+                const repoData = item.getAttribute('data-repo');
+                if (repoData) {
+                    const repo: Repository = JSON.parse(repoData);
+                    if (repo.name === this.currentRepository?.name) {
+                        item.classList.add('selected');
+                    }
+                }
+            });
+        }
     }
 
     /**
@@ -1658,14 +1671,16 @@ export class MarketplaceUI {
             if (response.ok) {
                 this.showSuccess('Subproject registered successfully');
                 
+                // Reload local repositories to get updated version and subproject name
+                await this.loadLocalRepositories();
+                
                 // Add the subproject name (not repository name) to registered projects
-                const subprojectName = repositoryBeingRegistered.subprojectName || repositoryBeingRegistered.name;
+                // Get the updated subproject name from the reloaded data
+                const updatedRepo = this.repositories[repoIndex];
+                const subprojectName = updatedRepo?.subprojectName || repositoryBeingRegistered.name;
                 if (!this.registeredProjects.includes(subprojectName)) {
                     this.registeredProjects.push(subprojectName);
                 }
-                
-                // Reload local repositories to get updated version and subproject name
-                await this.loadLocalRepositories();
                 
                 // Clear loading state
                 if (repoIndex !== -1) {
