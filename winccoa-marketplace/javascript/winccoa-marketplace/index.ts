@@ -1,19 +1,20 @@
-import { Vrpc } from "winccoa-manager";
+import { Vrpc, WinccoaManager } from "winccoa-manager";
 import { MarketplaceService } from "./lib/Service";
 
 const container = new Vrpc.ServiceContainer();
 const marketplaceService = new MarketplaceService();
+const winccoa = new WinccoaManager();
 
 async function main() {
   try {
-    console.log("Starting Marketplace Service...");
+    winccoa.logInfo("Starting Marketplace Service...");
 
     container.registerService(marketplaceService);
     container.startAllServices();
 
-    console.log("Marketplace Service created and registered successfully");
+    winccoa.logInfo("Marketplace Service created and registered successfully");
   } catch (error) {
-    console.error("Failed to start Marketplace Service:", error);
+    winccoa.logSevere("Failed to start Marketplace Service:", error);
   }
 }
 
