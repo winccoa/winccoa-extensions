@@ -8,14 +8,12 @@ import {
   WinccoaCtrlScript,
   WinccoaCtrlType,
   WinccoaManager,
-  WinccoaVersionDetails,
 } from "winccoa-manager";
 import { AsciiManager } from "./AsciiManager";
 import { CommandExecutor } from "./CommandExecutor";
 import { PathResolver } from "./PathResolver";
 import { NodeInstaller } from "./NodeInstaller";
-import { AddonConfig, ManagerConfig } from "./AddonConfig";
-import { connect } from "http2";
+import { AddonConfig } from "./AddonConfig";
 
 /**
  * Interface for manager configuration
@@ -25,31 +23,52 @@ export interface Manager {
   startParams: string;
 }
 
+/**
+ * Enum for script types
+ */
+export enum ScriptType {
+  Script = 0,
+  UpdateScript = 1,
+  UninstallScript = 2,
+}
+
 // Export the class for use in other modules
 export { AddOnHandler };
 
 /**
  * WinCC OA AddOn Handler for managing GitHub repositories
  *
- * AUTHENTICATION SETUP:
+ * SECURE AUTHENTICATION METHODS:
  *
- * 1. Personal Access Token (Recommended):
- *    - Go to GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)
- *    - Click "Generate new token"
- *    - Select scopes: "repo" (for private repos) or "public_repo" (for public repos)
- *    - Copy the generated token
- *    - Set environment variable: GITHUB_TOKEN=your_token_here
- *    - Or pass directly to constructor: new AddOnHandler('your_token_here')
+ * 1. Environment Variables (Best for Production & WinCC OA):
+ *    - Set: GITHUB_TOKEN=ghp_your_token_here
+ *    - const handler = new AddOnHandler(); // Auto-detects token
+ *    - Keeps tokens out of source code
+ *    - Secure for scripts and CI/CD
+ *    - Perfect for WinCC OA integration
  *
- * 2. Environment Variable Setup:
- *    Windows PowerShell: $env:GITHUB_TOKEN="your_token_here"
- *    Windows CMD: set GITHUB_TOKEN=your_token_here
- *    Linux/Mac: export GITHUB_TOKEN=your_token_here
+ * 2. Token Auth Factory Method (WinCC OA Compatible):
+ *    - const handler = await AddOnHandler.createWithTokenAuth();
+ *    - Requires GITHUB_TOKEN environment variable to be set
+ *    - No interactive input - perfect for WinCC OA context
+ *    - Clean error messages if token not found
  *
- * 3. Benefits of Authentication:
+ * How to Create Personal Access Token:
+ *    1. GitHub.com > Settings > Developer settings > Personal access tokens
+ *    2. Click "Generate new token (classic)"
+ *    3. Select scopes: "repo" (private) or "public_repo" (public only)
+ *    4. Copy token immediately (shown only once)
+ *
+ * Environment Variable Setup:
+ *    Windows PowerShell: $env:GITHUB_TOKEN="ghp_your_token_here"
+ *    Windows CMD: set GITHUB_TOKEN=ghp_your_token_here
+ *    Linux/Mac: export GITHUB_TOKEN="ghp_your_token_here"
+ *
+ * Authentication Benefits:
  *    - Access private repositories
  *    - Higher rate limits (5000 vs 60 requests/hour)
  *    - Access to organization repositories
+ *    - Full GitHub API functionality
  */
 
 const winccoa = new WinccoaManager();
@@ -210,19 +229,10 @@ class AddOnHandler {
   private pmonUser: string = "";
   private pmonPassword: string = "";
 
-  constructor(authToken?: string) {
-    if (authToken) {
-      // Initialize octokit with authentication
-      this.octokit = new Octokit({
-        auth: authToken,
-      });
-      this.isAuthenticated = true;
-      console.log("GitHub authentication enabled");
-    } else {
-      // Initialize octokit for public repositories only
-      this.octokit = new Octokit();
-      console.log("No authentication - limited to public repositories");
-    }
+  constructor() {
+    // Initialize octokit without authentication first
+    this.octokit = new Octokit();
+    this.isAuthenticated = false;
 
     // Get WinCC OA version
     const details = winccoa.getVersionInfo();
@@ -236,6 +246,77 @@ class AddOnHandler {
 
     // Get WinCC OA default project directory
     this._defaultDirectory = getDefaultProjDir();
+
+    // Setup authentication synchronously
+    this.setupSyncAuthentication();
+  }
+
+  /**
+   * Setup synchronous authentication (Token method only)
+   */
+  private setupSyncAuthentication(): void {
+    try {
+      const authMethods = this.getSupportedAuthMethods();
+
+      if (authMethods.length === 0) {
+        console.log(
+          "No authentication methods configured - using public access only",
+        );
+        return;
+      }
+
+      console.log(
+        `Configured authentication methods: ${authMethods.join(", ")}`,
+      );
+
+      // Check if Token method is available
+      const hasToken = authMethods.includes("Token");
+
+      if (hasToken) {
+        // Check for Token authentication first
+        const envToken = process.env.GITHUB_TOKEN;
+        if (envToken) {
+          console.log("Using GITHUB_TOKEN environment variable (Token method)");
+          this.octokit = new Octokit({
+            auth: envToken,
+          });
+          this.isAuthenticated = true;
+          return;
+        } else {
+          console.log(
+            "Token authentication configured but GITHUB_TOKEN environment variable not found",
+          );
+          console.log("To authenticate, use one of these methods:");
+          console.log("   - Set GITHUB_TOKEN environment variable");
+          console.log("   - await handler.authenticateWithToken()");
+        }
+      }
+    } catch (error) {
+      console.error("Error setting up authentication:", error);
+      console.log("Using public access only");
+    }
+  }
+
+  /**
+   * Create an AddOnHandler instance with token-based authentication
+   * Uses GITHUB_TOKEN environment variable for secure authentication
+   * @returns Promise<AddOnHandler> with authenticated instance
+   */
+  static async createWithTokenAuth(): Promise<AddOnHandler> {
+    const handler = new AddOnHandler();
+    const success = await handler.authenticateWithToken();
+    if (!success) {
+      throw new Error("Token authentication failed");
+    }
+    return handler;
+  }
+
+  /**
+   * Get authentication status
+   * @returns boolean indicating if handler is authenticated
+   */
+  isAuthenticatedUser(): boolean {
+    return this.isAuthenticated;
   }
 
   getDefaultAddonPath(): string {
@@ -266,6 +347,50 @@ class AddOnHandler {
         "Authentication validation failed:",
         (error as any).message,
       );
+      return false;
+    }
+  }
+
+  /**
+   * Authenticate with GitHub using a personal access token
+   * Uses GITHUB_TOKEN environment variable for secure authentication
+   * @returns Promise<boolean> indicating success/failure
+   */
+  async authenticateWithToken(): Promise<boolean> {
+    try {
+      // Check for environment variable
+      const authToken = process.env.GITHUB_TOKEN;
+
+      if (authToken) {
+        console.log("Using GITHUB_TOKEN environment variable");
+      } else {
+        console.log("GITHUB_TOKEN environment variable not found");
+        return false;
+      }
+
+      if (!authToken) {
+        console.log("No token provided");
+        return false;
+      }
+
+      // Test the token by creating a new Octokit instance
+      const testOctokit = new Octokit({ auth: authToken });
+
+      try {
+        await testOctokit.rest.users.getAuthenticated();
+
+        // If successful, update the main instance
+        this.octokit = testOctokit;
+        this.isAuthenticated = true;
+
+        console.log("GitHub token authentication successful!");
+        return true;
+      } catch (tokenError: unknown) {
+        console.error("Invalid GitHub token:", (tokenError as Error).message);
+        return false;
+      }
+    } catch (error: unknown) {
+      console.error("Token authentication failed:", error);
       return false;
     }
   }
@@ -399,7 +524,60 @@ bool addManager(string manager, string startMode, string options, string user, s
     repoPath: string,
     projectName: string,
     deleteFiles: boolean,
+    config?: AddonConfig,
   ): Promise<number> {
+    // Execute uninstall scripts if available
+    if (
+      config &&
+      config.UnInstallScripts &&
+      config.UnInstallScripts.length > 0
+    ) {
+      console.log(
+        `Executing ${config.UnInstallScripts.length} uninstall script(s)...`,
+      );
+
+      // Create a timeout promise that rejects after 5 minutes
+      const timeoutPromise = new Promise<void>((_, reject) => {
+        setTimeout(
+          () => {
+            reject(
+              new Error(
+                "Uninstall scripts execution timed out after 5 minutes",
+              ),
+            );
+          },
+          5 * 60 * 1000,
+        ); // 5 minutes in milliseconds
+      });
+
+      // Race the execution against the timeout
+      try {
+        await Promise.race([
+          this.executeScripts(
+            path.join(repoPath, projectName),
+            config.UnInstallScripts,
+            ScriptType.UninstallScript,
+          ),
+          timeoutPromise,
+        ]);
+        console.log("Uninstall scripts completed successfully");
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("timed out")) {
+          console.error(
+            "Uninstall scripts execution timed out after 5 minutes",
+          );
+        } else {
+          console.error("Error executing uninstall scripts:", error);
+        }
+        // Continue with unregistration even if scripts fail
+        console.log(
+          "Continuing with project unregistration despite script errors",
+        );
+      }
+    } else {
+      console.log("No uninstall scripts to execute");
+    }
+
     const ret = (await this.ctrlScript.start(
       "unregisterSubProj",
       [repoPath, projectName, deleteFiles],
@@ -830,6 +1008,7 @@ bool addManager(string manager, string startMode, string options, string user, s
         : [],
       Dplists: packageJson.Dplists || [],
       UpdateScripts: packageJson.UpdateScripts || [],
+      UnInstallScripts: packageJson.UnInstallScripts || [],
     };
   }
 
@@ -977,10 +1156,45 @@ bool addManager(string manager, string startMode, string options, string user, s
               console.log(
                 `Executing ${updatedAddonConfig.UpdateScripts.length} update script(s)...`,
               );
-              await this.executeUpdateScripts(
-                repositoryDirectory,
-                updatedAddonConfig.UpdateScripts,
-              );
+
+              // Create a timeout promise that rejects after 5 minutes
+              const timeoutPromise = new Promise<void>((_, reject) => {
+                setTimeout(
+                  () => {
+                    reject(
+                      new Error(
+                        "Update scripts execution timed out after 5 minutes",
+                      ),
+                    );
+                  },
+                  5 * 60 * 1000,
+                ); // 5 minutes in milliseconds
+              });
+
+              // Race the execution against the timeout
+              try {
+                await Promise.race([
+                  this.executeScripts(
+                    repositoryDirectory,
+                    updatedAddonConfig.UpdateScripts,
+                    ScriptType.UpdateScript,
+                  ),
+                  timeoutPromise,
+                ]);
+                console.log("Update scripts completed successfully");
+              } catch (error) {
+                if (
+                  error instanceof Error &&
+                  error.message.includes("timed out")
+                ) {
+                  console.error(
+                    "Update scripts execution timed out after 5 minutes",
+                  );
+                } else {
+                  console.error("Error executing update scripts:", error);
+                }
+                throw error;
+              }
             } else {
               console.log("No update scripts to execute");
             }
@@ -1208,8 +1422,8 @@ bool addManager(string manager, string startMode, string options, string user, s
     }
   }
 
-  listCustomRepositories(): object[] {
-    // Read repositories.config.json and return an array of repository info objects
+  listCustomRepositories(): { repositories: object[]; authMethods: string[] } {
+    // Read repositories.config.json and return repository info and auth methods
     try {
       const configPath = path.resolve(
         __dirname,
@@ -1219,20 +1433,57 @@ bool addManager(string manager, string startMode, string options, string user, s
         console.warn(
           `[listCustomRepositories] repositories.config.json not found at ${configPath}`,
         );
-        return [];
+        return { repositories: [], authMethods: [] };
       }
       const fileContent = fs.readFileSync(configPath, "utf8");
-      const repos = JSON.parse(fileContent);
+      const config = JSON.parse(fileContent);
 
-      return repos
+      // Handle new structure with customRepos array and authMethods
+      const repositories = (config.customRepos || [])
         .filter((repo: any) => !!repo.url)
         .map((repo: any) => ({
           cloneUrl: repo.url,
           name: repo.name,
         }));
+
+      const authMethods = config.authMethods || [];
+
+      return {
+        repositories,
+        authMethods,
+      };
     } catch (error) {
       console.error(
         "[listCustomRepositories] Failed to read repositories.config.json:",
+        error,
+      );
+      return { repositories: [], authMethods: [] };
+    }
+  }
+
+  /**
+   * Get supported authentication methods from repositories.config.json
+   * @returns Array of supported authentication methods
+   */
+  getSupportedAuthMethods(): string[] {
+    try {
+      const configPath = path.resolve(
+        __dirname,
+        "../../../config/repositories.config.json",
+      );
+      if (!fs.existsSync(configPath)) {
+        console.warn(
+          `[getSupportedAuthMethods] repositories.config.json not found at ${configPath}`,
+        );
+        return [];
+      }
+      const fileContent = fs.readFileSync(configPath, "utf8");
+      const config = JSON.parse(fileContent);
+
+      return config.authMethods || [];
+    } catch (error) {
+      console.error(
+        "[getSupportedAuthMethods] Failed to read repositories.config.json:",
         error,
       );
       return [];
@@ -1264,25 +1515,71 @@ bool addManager(string manager, string startMode, string options, string user, s
   }
 
   /**
-   * Execute update scripts based on their file extensions
-   * @param repositoryPath The path to the repository
-   * @param updateScripts Array of update script filenames
+   * Execute a JavaScript file using WinCC OA bootstrap
+   * @param scriptFile The JavaScript file to execute
+   * @param scriptType The type of script (for logging purposes)
    */
-  private async executeUpdateScripts(
-    repositoryPath: string,
-    updateScripts: string[],
+  private async startWinCCOAnodeManager(
+    scriptFile: string,
+    scriptType: string,
   ): Promise<void> {
-    for (const scriptFile of updateScripts) {
-      try {
-        const scriptPath = path.join(repositoryPath, scriptFile);
-        const fileExtension = path.extname(scriptFile).toLowerCase();
+    console.log(`Executing ${scriptType} script: ${scriptFile}`);
 
-        console.log(`Executing update script: ${scriptFile}`);
+    // Get current project name from WinCC OA
+    const projectName = (await this.ctrlScript.start(
+      "getProjectName",
+    )) as string;
+    console.log(`Current project name: ${projectName}`);
+
+    const installDir = getWinCCOAInstallDir(winccoa);
+    if (installDir) {
+      const bootstrapPath = path.join(
+        installDir,
+        "javascript",
+        "winccoa-manager",
+        "lib",
+        "bootstrap.js",
+      );
+      const command = `node.exe -- "${bootstrapPath}" -num 99 -pmonIndex 100 -proj ${projectName} ${scriptFile}`;
+      console.log(`Executing JavaScript command: ${command}`);
+
+      const result = await CommandExecutor.execute(command);
+      if (result.exitCode === 0) {
+        console.log(
+          `Successfully executed ${scriptType} script: ${scriptFile}`,
+        );
+      } else {
+        console.error(
+          `Failed to execute ${scriptType} script ${scriptFile}. Exit code: ${result.exitCode}, Error: ${result.stderr}`,
+        );
+      }
+    } else {
+      console.error(
+        `Could not determine WinCC OA installation directory for ${scriptType} script: ${scriptFile}`,
+      );
+    }
+  }
+
+  /**
+   * Execute scripts based on their file extensions
+   * @param repositoryPath The path to the repository
+   * @param scripts Array of script filenames
+   * @param scriptType Type of scripts being executed (for logging)
+   */
+  private async executeScripts(
+    repositoryPath: string,
+    scripts: string[],
+    scriptType: ScriptType = ScriptType.Script,
+  ): Promise<void> {
+    for (const scriptFile of scripts) {
+      try {
+        const fileExtension = path.extname(scriptFile).toLowerCase();
+        console.log(`Executing ${scriptType}: ${scriptFile}`);
 
         switch (fileExtension) {
           case ".ctl":
             // For .ctl files, use WCCOActrl manager
-            console.log(`Executing CTRL script: ${scriptFile}`);
+            console.log(`Executing CTRL ${scriptType}: ${scriptFile}`);
             await this.startManagers(repositoryPath, [
               {
                 exeName: "WCCOActrl",
@@ -1292,59 +1589,40 @@ bool addManager(string manager, string startMode, string options, string user, s
             break;
 
           case ".ts":
-            // For .ts files, use NodeInstaller.installAndBuild
-            console.log(`Building TypeScript project for: ${scriptFile}`);
+            // For .ts files, build TypeScript project and execute the transpiled JS file
+            console.log(
+              `Building TypeScript project for ${scriptType}: ${scriptFile}`,
+            );
             await NodeInstaller.installAndBuild(repositoryPath);
-            console.log("currently not implemented - skipping");
+
+            // Execute the transpiled JavaScript file
+            const jsScriptFile = scriptFile.replace(/\.ts$/, ".js");
+            await this.startWinCCOAnodeManager(
+              jsScriptFile,
+              `TypeScript ${scriptType}`,
+            );
             break;
 
           case ".js":
-            // TODO: clarify why pmonIndex is needed to start a javascript file
-            /*
             // For .js files, execute with Node.js using WinCC OA bootstrap
-            console.log(`Executing JavaScript script: ${scriptFile}`);
-            const installDir = getWinCCOAInstallDir(winccoa);
-            if (installDir) {
-              const bootstrapPath = path.join(
-                installDir,
-                "javascript",
-                "winccoa-manager",
-                "lib",
-                "bootstrap.js",
-              );
-              const command = `node.exe -- "${bootstrapPath}" -currentproj ${scriptFile}`;
-              console.log(`Executing JavaScript command: ${command}`);
-
-              const result = await CommandExecutor.execute(command);
-              if (result.exitCode === 0) {
-                console.log(
-                  `Successfully executed JavaScript script: ${scriptFile}`,
-                );
-              } else {
-                console.error(
-                  `Failed to execute JavaScript script ${scriptFile}. Exit code: ${result.exitCode}, Error: ${result.stderr}`,
-                );
-              }
-            } else {
-              console.error(
-                `Could not determine WinCC OA installation directory for JavaScript script: ${scriptFile}`,
-              );
-            }*/
-            console.log("currently not implemented - skipping");
+            await this.startWinCCOAnodeManager(
+              scriptFile,
+              `JavaScript ${scriptType}`,
+            );
             break;
 
           default:
             console.log(
-              `Unknown script type '${fileExtension}' for file: ${scriptFile}`,
+              `Unknown ${scriptType} type '${fileExtension}' for file: ${scriptFile}`,
             );
             break;
         }
       } catch (error) {
-        console.error(`Failed to execute update script ${scriptFile}:`, error);
+        console.error(`Failed to execute ${scriptType} ${scriptFile}:`, error);
       }
     }
 
-    console.log("All update scripts have been processed");
+    console.log(`All ${scriptType}s have been processed`);
   }
 
   public async startManagers(

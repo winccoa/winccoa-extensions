@@ -87,6 +87,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
             : [],
           Dplists: jsonConfig.Dplists || [],
           UpdateScripts: jsonConfig.UpdateScripts || [],
+          UnInstallScripts: jsonConfig.UnInstallScripts || [],
         }),
       );
 
@@ -181,6 +182,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
           : [],
         Dplists: jsonConfig.Dplists || [],
         UpdateScripts: jsonConfig.UpdateScripts || [],
+        UnInstallScripts: jsonConfig.UnInstallScripts || [],
       }),
     );
 
@@ -189,6 +191,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
         repositoryPath,
         config.Subproject,
         deleteFiles,
+        config,
       );
       console.log(
         `Sub-project ${config.Subproject} unregistered with result code:`,
@@ -230,7 +233,8 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       },
     );
 
-    const customRepos = this._addOnHandler.listCustomRepositories();
+    const customReposData = this._addOnHandler.listCustomRepositories();
+    const customRepos = customReposData.repositories;
 
     const repos = [...orgRepos, ...customRepos];
 
