@@ -1664,13 +1664,24 @@ export class MarketplaceUI {
                     this.registeredProjects.push(subprojectName);
                 }
                 
+                // Reload local repositories to get updated version and subproject name
+                await this.loadLocalRepositories();
+                
                 // Clear loading state
                 if (repoIndex !== -1) {
                     this.repositories[repoIndex].loadingAction = null;
                 }
                 
-                // If this is still the current repository, update UI
+                // If this is still the current repository, sync it from the array and update UI
                 if (this.currentRepository?.name === repositoryBeingRegistered.name) {
+                    // Sync currentRepository with the updated data from repositories array
+                    const updatedRepo = this.repositories[repoIndex];
+                    if (updatedRepo) {
+                        this.currentRepository.fileContent = updatedRepo.fileContent;
+                        this.currentRepository.subprojectName = updatedRepo.subprojectName;
+                        this.currentRepository.currentVersion = updatedRepo.currentVersion;
+                        this.currentRepository.hasUpdate = updatedRepo.hasUpdate;
+                    }
                     this.currentRepository.loadingAction = null;
                     this.updateLocalStatus(this.currentRepository);
                 }
@@ -1927,6 +1938,11 @@ export class MarketplaceUI {
                     this.registeredProjects.splice(index, 1);
                 }
                 
+                // Reload local repositories if not deleted (to update version info)
+                if (!result.deleteRepository) {
+                    await this.loadLocalRepositories();
+                }
+                
                 // Update the repository in the repositories array
                 if (repoIndex !== -1) {
                     // If repository was deleted, reset the cloned state
@@ -1934,16 +1950,31 @@ export class MarketplaceUI {
                         this.repositories[repoIndex].cloned = false;
                         this.repositories[repoIndex].localPath = undefined;
                         this.repositories[repoIndex].fileContent = undefined;
+                        this.repositories[repoIndex].currentVersion = undefined;
+                        this.repositories[repoIndex].subprojectName = undefined;
+                        this.repositories[repoIndex].hasUpdate = false;
                     }
                     this.repositories[repoIndex].loadingAction = null;
                 }
                 
-                // If this is still the current repository, update it and refresh UI
+                // If this is still the current repository, sync it and refresh UI
                 if (this.currentRepository?.name === repositoryBeingUnregistered.name) {
                     if (result.deleteRepository) {
                         this.currentRepository.cloned = false;
                         this.currentRepository.localPath = undefined;
                         this.currentRepository.fileContent = undefined;
+                        this.currentRepository.currentVersion = undefined;
+                        this.currentRepository.subprojectName = undefined;
+                        this.currentRepository.hasUpdate = false;
+                    } else {
+                        // Sync currentRepository with updated data from repositories array
+                        const updatedRepo = this.repositories[repoIndex];
+                        if (updatedRepo) {
+                            this.currentRepository.fileContent = updatedRepo.fileContent;
+                            this.currentRepository.subprojectName = updatedRepo.subprojectName;
+                            this.currentRepository.currentVersion = updatedRepo.currentVersion;
+                            this.currentRepository.hasUpdate = updatedRepo.hasUpdate;
+                        }
                     }
                     this.currentRepository.loadingAction = null;
                     this.updateLocalStatus(this.currentRepository);
