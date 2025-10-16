@@ -79,7 +79,7 @@ Stdout:            ${result.stdout || "None"}`;
       // Return true for warning exit codes; log only if enabled
       if (AsciiManager.WARNING_EXIT_CODES.includes(exitCode)) {
         if (logWarnings) {
-          console.warn(
+          winccoa.logWarning(
             `[AsciiManager.import] Import completed with warnings.\n${logDetails}`,
           );
         }
@@ -171,7 +171,8 @@ Stdout:            ${result.stdout || "None"}`;
         ])
       ).map((path) => path?.trim());
 
-      winccoa.logDebugF( "addonHandler",
+      winccoa.logDebugF(
+        "addonHandler",
         "Resolved Paths:",
         asciiManagerPath,
         importFilePath,

@@ -110,7 +110,8 @@ function getWinCCOARegistryValue(
   description: string,
 ): string | null {
   if (os.platform() !== "win32") {
-    winccoa.logWarning("addonHandler",
+    winccoa.logWarning(
+      "addonHandler",
       `Not running on Windows, ${description} registry lookup skipped`,
     );
     return null;
@@ -118,21 +119,21 @@ function getWinCCOARegistryValue(
 
   try {
     const registryPath = "HKEY_LOCAL_MACHINE\\SOFTWARE\\ETM\\WinCC_OA\\3.21";
-    winccoa.logDebugF("addonHandler",
+    winccoa.logDebugF(
+      "addonHandler",
       `Checking Windows registry for ${description}: ${registryPath}`,
     );
 
     const registryValue = readWindowsRegistry(registryPath, valueName);
     if (registryValue && fs.existsSync(registryValue)) {
-      winccoa.logDebugF("addonHandler",
+      winccoa.logDebugF(
+        "addonHandler",
         `Found WinCC OA ${description} from registry: ${registryValue}`,
       );
       return registryValue;
     }
 
-    winccoa.logWarning(
-      `No valid WinCC OA ${description} found in registry`,
-    );
+    winccoa.logWarning(`No valid WinCC OA ${description} found in registry`);
     return null;
   } catch (error) {
     winccoa.logWarning(
@@ -165,12 +166,15 @@ function getWinCCOAInstallDir(winccoa: WinccoaManager): string | null {
     if (winccoa) {
       const installPath = PathResolver.getInstallationPath(winccoa);
       if (installPath && fs.existsSync(installPath)) {
-        winccoa.logDebugF("addonHandler",
+        winccoa.logDebugF(
+          "addonHandler",
           `Found WinCC OA installation directory via API: ${installPath}`,
         );
         return installPath;
       }
-      winccoa.logWarning("WinCC OA API did not return a valid installation path");
+      winccoa.logWarning(
+        "WinCC OA API did not return a valid installation path",
+      );
     } else {
       console.error("No WinCC OA manager instance available for API query");
     }
@@ -187,7 +191,8 @@ function getWinCCOAInstallDir(winccoa: WinccoaManager): string | null {
     // Method 3: Environment variables (additional fallback)
     const envInstallBase = process.env.PVSS_INSTALL_BASE;
     if (envInstallBase && fs.existsSync(envInstallBase)) {
-      winccoa.logDebugF("addonHandler",
+      winccoa.logDebugF(
+        "addonHandler",
         `Found WinCC OA installation directory from environment: ${envInstallBase}`,
       );
       return envInstallBase;
@@ -234,7 +239,10 @@ class AddOnHandler {
       details.winccoa.minor +
       "." +
       details.winccoa.patch;
-    winccoa.logDebugF("addonHandler", `Detected WinCC OA version: ${this._oaVersion}`);
+    winccoa.logDebugF(
+      "addonHandler",
+      `Detected WinCC OA version: ${this._oaVersion}`,
+    );
 
     // Get WinCC OA default project directory
     this._defaultDirectory = getDefaultProjDir();
@@ -367,7 +375,10 @@ bool addManager(string manager, string startMode, string options, string user, s
       Array.isArray(config.Dplists) &&
       config.Dplists.length > 0
     ) {
-      winccoa.logDebugF("addonHandler", `Importing ${config.Dplists.length} dplist file(s)...`);
+      winccoa.logDebugF(
+        "addonHandler",
+        `Importing ${config.Dplists.length} dplist file(s)...`,
+      );
       await this.importAsciiFiles(
         config.Dplists,
         path.join(repoPath, projectName, "dplist"),
@@ -377,7 +388,10 @@ bool addManager(string manager, string startMode, string options, string user, s
     }
 
     for (const manager of config.Managers || []) {
-      winccoa.logDebugF("addonHandler", `Adding manager ${manager.Name} with start mode ${manager.StartMode} and options ${manager.Options}`);
+      winccoa.logDebugF(
+        "addonHandler",
+        `Adding manager ${manager.Name} with start mode ${manager.StartMode} and options ${manager.Options}`,
+      );
       // eslint-disable-next-line no-await-in-loop
       await this.ctrlScript.start(
         "addManager",
@@ -414,11 +428,30 @@ bool addManager(string manager, string startMode, string options, string user, s
     // delete the whole cloned repository folder
     winccoa.logDebugF("addonHandler", `deleteFiles = ${deleteFiles} `);
     if (deleteFiles) {
-      winccoa.logDebugF("addonHandler", `Deleting cloned repository folder: ${repoPath}`);
+      winccoa.logDebugF(
+        "addonHandler",
+        `Deleting cloned repository folder: ${repoPath}`,
+      );
       await fs.promises.rm(repoPath, { recursive: true, force: true });
     }
 
     return ret;
+  }
+
+  async removeRepository(repoPath: string): Promise<boolean> {
+    winccoa.logDebugF(
+      "addonHandler",
+      `Removing local repository folder: ${repoPath}`,
+    );
+    try {
+      await fs.promises.rm(repoPath, { recursive: true, force: true });
+      return true;
+    } catch (error) {
+      winccoa.logWarning(
+        `Failed to remove local repository folder: ${(error as Error).message}`,
+      );
+      return false;
+    }
   }
 
   async listSubProjects(): Promise<string[]> {
@@ -571,19 +604,26 @@ bool addManager(string manager, string startMode, string options, string user, s
 
       // Check if repository already exists locally
       if (fs.existsSync(fullPath)) {
-        winccoa.logDebugF("addonHandler",`\nRepository already exists at: ${fullPath}`);
-        winccoa.logDebugF("addonHandler","Performing git pull to ensure latest changes...");
+        winccoa.logDebugF(
+          "addonHandler",
+          `\nRepository already exists at: ${fullPath}`,
+        );
+        winccoa.logDebugF(
+          "addonHandler",
+          "Performing git pull to ensure latest changes...",
+        );
 
         // Use simple-git for pull operation
         const git = simpleGit(fullPath);
         const pullResult = await git.pull();
 
         if (pullResult.summary.changes) {
-          winccoa.logDebugF("addonHandler",
+          winccoa.logDebugF(
+            "addonHandler",
             `Pull completed: ${pullResult.summary.changes} changes, ${pullResult.summary.insertions} insertions, ${pullResult.summary.deletions} deletions`,
           );
         } else {
-          winccoa.logDebugF("addonHandler","Repository is already up to date");
+          winccoa.logDebugF("addonHandler", "Repository is already up to date");
         }
 
         winccoa.logDebugF("addonHandler", "Git pull completed successfully!");
@@ -595,14 +635,20 @@ bool addManager(string manager, string startMode, string options, string user, s
         };
       }
 
-      winccoa.logDebugF("addonHandler", `Cloning repository from URL: ${cloneUrl}`);
+      winccoa.logDebugF(
+        "addonHandler",
+        `Cloning repository from URL: ${cloneUrl}`,
+      );
       winccoa.logDebugF("addonHandler", `Target directory: ${fullPath}`);
 
       // Ensure the parent directory exists
       const parentDir = path.dirname(fullPath);
       if (!fs.existsSync(parentDir)) {
         fs.mkdirSync(parentDir, { recursive: true });
-        winccoa.logDebugF("addonHandler",`Created parent directory: ${parentDir}`);
+        winccoa.logDebugF(
+          "addonHandler",
+          `Created parent directory: ${parentDir}`,
+        );
       }
 
       // Use simple-git for clone operation from the parent directory
@@ -614,29 +660,37 @@ bool addManager(string manager, string startMode, string options, string user, s
         cloneOptions.push("--branch", branch);
       }
 
-      winccoa.logDebugF("addonHandler",
+      winccoa.logDebugF(
+        "addonHandler",
         `\nCloning ${branch ? `branch '${branch}' from ` : ""}${cloneUrl}...`,
       );
 
       // Clone the repository
       const cloneResult = await git.clone(cloneUrl, repoName, cloneOptions);
 
-      winccoa.logDebugF("addonHandler", `\nSuccessfully cloned repository to: ${fullPath}`);
+      winccoa.logDebugF(
+        "addonHandler",
+        `\nSuccessfully cloned repository to: ${fullPath}`,
+      );
 
       // Perform git pull to ensure we have the very latest changes
-      winccoa.logDebugF("addonHandler", "Performing git pull to ensure latest changes...");
+      winccoa.logDebugF(
+        "addonHandler",
+        "Performing git pull to ensure latest changes...",
+      );
       const repoGit = simpleGit(fullPath);
       const pullResult = await repoGit.pull();
 
       if (pullResult.summary.changes) {
-        winccoa.logDebugF("addonHandler",
+        winccoa.logDebugF(
+          "addonHandler",
           `Pull completed: ${pullResult.summary.changes} changes, ${pullResult.summary.insertions} insertions, ${pullResult.summary.deletions} deletions`,
         );
       } else {
-        winccoa.logDebugF("addonHandler","Repository is already up to date");
+        winccoa.logDebugF("addonHandler", "Repository is already up to date");
       }
 
-      winccoa.logDebugF("addonHandler","Git pull completed successfully!");
+      winccoa.logDebugF("addonHandler", "Git pull completed successfully!");
 
       // Check if package.winccoa.json exists and read its content
       return {
@@ -851,20 +905,30 @@ bool addManager(string manager, string startMode, string options, string user, s
       );
 
       if (fs.existsSync(packageWinCCoAPath)) {
-        winccoa.logDebugF("addonHandler",
+        winccoa.logDebugF(
+          "addonHandler",
           "package.winccoa.json found - this appears to be a WinCC OA addon",
         );
         const fileContent = fs.readFileSync(packageWinCCoAPath, "utf8");
 
         const parseResult = JSON.parse(fileContent);
-        winccoa.logDebugF("addonHandler", "Parsed package.winccoa.json content:", parseResult);
+        winccoa.logDebugF(
+          "addonHandler",
+          "Parsed package.winccoa.json content:",
+          parseResult,
+        );
 
         const JSONstring = JSON.stringify(parseResult, null, 2);
-        winccoa.logDebugF("addonHandler", "Stringified package.winccoa.json content:", JSONstring);
+        winccoa.logDebugF(
+          "addonHandler",
+          "Stringified package.winccoa.json content:",
+          JSONstring,
+        );
 
         return JSONstring;
       } else {
-        winccoa.logDebugF("addonHandler",
+        winccoa.logDebugF(
+          "addonHandler",
           "package.winccoa.json not found - this may not be a WinCC OA addon",
         );
         return null;
@@ -925,7 +989,8 @@ bool addManager(string manager, string startMode, string options, string user, s
       const versionBeforePull =
         this.extractVersionFromPackageJson(repositoryDirectory);
 
-      winccoa.logDebugF("addonHandler",
+      winccoa.logDebugF(
+        "addonHandler",
         `Pulling latest changes from repository: ${repositoryDirectory}`,
       );
 
@@ -934,17 +999,19 @@ bool addManager(string manager, string startMode, string options, string user, s
       const pullResult = await git.pull();
 
       if (pullResult.summary.changes) {
-        winccoa.logDebugF("addonHandler",
+        winccoa.logDebugF(
+          "addonHandler",
           `Pull completed: ${pullResult.summary.changes} changes, ${pullResult.summary.insertions} insertions, ${pullResult.summary.deletions} deletions`,
         );
       } else {
         winccoa.logDebugF("addonHandler", "Repository is already up to date");
       }
 
-      winccoa.logDebugF("addonHandler","Git pull completed successfully!");
+      winccoa.logDebugF("addonHandler", "Git pull completed successfully!");
 
       // Read version after pull and compare
-      const versionAfterPull = this.extractVersionFromPackageJson(repositoryDirectory);
+      const versionAfterPull =
+        this.extractVersionFromPackageJson(repositoryDirectory);
       // TEMP: hardcoded for testing
       // const versionAfterPull = "2.0.1"
       let updatedAddonConfig: AddonConfig | null = null;
@@ -954,7 +1021,8 @@ bool addManager(string manager, string startMode, string options, string user, s
         versionAfterPull &&
         this.isVersionHigher(versionAfterPull, versionBeforePull)
       ) {
-        winccoa.logDebugF("addonHandler",
+        winccoa.logDebugF(
+          "addonHandler",
           `INFO: Version updated from ${versionBeforePull} to ${versionAfterPull}`,
         );
 
@@ -980,15 +1048,23 @@ bool addManager(string manager, string startMode, string options, string user, s
 
             // Execute update scripts if any
             if (updatedAddonConfig.UpdateScripts) {
-              winccoa.logDebugF("addonHandler",
+              winccoa.logDebugF(
+                "addonHandler",
                 `Executing ${updatedAddonConfig.UpdateScripts.length} update script(s)...`,
               );
-              
+
               // Create a timeout promise that rejects after 5 minutes
               const timeoutPromise = new Promise<void>((_, reject) => {
-                setTimeout(() => {
-                  reject(new Error("Update scripts execution timed out after 5 minutes"));
-                }, 5 * 60 * 1000); // 5 minutes in milliseconds
+                setTimeout(
+                  () => {
+                    reject(
+                      new Error(
+                        "Update scripts execution timed out after 5 minutes",
+                      ),
+                    );
+                  },
+                  5 * 60 * 1000,
+                ); // 5 minutes in milliseconds
               });
 
               // Race the execution against the timeout
@@ -998,19 +1074,27 @@ bool addManager(string manager, string startMode, string options, string user, s
                     repositoryDirectory,
                     updatedAddonConfig.UpdateScripts,
                   ),
-                  timeoutPromise
+                  timeoutPromise,
                 ]);
-                winccoa.logDebugF("addonHandler","Update scripts completed successfully");
+                winccoa.logDebugF(
+                  "addonHandler",
+                  "Update scripts completed successfully",
+                );
               } catch (error) {
-                if (error instanceof Error && error.message.includes("timed out")) {
-                  winccoa.logWarning("Update scripts execution timed out after 5 minutes");
+                if (
+                  error instanceof Error &&
+                  error.message.includes("timed out")
+                ) {
+                  winccoa.logWarning(
+                    "Update scripts execution timed out after 5 minutes",
+                  );
                 } else {
                   winccoa.logWarning("Error executing update scripts:", error);
                 }
                 throw error;
               }
             } else {
-              winccoa.logDebugF("addonHandler","No update scripts to execute");
+              winccoa.logDebugF("addonHandler", "No update scripts to execute");
             }
           } catch (error) {
             winccoa.logWarning(
@@ -1090,14 +1174,17 @@ bool addManager(string manager, string startMode, string options, string user, s
     } = options;
 
     try {
-      winccoa.logDebugF("addonHandler",`Fetching repositories for organization: ${org}`);
+      winccoa.logDebugF(
+        "addonHandler",
+        `Fetching repositories for organization: ${org}`,
+      );
 
       const allRepos: any[] = [];
       let page = 1;
       let hasMorePages = true;
 
       while (hasMorePages && page <= maxPages) {
-        winccoa.logDebugF("addonHandler",`Fetching page ${page}...`);
+        winccoa.logDebugF("addonHandler", `Fetching page ${page}...`);
 
         // eslint-disable-next-line no-await-in-loop
         const response = await this.octokit.rest.repos.listForOrg({
@@ -1141,7 +1228,8 @@ bool addManager(string manager, string startMode, string options, string user, s
         const validRepos: any[] = [];
         for (const repo of repos) {
           try {
-            winccoa.logDebugF("addonHandler",
+            winccoa.logDebugF(
+              "addonHandler",
               `Fetching package.winccoa.json for ${repo.fullName}...`,
             );
             const packageResponse = await this.octokit.rest.repos.getContent({
@@ -1182,7 +1270,8 @@ bool addManager(string manager, string startMode, string options, string user, s
                 if (isCompatible) {
                   (repo as any).winccoaPackage = packageJson;
                   validRepos.push(repo); // Only add repos with valid and compatible package.winccoa.json
-                  winccoa.logDebugF("addonHandler",
+                  winccoa.logDebugF(
+                    "addonHandler",
                     `Found package.winccoa.json for ${repo.fullName} - added to results`,
                   );
                 }
@@ -1217,7 +1306,8 @@ bool addManager(string manager, string startMode, string options, string user, s
         page++;
       }
 
-      winccoa.logDebugF("addonHandler",
+      winccoa.logDebugF(
+        "addonHandler",
         `Retrieved ${allRepos.length} WinCC OA addon repositories from organization: ${org}`,
       );
       return allRepos;
@@ -1300,12 +1390,17 @@ bool addManager(string manager, string startMode, string options, string user, s
     scriptFile: string,
     scriptType: string,
   ): Promise<void> {
-    winccoa.logDebugF("addonHandler",`Executing ${scriptType} script: ${scriptFile}`);
-    
+    winccoa.logDebugF(
+      "addonHandler",
+      `Executing ${scriptType} script: ${scriptFile}`,
+    );
+
     // Get current project name from WinCC OA
-    const projectName = (await this.ctrlScript.start("getProjectName")) as string;
-    winccoa.logDebugF("addonHandler",`Current project name: ${projectName}`);
-    
+    const projectName = (await this.ctrlScript.start(
+      "getProjectName",
+    )) as string;
+    winccoa.logDebugF("addonHandler", `Current project name: ${projectName}`);
+
     const installDir = getWinCCOAInstallDir(winccoa);
     if (installDir) {
       const bootstrapPath = path.join(
@@ -1316,16 +1411,26 @@ bool addManager(string manager, string startMode, string options, string user, s
         "bootstrap.js",
       );
       const command = `node.exe -- "${bootstrapPath}" -num 99 -pmonIndex 100 -proj ${projectName} ${scriptFile}`;
-      winccoa.logDebugF("addonHandler",`Executing JavaScript command: ${command}`);
+      winccoa.logDebugF(
+        "addonHandler",
+        `Executing JavaScript command: ${command}`,
+      );
 
       const result = await CommandExecutor.execute(command);
       if (result.exitCode === 0) {
-        winccoa.logDebugF("addonHandler",`Successfully executed ${scriptType} script: ${scriptFile}`);
+        winccoa.logDebugF(
+          "addonHandler",
+          `Successfully executed ${scriptType} script: ${scriptFile}`,
+        );
       } else {
-        winccoa.logWarning(`Failed to execute ${scriptType} script ${scriptFile}. Exit code: ${result.exitCode}, Error: ${result.stderr}`);
+        winccoa.logWarning(
+          `Failed to execute ${scriptType} script ${scriptFile}. Exit code: ${result.exitCode}, Error: ${result.stderr}`,
+        );
       }
     } else {
-      winccoa.logWarning(`Could not determine WinCC OA installation directory for ${scriptType} script: ${scriptFile}`);
+      winccoa.logWarning(
+        `Could not determine WinCC OA installation directory for ${scriptType} script: ${scriptFile}`,
+      );
     }
   }
 
@@ -1341,12 +1446,18 @@ bool addManager(string manager, string startMode, string options, string user, s
     for (const scriptFile of updateScripts) {
       try {
         const fileExtension = path.extname(scriptFile).toLowerCase();
-        winccoa.logDebugF("addonHandler", `Executing update script: ${scriptFile}`);
+        winccoa.logDebugF(
+          "addonHandler",
+          `Executing update script: ${scriptFile}`,
+        );
 
         switch (fileExtension) {
           case ".ctl":
             // For .ctl files, use WCCOActrl manager
-            winccoa.logDebugF("addonHandler", `Executing CTRL script: ${scriptFile}`);
+            winccoa.logDebugF(
+              "addonHandler",
+              `Executing CTRL script: ${scriptFile}`,
+            );
             await this.startManagers(repositoryPath, [
               {
                 exeName: "WCCOActrl",
@@ -1357,11 +1468,14 @@ bool addManager(string manager, string startMode, string options, string user, s
 
           case ".ts":
             // For .ts files, build TypeScript project and execute the transpiled JS file
-            winccoa.logDebugF("addonHandler",`Building TypeScript project for: ${scriptFile}`);
+            winccoa.logDebugF(
+              "addonHandler",
+              `Building TypeScript project for: ${scriptFile}`,
+            );
             await NodeInstaller.installAndBuild(repositoryPath);
-            
+
             // Execute the transpiled JavaScript file
-            const jsScriptFile = scriptFile.replace(/\.ts$/, '.js');
+            const jsScriptFile = scriptFile.replace(/\.ts$/, ".js");
             await this.startWinCCOAnodeManager(jsScriptFile, "TypeScript");
             break;
 
@@ -1377,11 +1491,14 @@ bool addManager(string manager, string startMode, string options, string user, s
             break;
         }
       } catch (error) {
-        winccoa.logWarning(`Failed to execute update script ${scriptFile}:`, error);
+        winccoa.logWarning(
+          `Failed to execute update script ${scriptFile}:`,
+          error,
+        );
       }
     }
 
-    winccoa.logDebugF("addonHandler","All update scripts have been processed");
+    winccoa.logDebugF("addonHandler", "All update scripts have been processed");
   }
 
   public async startManagers(
@@ -1409,7 +1526,8 @@ bool addManager(string manager, string startMode, string options, string user, s
           let foundInBin = fs.existsSync(exePath);
 
           if (foundInBin) {
-            winccoa.logDebugF("addonHandler",
+            winccoa.logDebugF(
+              "addonHandler",
               `[startManagers] Found executable in subproject bin: ${exePath}`,
             );
           } else {
@@ -1425,7 +1543,8 @@ bool addManager(string manager, string startMode, string options, string user, s
 
               if (fs.existsSync(installBinPath)) {
                 exePath = installBinPath;
-                winccoa.logDebugF("addonHandler",
+                winccoa.logDebugF(
+                  "addonHandler",
                   `[startManagers] Found executable in WinCC OA installation: ${exePath}`,
                 );
               } else {
@@ -1455,7 +1574,8 @@ bool addManager(string manager, string startMode, string options, string user, s
           const projectParamRegex = /-(?:proj|PROJ|currentproj|CURRENTPROJ)\b/i;
           if (!projectParamRegex.test(startParams)) {
             startParams = "-currentproj " + startParams.trim();
-            winccoa.logDebugF("addonHandler",
+            winccoa.logDebugF(
+              "addonHandler",
               `[startManagers] No project parameter found, adding -currentproj to: ${manager.exeName}`,
             );
           }
@@ -1463,13 +1583,17 @@ bool addManager(string manager, string startMode, string options, string user, s
           // Build the command string with executable and start parameters
           const command = `"${exePath}" ${startParams}`.trim();
 
-          winccoa.logDebugF("addonHandler",`###### [startManagers] Starting manager: ${command}`);
+          winccoa.logDebugF(
+            "addonHandler",
+            `###### [startManagers] Starting manager: ${command}`,
+          );
 
           // Execute the command (this will start the manager and return immediately)
           const result = await CommandExecutor.execute(command);
 
           if (result.exitCode === 0) {
-            winccoa.logDebugF("addonHandler",
+            winccoa.logDebugF(
+              "addonHandler",
               `[startManagers] Successfully started manager ${manager.exeName}`,
             );
           } else {
@@ -1491,7 +1615,8 @@ bool addManager(string manager, string startMode, string options, string user, s
     // Wait for all managers to be started (but not for them to finish running)
     await Promise.all(startPromises);
 
-    winccoa.logDebugF("addonHandler",
+    winccoa.logDebugF(
+      "addonHandler",
       `[startManagers] All ${managers.length} manager(s) have been started`,
     );
   }
