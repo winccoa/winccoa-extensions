@@ -39,6 +39,7 @@ export class AsciiManager {
   public static async import(
     winccoa: WinccoaManager,
     fileName: string,
+    fullFilePath: string = "",
     confirm: boolean = false,
     useDbdFiles: boolean = false,
     logWarnings: boolean = false,
@@ -48,6 +49,7 @@ export class AsciiManager {
       const command = await this.prepareImportCommand(
         winccoa,
         fileName,
+        fullFilePath,
         confirm,
         useDbdFiles,
         noVerbose,
@@ -141,6 +143,7 @@ Stdout:            ${result.stdout || "None"}`;
   private static async prepareImportCommand(
     winccoa: WinccoaManager,
     fileName: string,
+    fullFilePath: string = "",
     confirm: boolean = false,
     useDbdFiles: boolean = false,
     noVerbose: boolean = false,
@@ -163,10 +166,16 @@ Stdout:            ${result.stdout || "None"}`;
       const [asciiManagerPath, importFilePath, runningProjectName] = (
         await Promise.all([
           PathResolver.getComponentPath(winccoa, ComponentId.ASCII_COMPONENT),
-          PathResolver.getFilePath(winccoa, fileName, useDbdFiles),
+          fullFilePath === "" ? PathResolver.getFilePath(winccoa, fileName, useDbdFiles): fullFilePath,
           this.getProjectName(winccoa),
         ])
       ).map((path) => path?.trim());
+
+      console.log("Resolved Paths:", 
+        asciiManagerPath,
+        importFilePath,
+        runningProjectName,
+      );
 
       if (!asciiManagerPath || !importFilePath || !runningProjectName) {
         console.error(

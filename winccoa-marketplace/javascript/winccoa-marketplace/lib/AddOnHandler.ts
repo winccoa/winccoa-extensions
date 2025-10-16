@@ -336,6 +336,7 @@ bool addManager(string manager, string startMode, string options, string user, s
       [repoPath, projectName],
       [WinccoaCtrlType.string, WinccoaCtrlType.string],
     )) as number;
+
     await NodeInstaller.installAndBuild(path.join(repoPath, projectName));
 
     // Import dplist files if available
@@ -345,7 +346,7 @@ bool addManager(string manager, string startMode, string options, string user, s
       config.Dplists.length > 0
     ) {
       console.log(`Importing ${config.Dplists.length} dplist file(s)...`);
-      await this.importAsciiFiles(config.Dplists);
+      await this.importAsciiFiles(config.Dplists, path.join(repoPath, projectName, "dplist"));
     } else {
       console.log("No dplist files to import");
     }
@@ -932,7 +933,7 @@ bool addManager(string manager, string startMode, string options, string user, s
               this.mapPackageJsonToAddonConfig(parsedPackage);
 
             if (updatedAddonConfig.Dplists) {
-              this.importAsciiFiles(updatedAddonConfig.Dplists);
+              this.importAsciiFiles(updatedAddonConfig.Dplists, path.join(repositoryDirectory, updatedAddonConfig.Subproject, "dplist"));
             }
 
             // Execute update scripts if any
@@ -1198,13 +1199,14 @@ bool addManager(string manager, string startMode, string options, string user, s
     }
   }
 
-  public async importAsciiFiles(fileList: string | string[]): Promise<void> {
+  public async importAsciiFiles(fileList: string | string[], dplPath: string): Promise<void> {
     // Convert single file to array for uniform processing
     const files = Array.isArray(fileList) ? fileList : [fileList];
 
     for (const file of files) {
       try {
-        if (!(await AsciiManager.import(winccoa, file))) {
+        // eslint-disable-next-line no-await-in-loop
+        if (!(await AsciiManager.import(winccoa, file, path.join(dplPath, file)))) {
           console.error(`[importAsciiFiles] Failed to import: ${file}`);
         }
       } catch (error) {
