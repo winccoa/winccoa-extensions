@@ -541,10 +541,11 @@ export class MarketplaceUI {
         const repositoryItems = this.repositories.map(repo => {
             const isRegistered = this.registeredProjects.includes(repo.name);
             const statusClass = isRegistered ? 'registered' : (repo.cloned ? 'cloned' : '');
+            const statusTooltip = isRegistered ? 'Registered' : (repo.cloned ? 'Cloned' : 'Not cloned');
             
             return `
                 <div class="repository-item" data-repo='${JSON.stringify(repo)}'>
-                    <div class="repository-status ${statusClass}"></div>
+                    <div class="repository-status ${statusClass}" title="${statusTooltip}"></div>
                     <div class="repository-item-header">
                         <div class="repository-item-name">${repo.name}</div>
                         <ix-pill class="repository-item-visibility" variant="outline" size="small">
@@ -1174,6 +1175,14 @@ export class MarketplaceUI {
                     this.currentRepository.cloned = false;
                     this.currentRepository.localPath = undefined;
                     this.currentRepository.fileContent = undefined;
+                    
+                    // Also update the repository in the repositories array
+                    const repoInArray = this.repositories.find(r => r.name === this.currentRepository!.name);
+                    if (repoInArray) {
+                        repoInArray.cloned = false;
+                        repoInArray.localPath = undefined;
+                        repoInArray.fileContent = undefined;
+                    }
                 }
                 
                 this.updateLocalStatus(this.currentRepository);
