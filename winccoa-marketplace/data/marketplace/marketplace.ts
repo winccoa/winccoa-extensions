@@ -23,6 +23,7 @@ export class MarketplaceUI {
     private registeredProjects: string[] = [];
     private currentMode: 'marketplace' | 'registered' = 'marketplace';
     private predefinedOrganizations: string[] = ['winccoa'];
+    private currentLoadController: AbortController | null = null; // Track ongoing load requests
 
     constructor() {
         // Auto-detect backend URL based on current frontend URL
@@ -182,16 +183,57 @@ export class MarketplaceUI {
     private initializeEventListeners(): void {
         // Refresh button
         const refreshBtn = document.getElementById('refresh-btn');
-        refreshBtn?.addEventListener('click', () => {
-            const orgSelect = document.getElementById('organization-select') as any;
-            const selectedValue = (orgSelect?.value || '').toString().trim();
+        refreshBtn?.addEventListener('click', async () => {
+            // Cancel any ongoing load operations
+            this.cancelCurrentLoad();
             
-            if (selectedValue) {
-                // Single organization selected
-                this.loadRepositories(selectedValue);
-            } else {
-                // Empty = load all predefined organizations
-                this.loadAllOrganizations();
+            // Create new abort controller for this load operation
+            this.currentLoadController = new AbortController();
+            
+            try {
+                // Check current mode and refresh accordingly
+                if (this.currentMode === 'registered') {
+                    // In registered mode, reload all data and show registered repos
+                    const orgSelect = document.getElementById('organization-select') as any;
+                    const selectedValue = (orgSelect?.value || '').toString().trim();
+                    
+                    if (selectedValue) {
+                        await this.loadRepositories(selectedValue);
+                    } else {
+                        await this.loadAllOrganizations();
+                    }
+                    
+                    await Promise.all([
+                        this.loadRegisteredProjects(),
+                        this.loadLocalRepositories()
+                    ]);
+                    
+                    this.showRegisteredRepositories();
+                } else {
+                    // In marketplace mode, load and show all repos
+                    const orgSelect = document.getElementById('organization-select') as any;
+                    const selectedValue = (orgSelect?.value || '').toString().trim();
+                    
+                    if (selectedValue) {
+                        await this.loadRepositories(selectedValue);
+                    } else {
+                        await this.loadAllOrganizations();
+                    }
+                    
+                    await Promise.all([
+                        this.loadRegisteredProjects(),
+                        this.loadLocalRepositories()
+                    ]);
+                    
+                    this.renderRepositoryList();
+                }
+            } catch (error: unknown) {
+                // Ignore abort errors (user cancelled by clicking refresh again)
+                if ((error as Error).name === 'AbortError') {
+                    console.log('Refresh cancelled');
+                    return;
+                }
+                throw error;
             }
         });
 
@@ -205,15 +247,37 @@ export class MarketplaceUI {
         // Organization select with change event
         const orgSelect = document.getElementById('organization-select') as any;
         
-        orgSelect?.addEventListener('valueChange', (e: CustomEvent) => {
-            const value = e.detail?.trim() || '';
+        orgSelect?.addEventListener('valueChange', async (e: CustomEvent) => {
+            // Cancel any ongoing load operations
+            this.cancelCurrentLoad();
             
-            if (value) {
-                // Single organization selected or custom value entered
-                this.loadRepositories(value);
-            } else {
-                // Empty = load all predefined organizations
-                this.loadAllOrganizations();
+            // Create new abort controller for this load operation
+            this.currentLoadController = new AbortController();
+            
+            try {
+                const value = e.detail?.trim() || '';
+                
+                if (value) {
+                    // Single organization selected or custom value entered
+                    await this.loadRepositories(value);
+                } else {
+                    // Empty = load all predefined organizations
+                    await this.loadAllOrganizations();
+                }
+                
+                // Reload status information and render
+                await Promise.all([
+                    this.loadRegisteredProjects(),
+                    this.loadLocalRepositories()
+                ]);
+                this.renderRepositoryList();
+            } catch (error: unknown) {
+                // Ignore abort errors (user changed organization while loading)
+                if ((error as Error).name === 'AbortError') {
+                    console.log('Organization change cancelled previous load');
+                    return;
+                }
+                throw error;
             }
         });
 
@@ -264,30 +328,84 @@ export class MarketplaceUI {
     /**
      * Switch to marketplace mode (show all repositories from organization)
      */
-    private switchToMarketplaceMode(): void {
+    private async switchToMarketplaceMode(): Promise<void> {
+        // Cancel any ongoing load operations
+        this.cancelCurrentLoad();
+        
+        // Create new abort controller for this load operation
+        this.currentLoadController = new AbortController();
+        
         this.currentMode = 'marketplace';
         this.updateMenuSelection();
-        this.updateTitle();
+        this.updateTitle(); // Update title immediately before loading
         
-        // Load organization repositories
-        const orgSelect = document.getElementById('organization-select') as any;
-        const selectedValue = (orgSelect?.value || '').toString().trim();
-        
-        if (selectedValue) {
-            this.loadRepositories(selectedValue);
-        } else {
-            this.loadAllOrganizations();
+        try {
+            // Load organization repositories
+            const orgSelect = document.getElementById('organization-select') as any;
+            const selectedValue = (orgSelect?.value || '').toString().trim();
+            
+            if (selectedValue) {
+                await this.loadRepositories(selectedValue);
+            } else {
+                await this.loadAllOrganizations();
+            }
+            
+            // Load status information and render
+            await Promise.all([
+                this.loadRegisteredProjects(),
+                this.loadLocalRepositories()
+            ]);
+            
+            this.renderRepositoryList();
+        } catch (error: unknown) {
+            // Ignore abort errors (user cancelled by switching modes)
+            if ((error as Error).name === 'AbortError') {
+                console.log('Switch to marketplace cancelled');
+                return;
+            }
+            throw error;
         }
     }
 
     /**
      * Switch to registered projects mode (show only registered repositories)
      */
-    private switchToRegisteredProjectsMode(): void {
+    private async switchToRegisteredProjectsMode(): Promise<void> {
+        // Cancel any ongoing load operations
+        this.cancelCurrentLoad();
+        
+        // Create new abort controller for this load operation
+        this.currentLoadController = new AbortController();
+        
         this.currentMode = 'registered';
         this.updateMenuSelection();
-        this.updateTitle();
-        this.showRegisteredRepositories();
+        this.updateTitle(); // Update title immediately before loading
+        
+        try {
+            // Load all repositories and status first
+            const orgSelect = document.getElementById('organization-select') as any;
+            const selectedValue = (orgSelect?.value || '').toString().trim();
+            
+            if (selectedValue) {
+                await this.loadRepositories(selectedValue);
+            } else {
+                await this.loadAllOrganizations();
+            }
+            
+            await Promise.all([
+                this.loadRegisteredProjects(),
+                this.loadLocalRepositories()
+            ]);
+            
+            this.showRegisteredRepositories();
+        } catch (error: unknown) {
+            // Ignore abort errors (user cancelled by switching modes)
+            if ((error as Error).name === 'AbortError') {
+                console.log('Switch to registered projects cancelled');
+                return;
+            }
+            throw error;
+        }
     }
 
     /**
@@ -318,9 +436,7 @@ export class MarketplaceUI {
         
         if (title) {
             if (this.currentMode === 'marketplace') {
-                const orgInput = document.getElementById('organization-input') as HTMLInputElement | null;
-                const currentOrg = orgInput?.value?.trim() || 'winccoa';
-                title.textContent = `${currentOrg} Repositories`;
+                title.textContent = 'Marketplace';
                 // Show organization input in marketplace mode
                 if (orgContainer) {
                     (orgContainer as HTMLElement).style.display = '';
@@ -340,9 +456,11 @@ export class MarketplaceUI {
      */
     private showRegisteredRepositories(): void {
         // Filter repositories to show only registered ones
-        const registeredRepos = this.repositories.filter(repo => 
-            this.registeredProjects.includes(repo.name)
-        );
+        // Use subproject name (if available) or repository name for comparison
+        const registeredRepos = this.repositories.filter(repo => {
+            const nameToCheck = repo.subprojectName || repo.name;
+            return this.registeredProjects.includes(nameToCheck);
+        });
         
         // Temporarily store all repositories and replace with filtered ones
         const allRepositories = [...this.repositories];
@@ -396,14 +514,42 @@ export class MarketplaceUI {
      * Load initial data
      */
     private async loadInitialData(): Promise<void> {
-        // Load repositories and status information in sequence to ensure proper state
-        await this.loadAllOrganizations(); // Load all organizations by default (don't render yet)
-        await Promise.all([
-            this.loadRegisteredProjects(),
-            this.loadLocalRepositories() // Load local repository states
-        ]);
-        // Re-render with all status information loaded
-        this.renderRepositoryList();
+        // Cancel any ongoing load operations
+        this.cancelCurrentLoad();
+        
+        // Create new abort controller for this load operation
+        this.currentLoadController = new AbortController();
+        
+        // Set initial title immediately
+        this.updateTitle();
+        
+        try {
+            // Load repositories and status information in sequence to ensure proper state
+            await this.loadAllOrganizations(); // Load all organizations by default (don't render yet)
+            await Promise.all([
+                this.loadRegisteredProjects(),
+                this.loadLocalRepositories() // Load local repository states
+            ]);
+            // Re-render with all status information loaded
+            this.renderRepositoryList();
+        } catch (error: unknown) {
+            // Ignore abort errors (user cancelled by switching modes)
+            if ((error as Error).name === 'AbortError') {
+                console.log('Load operation cancelled');
+                return;
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * Cancel current load operation
+     */
+    private cancelCurrentLoad(): void {
+        if (this.currentLoadController) {
+            this.currentLoadController.abort();
+            this.currentLoadController = null;
+        }
     }
 
     /**
@@ -413,17 +559,20 @@ export class MarketplaceUI {
         try {
             this.showLoading('repository-list');
             
-            const title = document.getElementById('repositories-title');
-            if (title) {
-                title.textContent = 'All Organizations';
-            }
-            
             // Load repositories from all predefined organizations in parallel
             const promises = this.predefinedOrganizations.map(org => 
-                this.makeApiCall(`/marketplace/listRepos?organization=${org}`)
+                this.makeApiCall(`/marketplace/listRepos?organization=${org}`, {
+                    signal: this.currentLoadController?.signal
+                })
                     .then(response => response.json())
                     .then(data => Array.isArray(data) ? data : [])
-                    .catch(() => []) // Ignore errors for individual organizations
+                    .catch((error) => {
+                        // Ignore abort errors
+                        if (error.name === 'AbortError') {
+                            throw error; // Re-throw abort to propagate up
+                        }
+                        return []; // Ignore other errors for individual organizations
+                    })
             );
             
             const results = await Promise.all(promises);
@@ -471,7 +620,9 @@ export class MarketplaceUI {
                 orgSelect.value = organization;
             }
             
-            const response = await this.makeApiCall(`/marketplace/listRepos?organization=${organization}`);
+            const response = await this.makeApiCall(`/marketplace/listRepos?organization=${organization}`, {
+                signal: this.currentLoadController?.signal
+            });
             const data: Repository[] | { error?: string } = await response.json();
             
             if (response.ok) {
@@ -494,13 +645,7 @@ export class MarketplaceUI {
                     }
                 });
                 
-                this.renderRepositoryList();
-                
-                // Update the title to show current organization
-                const title = document.getElementById('repositories-title');
-                if (title) {
-                    title.textContent = `${organization} Repositories`;
-                }
+                // Don't render here - will be rendered after all status info is loaded
                 
                 this.showToast(`Loaded ${this.repositories.length} repositories from ${organization}`, 'success');
             } else {
@@ -508,13 +653,7 @@ export class MarketplaceUI {
                 const errorMsg = errorData.error || 'Unknown error';
                 this.showError(`Failed to load repositories from "${organization}": ${errorMsg}`);
                 this.repositories = [];
-                this.renderRepositoryList();
-                
-                // Reset title on error
-                const title = document.getElementById('repositories-title');
-                if (title) {
-                    title.textContent = 'Available Repositories';
-                }
+                // Don't render here - will be rendered after all status info is loaded
             }
         } catch (error: unknown) {
             let errorMessage = 'Failed to connect to marketplace service';
@@ -530,7 +669,7 @@ export class MarketplaceUI {
             
             this.showError(errorMessage);
             this.repositories = [];
-            this.renderRepositoryList();
+            // Don't render here - will be rendered after all status info is loaded
         } finally {
             // Remove loading state from organization input
             const orgInput = document.getElementById('organization-input');
@@ -543,13 +682,18 @@ export class MarketplaceUI {
      */
     private async loadRegisteredProjects(): Promise<void> {
         try {
-            const response = await this.makeApiCall('/marketplace/listProjects');
+            const response = await this.makeApiCall('/marketplace/listProjects', {
+                signal: this.currentLoadController?.signal
+            });
             if (response.ok) {
                 const data: string[] = await response.json();
                 this.registeredProjects = Array.isArray(data) ? data : [];
             }
         } catch (error: unknown) {
             const apiError = error as ApiError;
+            if (apiError.name === 'AbortError') {
+                throw error; // Re-throw abort errors
+            }
             if (apiError.isSSLError) {
                 console.warn('SSL Certificate Issue loading registered projects:', apiError.message);
             } else if (apiError.isConnectionError) {
@@ -566,7 +710,9 @@ export class MarketplaceUI {
      */
     private async loadLocalRepositories(): Promise<void> {
         try {
-            const response = await this.makeApiCall('/marketplace/listLocalRepos');
+            const response = await this.makeApiCall('/marketplace/listLocalRepos', {
+                signal: this.currentLoadController?.signal
+            });
             if (response.ok) {
                 const localRepos: Array<{ addon: string; fileContent: any }> = await response.json();
                 
@@ -606,6 +752,9 @@ export class MarketplaceUI {
             }
         } catch (error: unknown) {
             const apiError = error as ApiError;
+            if (apiError.name === 'AbortError') {
+                throw error; // Re-throw abort errors
+            }
             console.warn('Could not load local repositories:', apiError.message || 'Unknown error');
         }
     }
