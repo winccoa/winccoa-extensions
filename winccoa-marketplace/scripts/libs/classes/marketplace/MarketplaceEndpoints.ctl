@@ -269,7 +269,6 @@ class MarketplaceEndpoints
   //--------------------------------------------------------------------------------
   public static dyn_string setPmonCredentials(const blob &content, string user, string ip, dyn_string headerNames, dyn_string headerValues, int connectionIndex)
   {
-    DebugTN("postTest");
     string jsonData;
     blobGetValue(content, 0, jsonData, bloblen(content));
     mapping contentMapping = jsonDecode(jsonData);
@@ -279,11 +278,7 @@ class MarketplaceEndpoints
       return makeDynString(jsonEncode(makeMapping("error", "Missing required data: user and/or password")), "Status: 400 Bad Request");
     }
 
-    DebugTN(contentMapping["user"], contentMapping["password"]);
-    DebugTN(connectionIndex);
-
-    //TODO: send credentials to client
-    bool validCredentials = true;
+    bool validCredentials = client.setPmonCredentials(connectionIndex, contentMapping["user"], contentMapping["password"]);
 
     if (validCredentials)
     {
@@ -298,8 +293,8 @@ class MarketplaceEndpoints
   //--------------------------------------------------------------------------------
   public static dyn_string pmonCredentialsAreSet(const dyn_string &names, const dyn_string &values, const string user, string ip, dyn_string headerNames, dyn_string headerValues, int connectionIndex)
   {
-    //TODO: check at client
-    bool validCredentials = true;
+    bool validCredentials = client.verifyPmonCredentials(connectionIndex);
+
     if (validCredentials)
     {
       return makeDynString(jsonEncode("Credentials are set"), "Status: 200 OK");
@@ -313,7 +308,7 @@ class MarketplaceEndpoints
   //--------------------------------------------------------------------------------
   public static void closeCB(string ip, int connectionIndex)
   {
-    DebugTN("Connection closed", ip, connectionIndex);
+    client.removePmonCredentials(connectionIndex);
   }
 
 //--------------------------------------------------------------------------------

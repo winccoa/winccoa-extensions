@@ -1424,7 +1424,7 @@ export class MarketplaceUI {
                 <div style="display: flex; align-items: center; gap: 12px; margin: 32px 0 16px 0;">
                     <h3 style="margin: 0; color: var(--theme-color-std-text);">Latest Version</h3>
                     <ix-pill variant="warning" size="small" icon="arrow-up">
-                        Update Available
+                        Update available
                     </ix-pill>
                 </div>
             `;

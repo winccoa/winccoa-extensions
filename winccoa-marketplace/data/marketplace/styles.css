@@ -554,3 +554,8 @@ ix-toast-container ix-toast {
 .overview-card#metadata-card {
     grid-column: 1 / -1;
 }
+
+/* Rotate moon icon for theme toggle button */
+#theme-toggle[icon="moon"] {
+    transform: rotate(-45deg);
+}
