@@ -39,8 +39,28 @@ class MarketplaceEndpoints
     httpConnect(getDefaultAddonPath, MARKETPLACE_URL_PREFIX + "/getDefaultAddonPath", "application/json");
     httpConnect(listLocalRepos, MARKETPLACE_URL_PREFIX + "/listLocalRepos", "application/json");
     httpConnect(remove, MARKETPLACE_URL_PREFIX + "/remove", "application/json");
+    httpConnect(postTest, MARKETPLACE_URL_PREFIX + "/postTest", "application/json");
+    httpOnConnectionClose(closeCB);
   }
 
+  public static void closeCB(string ip, int connectionIndex)
+  {
+    DebugTN("Connection closed", ip, connectionIndex);
+  }
+
+  public static dyn_string postTest(const blob &content, string user, string ip, dyn_string headerNames, dyn_string headerValues, int connectionIndex)
+  {
+    DebugTN("postTest");
+    string jsonData;
+    blobGetValue(content, 0, jsonData, bloblen(content));
+    mapping contentMapping = jsonDecode(jsonData);
+    DebugTN(contentMapping);
+    DebugTN(user);
+    DebugTN(ip);
+    DebugTN(headerNames);
+    DebugTN(headerValues);
+    DebugTN(connectionIndex);
+  }
 
   //--------------------------------------------------------------------------------
   public static dyn_string listRepos(const dyn_string &names, const dyn_string &values)
