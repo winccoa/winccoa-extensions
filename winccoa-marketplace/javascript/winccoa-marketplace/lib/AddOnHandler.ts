@@ -272,8 +272,15 @@ class AddOnHandler {
   private pmonCredentials: PmonCredentials[] = [];
 
   constructor() {
-    // Initialize octokit without authentication first
-    this.octokit = new Octokit();
+    // Initialize octokit without authentication first - suppress HTTP error logging
+    this.octokit = new Octokit({
+      log: {
+        debug: () => {},
+        info: () => {},
+        warn: () => {},
+        error: () => {},
+      },
+    });
     this.isAuthenticated = false;
 
     // Get WinCC OA version
@@ -331,6 +338,12 @@ class AddOnHandler {
           );
           this.octokit = new Octokit({
             auth: authToken,
+            log: {
+              debug: () => {},
+              info: () => {},
+              warn: () => {},
+              error: () => {},
+            },
           });
           this.isAuthenticated = true;
           return;
@@ -406,17 +419,13 @@ class AddOnHandler {
       password = credentials.password;
     }
 
-    const pmonPath = await this.ctrlScript.start(
-      "getPmonPath",
-    );
+    const pmonPath = await this.ctrlScript.start("getPmonPath");
 
-    const configFilePath = await this.ctrlScript.start(
-      "getConfigFilePath",
-    );
+    const configFilePath = await this.ctrlScript.start("getConfigFilePath");
 
     const result = await CommandExecutor.execute(
       `"${pmonPath}" -config "${configFilePath}" -auth "${user}" "${password}" "${user}" "${password}"`,
-    )
+    );
 
     return result.exitCode == 0;
   }
@@ -517,7 +526,15 @@ class AddOnHandler {
       }
 
       // Test the token by creating a new Octokit instance
-      const testOctokit = new Octokit({ auth: authToken });
+      const testOctokit = new Octokit({
+        auth: authToken,
+        log: {
+          debug: () => {},
+          info: () => {},
+          warn: () => {},
+          error: () => {},
+        },
+      });
 
       try {
         await testOctokit.rest.users.getAuthenticated();
@@ -1620,18 +1637,7 @@ bool addManager(string manager, string startMode, string options, string user, s
               }
             }
           } catch (error: any) {
-            // File doesn't exist or other error - this is expected for many repos
-            if (error.status === 404) {
-              winccoa.logWarning(
-                `No package.winccoa.json found for ${repo.fullName} - skipping repository`,
-              );
-            } else {
-              winccoa.logWarning(
-                `Error fetching package.winccoa.json for ${repo.fullName}:`,
-                error.message,
-              );
-            }
-            // Don't add repos without valid package.winccoa.json to results
+            // surpress errors as a repo does not have to contain the package.winccoa.json
           }
         }
 
