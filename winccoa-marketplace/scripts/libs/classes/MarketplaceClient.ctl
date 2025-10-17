@@ -27,7 +27,6 @@ class MarketplaceClient
   public anytype listRepos(string organization = "winccoa")
   {
     VrpcResponseData response = stub.callFunction("listRepos", organization);
-    DebugTN(__FUNCTION__, "VRPC STATUS: ", response.getStatus());
     return jsonDecode(response.getResponse());
   }
 
@@ -35,14 +34,12 @@ class MarketplaceClient
   {
     mapping request = makeMapping("url", url, "targetDirectory", path);
     VrpcResponseData response = stub.callFunction("clone", request);
-    DebugTN(__FUNCTION__, "VRPC STATUS: ", response.getStatus());
     return response.getResponse();
   }
 
   public mapping pull(string urlOrName)
   {
     VrpcResponseData response = stub.callFunction("pull", urlOrName);
-    DebugTN(__FUNCTION__, "VRPC STATUS: ", response.getStatus());
     return response.getResponse();
   }
 
