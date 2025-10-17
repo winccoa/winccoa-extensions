@@ -58,6 +58,11 @@ class MarketplaceClient
     return response.getResponse();
   }
 
+  public bool remove(string path)
+  {
+    VrpcResponseData response = stub.callFunction("remove", path);
+    return response.getResponse();
+  }
   public string repoPath()
   {
     VrpcResponseData response = stub.callFunction("repoPath", nullptr);

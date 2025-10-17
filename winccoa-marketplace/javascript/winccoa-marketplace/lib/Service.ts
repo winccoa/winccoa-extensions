@@ -1,6 +1,9 @@
-import { Vrpc } from "winccoa-manager";
+import { Vrpc, WinccoaManager } from "winccoa-manager";
 import { AddOnHandler, Manager } from "./AddOnHandler";
 import * as pathModule from "path";
+import { AddonConfig } from "./AddonConfig";
+
+const winccoa = new WinccoaManager();
 
 export class MarketplaceService extends Vrpc.ServiceBase {
   private _addOnHandler: AddOnHandler;
@@ -17,6 +20,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
 
     this.registerFunction("pull", this.pullRepository.bind(this));
     this.registerFunction("clone", this.cloneRepository.bind(this));
+    this.registerFunction("remove", this.removeRepository.bind(this));
     this.registerFunction("listRepos", this.listRemoteRepositories.bind(this));
     this.registerFunction("repoPath", this.getDefaultAddonPath.bind(this));
     this.registerFunction("localRepos", this.listLocalAddOns.bind(this));
@@ -32,7 +36,11 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     request: Vrpc.Variant,
   ): Promise<Vrpc.Variant> {
     try {
-      console.log("check if request is mapping:", request.isMapping());
+      winccoa.logDebugF(
+        "addonHandler",
+        "check if request is mapping:",
+        request.isMapping(),
+      );
       const requestMapping = request.getMapping();
 
       // Extract repositoryPath using requestMapping for the keys
@@ -45,7 +53,11 @@ export class MarketplaceService extends Vrpc.ServiceBase {
         );
       }
       const repositoryPath = repositoryPathVariant.getString();
-      console.log("-------- repositoryPath:", repositoryPath);
+      winccoa.logDebugF(
+        "addonHandler",
+        "-------- repositoryPath:",
+        repositoryPath,
+      );
 
       // Extract fileContent using requestMapping for the keys
       const fileContentVariant = requestMapping.get(
@@ -55,7 +67,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
         throw new Error('Missing required "fileContent" parameter in mapping');
       }
       const fileContent = fileContentVariant.getString();
-      console.log("-------- fileContent:", fileContent);
+      winccoa.logDebugF("addonHandler", "-------- fileContent:", fileContent);
 
       // Parse the JSON string to get addon configurations
       let addonConfigs: any[];
@@ -70,27 +82,15 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       }
 
       // Map each parsed config to AddonConfig interface
-      const configs: import("./AddonConfig").AddonConfig[] = addonConfigs.map(
-        (jsonConfig: any) => ({
-          RepoName: jsonConfig.RepoName,
-          Keywords: jsonConfig.Keywords,
-          Subproject: jsonConfig.Subproject,
-          Version: jsonConfig.Version,
-          Description: jsonConfig.Description,
-          OaVersion: jsonConfig.OaVersion,
-          Managers: jsonConfig.Managers
-            ? jsonConfig.Managers.map((manager: any) => ({
-                Name: manager.Name || "",
-                StartMode: manager.StartMode || "Unknown",
-                Options: manager.Options || "",
-              }))
-            : [],
-          Dplists: jsonConfig.Dplists || [],
-          UpdateScripts: jsonConfig.UpdateScripts || [],
-        }),
+      const configs: AddonConfig[] = addonConfigs.map((jsonConfig: any) =>
+        this._addOnHandler.mapPackageJsonToAddonConfig(jsonConfig),
       );
 
-      console.log("--------- Parsed addon configurations:", configs);
+      winccoa.logDebugF(
+        "addonHandler",
+        "--------- Parsed addon configurations:",
+        configs,
+      );
 
       // Register each addon configuration
       const results: any[] = [];
@@ -101,16 +101,20 @@ export class MarketplaceService extends Vrpc.ServiceBase {
           config,
         );
         results.push(result);
-        console.log(
+        winccoa.logDebugF(
+          "addonHandler",
           `Sub-project ${config.RepoName || "unnamed"} at ${repositoryPath} registered with result code:`,
           result,
         );
       }
 
-      console.log(`All ${configs.length} sub-projects registered successfully`);
+      winccoa.logDebugF(
+        "addonHandler",
+        `All ${configs.length} sub-projects registered successfully`,
+      );
       return Vrpc.Variant.createBool(true);
     } catch (error) {
-      console.error("Error in registerSubProjects:", error);
+      winccoa.logWarning("Error in registerSubProjects:", error);
       throw error;
     }
   }
@@ -129,7 +133,11 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       throw new Error('Missing required "repositoryPath" parameter in mapping');
     }
     const repositoryPath = repositoryPathVariant.getString();
-    console.log("-------- repositoryPath:", repositoryPath);
+    winccoa.logDebugF(
+      "addonHandler",
+      "-------- repositoryPath:",
+      repositoryPath,
+    );
 
     // Extract if files shall be deleted
     const deleteFileVariant = requestMapping.get(
@@ -139,7 +147,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       throw new Error('Missing required "deleteFiles" parameter in mapping');
     }
     const deleteFiles = deleteFileVariant.getBool();
-    console.log("-------- deleteFiles:", deleteFiles);
+    winccoa.logDebugF("addonHandler", "-------- deleteFiles:", deleteFiles);
 
     // Extract fileContent using requestMapping for the keys
     const fileContentVariant = requestMapping.get(
@@ -149,7 +157,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       throw new Error('Missing required "fileContent" parameter in mapping');
     }
     const fileContent = fileContentVariant.getString();
-    console.log("-------- fileContent:", fileContent);
+    winccoa.logDebugF("addonHandler", "-------- fileContent:", fileContent);
 
     // Parse the JSON string to get addon configurations
     let addonConfigs: any[];
@@ -164,24 +172,8 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     }
 
     // Map each parsed config to AddonConfig interface
-    const configs: import("./AddonConfig").AddonConfig[] = addonConfigs.map(
-      (jsonConfig: any) => ({
-        RepoName: jsonConfig.RepoName,
-        Keywords: jsonConfig.Keywords,
-        Subproject: jsonConfig.Subproject,
-        Version: jsonConfig.Version,
-        Description: jsonConfig.Description,
-        OaVersion: jsonConfig.OaVersion,
-        Managers: jsonConfig.Managers
-          ? jsonConfig.Managers.map((manager: any) => ({
-              Name: manager.Name || "",
-              StartMode: manager.StartMode || "Unknown",
-              Options: manager.Options || "",
-            }))
-          : [],
-        Dplists: jsonConfig.Dplists || [],
-        UpdateScripts: jsonConfig.UpdateScripts || [],
-      }),
+    const configs: AddonConfig[] = addonConfigs.map((jsonConfig: any) =>
+      this._addOnHandler.mapPackageJsonToAddonConfig(jsonConfig),
     );
 
     for (const config of configs) {
@@ -189,8 +181,10 @@ export class MarketplaceService extends Vrpc.ServiceBase {
         repositoryPath,
         config.Subproject,
         deleteFiles,
+        config,
       );
-      console.log(
+      winccoa.logDebugF(
+        "addonHandler",
         `Sub-project ${config.Subproject} unregistered with result code:`,
         result,
       );
@@ -203,9 +197,13 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     serverContext: Vrpc.ServerContext,
     request: Vrpc.Variant,
   ): Promise<Vrpc.Variant> {
-    console.log("Listing registered sub-projects");
+    winccoa.logDebugF("addonHandler", "Listing registered sub-projects");
     const result = await this._addOnHandler.listSubProjects();
-    console.log("Registered sub-projects listed with result code:", result);
+    winccoa.logDebugF(
+      "addonHandler",
+      "Registered sub-projects listed with result code:",
+      result,
+    );
     return Vrpc.Variant.createStringArray(result);
   }
 
@@ -230,7 +228,8 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       },
     );
 
-    const customRepos = this._addOnHandler.listCustomRepositories();
+    const customReposData = this._addOnHandler.listCustomRepositories();
+    const customRepos = customReposData.repositories;
 
     const repos = [...orgRepos, ...customRepos];
 
@@ -314,6 +313,15 @@ export class MarketplaceService extends Vrpc.ServiceBase {
 
     // return full path of the cloned repository with name
     return Vrpc.Variant.createMapping(resultMapping);
+  }
+
+  private async removeRepository(
+    serverContext: Vrpc.ServerContext,
+    request: Vrpc.Variant,
+  ): Promise<Vrpc.Variant> {
+    const directory = request.getString();
+    const result = await this._addOnHandler.removeRepository(directory);
+    return Vrpc.Variant.createBool(result);
   }
 
   private async getDefaultAddonPath(
