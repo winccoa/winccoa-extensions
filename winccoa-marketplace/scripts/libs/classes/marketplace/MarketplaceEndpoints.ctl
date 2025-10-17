@@ -38,8 +38,11 @@ class MarketplaceEndpoints
     httpConnect(listSubProjects, MARKETPLACE_URL_PREFIX + "/listProjects", "application/json");
     httpConnect(getDefaultAddonPath, MARKETPLACE_URL_PREFIX + "/getDefaultAddonPath", "application/json");
     httpConnect(listLocalRepos, MARKETPLACE_URL_PREFIX + "/listLocalRepos", "application/json");
+    httpConnect(remove, MARKETPLACE_URL_PREFIX + "/remove", "application/json");
+    httpConnect(setPmonCredentials, MARKETPLACE_URL_PREFIX + "/setPmonCredentials", "application/json");
+    httpConnect(pmonCredentialsAreSet, MARKETPLACE_URL_PREFIX + "/pmonCredentialsAreSet", "application/json");
+    httpOnConnectionClose(closeCB);
   }
-
 
   //--------------------------------------------------------------------------------
   public static dyn_string listRepos(const dyn_string &names, const dyn_string &values)
@@ -95,23 +98,24 @@ class MarketplaceEndpoints
   //--------------------------------------------------------------------------------
   public static dyn_string pull(const dyn_string &names, const dyn_string &values)
   {
-    int idx = names.indexOf("repo");
+    int idx = names.indexOf("repoName");
     if (idx < 0)
     {
-      return makeDynString("Missing required parameter: repo", "Status: 400 Bad Request");
+      return makeDynString("Missing required parameter: repoName", "Status: 400 Bad Request");
     }
-    string repo = values.at(idx);
+    string repoName = values.at(idx);
 
 
     try
     {
-      mapping result = client.pull(repo);
-      result.insert("message", "Successfully pulled repository " + repo);
+      string path = joinPath(client.repoPath(), repoName);
+      mapping result = client.pull(path);
+      result.insert("message", "Successfully pulled repository " + repoName);
       return makeDynString(jsonEncode(result), "Status: 200 OK");
     }
     catch
     {
-      return makeDynString(jsonEncode(makeMapping("error", "Couldn't pull repository " + repo)), "Status: 500 Internal Server Error");
+      return makeDynString(jsonEncode(makeMapping("error", "Couldn't pull repository " + repoName)), "Status: 500 Internal Server Error");
     }
   }
 
@@ -134,7 +138,7 @@ class MarketplaceEndpoints
     string fileContent = values.at(idx);
 
     mapping requestMapping;
-    string path = client.repoPath() + repoName;
+    string path = joinPath(client.repoPath(), repoName);
     requestMapping.insert("repositoryPath", path);
     requestMapping.insert("fileContent", fileContent);
 
@@ -176,7 +180,7 @@ class MarketplaceEndpoints
     }
 
     mapping requestMapping;
-    string path = client.repoPath() + repoName;
+    string path = joinPath(client.repoPath(), repoName);
     requestMapping.insert("repositoryPath", path);
     requestMapping.insert("fileContent", fileContent);
     requestMapping.insert("deleteFiles", deleteFiles);
@@ -239,6 +243,74 @@ class MarketplaceEndpoints
     }
   }
 
+  //--------------------------------------------------------------------------------
+  public static dyn_string remove(const dyn_string &names, const dyn_string &values)
+  {
+    int idx = names.indexOf("repoName");
+    if (idx < 0)
+    {
+      return makeDynString("Missing required parameter: repoName", "Status: 400 Bad Request");
+    }
+    string repoName = values.at(idx);
+
+    try
+    {
+      string path = joinPath(client.repoPath(), repoName);
+      mapping result = client.remove(path);
+      result.insert("message", "Successfully deleted repository " + repoName);
+      return makeDynString(jsonEncode(result), "Status: 200 OK");
+    }
+    catch
+    {
+      return makeDynString(jsonEncode(makeMapping("error", "Couldn't delete repository " + repoName)), "Status: 500 Internal Server Error");
+    }
+  }
+
+  //--------------------------------------------------------------------------------
+  public static dyn_string setPmonCredentials(const blob &content, string user, string ip, dyn_string headerNames, dyn_string headerValues, int connectionIndex)
+  {
+    string jsonData;
+    blobGetValue(content, 0, jsonData, bloblen(content));
+    mapping contentMapping = jsonDecode(jsonData);
+
+    if (!mappingHasKey(contentMapping, "user") || !mappingHasKey(contentMapping, "password"))
+    {
+      return makeDynString(jsonEncode(makeMapping("error", "Missing required data: user and/or password")), "Status: 400 Bad Request");
+    }
+
+    bool validCredentials = client.setPmonCredentials(connectionIndex, contentMapping["user"], contentMapping["password"]);
+
+    if (validCredentials)
+    {
+      return makeDynString(jsonEncode("Credentials set"), "Status: 200 OK");
+    }
+    else
+    {
+      return makeDynString(jsonEncode(makeMapping("error", "Invalid user/password")), "Status: 401 Unauthorized");
+    }
+  }
+
+  //--------------------------------------------------------------------------------
+  public static dyn_string pmonCredentialsAreSet(const dyn_string &names, const dyn_string &values, const string user, string ip, dyn_string headerNames, dyn_string headerValues, int connectionIndex)
+  {
+    bool validCredentials = client.verifyPmonCredentials(connectionIndex);
+
+    if (validCredentials)
+    {
+      return makeDynString(jsonEncode("Credentials are set"), "Status: 200 OK");
+    }
+    else
+    {
+      return makeDynString(jsonEncode(makeMapping("error", "No valid credentials set")), "Status: 401 Unauthorized");
+    }
+  }
+
+  //--------------------------------------------------------------------------------
+  public static void closeCB(string ip, int connectionIndex)
+  {
+    client.removePmonCredentials(connectionIndex);
+  }
+
 //--------------------------------------------------------------------------------
 //@protected members
 //--------------------------------------------------------------------------------
@@ -253,4 +325,15 @@ class MarketplaceEndpoints
   {
     client =  new MarketplaceClient();
   }
+
+  private static string joinPath(string base, string name)
+  {
+    base = makeNativePath(base);
+    if (base[strlen(base) - 1] != '/')
+    {
+      base += "/";
+    }
+    return makeNativePath(base + name);
+}
+
 };

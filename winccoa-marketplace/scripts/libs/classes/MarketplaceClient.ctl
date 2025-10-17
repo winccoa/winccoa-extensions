@@ -80,4 +80,26 @@ class MarketplaceClient
     VrpcResponseData response = stub.callFunction("localRepos", nullptr);
     return response.getResponse();
   }
+
+  public bool setPmonCredentials(string session, string user, string password)
+  {
+    mapping requestMap;
+    requestMap.insert("session", session);
+    requestMap.insert("user", user);
+    requestMap.insert("password", password);
+    VrpcResponseData response = stub.callFunction("setPmonCredentials", requestMap);
+    return response.getResponse();
+  }
+
+  public bool verifyPmonCredentials(string session)
+  {
+    VrpcResponseData response = stub.callFunction("verifyPmonCredentials", session);
+    return response.getResponse();
+  }
+
+  public bool removePmonCredentials(string session)
+  {
+    VrpcResponseData response = stub.callFunction("removePmonCredentials", session);
+    return response.getResponse();
+  }
 };
