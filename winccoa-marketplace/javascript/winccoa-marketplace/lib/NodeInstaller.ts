@@ -50,7 +50,7 @@ export class NodeInstaller {
 
   // Install and build all found package.json directories
   static async installAndBuild(projDir: string): Promise<void> {
-    const dirs = await this.findPackageDirs(projDir + "/javascript");
+    const dirs = await this.findPackageDirs(path.join(projDir, "javascript"));
     for (const dir of dirs) {
       winccoa.logDebugF("addonHandler", `Installing and building in ${dir}`);
       await this.runCommand("npm", ["install"], dir);

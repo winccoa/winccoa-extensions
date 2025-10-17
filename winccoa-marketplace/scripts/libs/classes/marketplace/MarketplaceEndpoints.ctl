@@ -108,7 +108,7 @@ class MarketplaceEndpoints
 
     try
     {
-      string path = client.repoPath() + repoName;
+      string path = joinPath(client.repoPath(), repoName);
       mapping result = client.pull(path);
       result.insert("message", "Successfully pulled repository " + repoName);
       return makeDynString(jsonEncode(result), "Status: 200 OK");
@@ -138,7 +138,7 @@ class MarketplaceEndpoints
     string fileContent = values.at(idx);
 
     mapping requestMapping;
-    string path = client.repoPath() + repoName;
+    string path = joinPath(client.repoPath(), repoName);
     requestMapping.insert("repositoryPath", path);
     requestMapping.insert("fileContent", fileContent);
 
@@ -180,7 +180,7 @@ class MarketplaceEndpoints
     }
 
     mapping requestMapping;
-    string path = client.repoPath() + repoName;
+    string path = joinPath(client.repoPath(), repoName);
     requestMapping.insert("repositoryPath", path);
     requestMapping.insert("fileContent", fileContent);
     requestMapping.insert("deleteFiles", deleteFiles);
@@ -255,7 +255,7 @@ class MarketplaceEndpoints
 
     try
     {
-      string path = client.repoPath() + repoName;
+      string path = joinPath(client.repoPath(), repoName);
       mapping result = client.remove(path);
       result.insert("message", "Successfully deleted repository " + repoName);
       return makeDynString(jsonEncode(result), "Status: 200 OK");
@@ -325,4 +325,15 @@ class MarketplaceEndpoints
   {
     client =  new MarketplaceClient();
   }
+
+  private static string joinPath(string base, string name)
+  {
+    base = makeNativePath(base);
+    if (base[strlen(base) - 1] != '/')
+    {
+      base += "/";
+    }
+    return makeNativePath(base + name);
+}
+
 };
