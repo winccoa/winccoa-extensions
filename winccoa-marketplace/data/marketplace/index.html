@@ -13,6 +13,8 @@
     <!-- Siemens IX Icons (required for IX 3.0.0+) -->
     <script type="module" src="https://cdn.jsdelivr.net/npm/@siemens/ix-icons@3.2.0/dist/ix-icons/ix-icons.esm.js"></script>
     <script nomodule src="https://cdn.jsdelivr.net/npm/@siemens/ix-icons@3.2.0/dist/ix-icons/ix-icons.js"></script>
+
+    <link rel="icon" type="image/x-icon" href="favicon.png">
     
     <!-- IX Modal using REAL IX components only -->
     <script>
@@ -501,9 +503,9 @@
                             </div>
                         </div>
                         
-                        <ix-tabs>
+                        <ix-tabs id="repo-tabs">
                             <ix-tab-item>Overview</ix-tab-item>
-                            <ix-tab-item>README</ix-tab-item>
+                            <!-- Subproject tab will be added dynamically if winccoaPackage exists -->
                         </ix-tabs>
                         
                         <div class="tab-content">
@@ -522,6 +524,10 @@
                                         <div class="stat-item">
                                             <span class="stat-label">Updated:</span>
                                             <span id="repo-updated">-</span>
+                                        </div>
+                                        <div class="stat-item">
+                                            <span class="stat-label">Clone URL:</span>
+                                            <a id="repo-clone-url" href="#" target="_blank" rel="noopener noreferrer" style="font-family: 'Courier New', monospace; font-size: 12px; word-break: break-all; color: var(--theme-color-primary); text-decoration: none;">-</a>
                                         </div>
                                     </div>
                                     
@@ -550,12 +556,9 @@
                                 </div>
                             </div>
                             
-                            <div id="readme-tab" class="tab-pane">
-                                <div id="readme-content" class="readme-content">
-                                    <div class="loading-spinner">
-                                        <ix-spinner></ix-spinner>
-                                        <span>Loading README...</span>
-                                    </div>
+                            <div id="subproject-tab" class="tab-pane">
+                                <div id="subproject-content" class="subproject-content">
+                                    <!-- Subproject metadata will be displayed here -->
                                 </div>
                             </div>
 

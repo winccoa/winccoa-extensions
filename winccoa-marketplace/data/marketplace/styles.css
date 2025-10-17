@@ -318,9 +318,9 @@ ix-menu ix-menu-item ix-icon {
 /* Overview Tab */
 .overview-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
     gap: 24px;
-    max-width: 800px;
+    max-width: none;
 }
 
 .overview-card {
@@ -481,10 +481,6 @@ ix-menu ix-menu-item ix-icon {
         height: 300px;
         border-right: none;
         border-bottom: 1px solid var(--theme-color-component-1);
-    }
-    
-    .overview-grid {
-        grid-template-columns: 1fr;
     }
     
     .action-buttons {

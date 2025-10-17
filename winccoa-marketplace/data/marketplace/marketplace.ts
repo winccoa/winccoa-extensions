@@ -551,6 +551,10 @@ export class MarketplaceUI {
                 if (packageData.Keywords && Array.isArray(packageData.Keywords)) {
                     repo.keywords = packageData.Keywords;
                 }
+                
+                if (packageData.Subproject) {
+                    repo.subprojectName = packageData.Subproject;
+                }
             } catch (e) {
                 console.warn(`Failed to parse winccoaPackage for ${repo.name}`);
             }
@@ -961,6 +965,17 @@ export class MarketplaceUI {
         // Update repository information
         this.updateRepositoryDetails(repo);
         
+        // Update tabs based on winccoaPackage availability
+        this.updateTabs(repo);
+        
+        // Switch to overview tab and ensure correct pane is shown
+        const tabPanes = document.querySelectorAll('.tab-pane');
+        tabPanes.forEach(pane => pane.classList.remove('active'));
+        const overviewTab = document.getElementById('overview-tab');
+        if (overviewTab) {
+            overviewTab.classList.add('active');
+        }
+        
         // Update button spinner visibility based on loading state
         const spinner = document.getElementById('action-loading-spinner');
         if (spinner) {
@@ -1010,10 +1025,22 @@ export class MarketplaceUI {
         const repoSize = document.getElementById('repo-size');
         const repoCreated = document.getElementById('repo-created');
         const repoUpdated = document.getElementById('repo-updated');
+        const repoCloneUrl = document.getElementById('repo-clone-url') as HTMLAnchorElement;
         
         if (repoSize) repoSize.textContent = this.formatSize(repo.size);
         if (repoCreated) repoCreated.textContent = this.formatExactDate(repo.createdAt);
         if (repoUpdated) repoUpdated.textContent = this.formatRelativeTime(repo.updatedAt, false);
+        if (repoCloneUrl) {
+            if (repo.cloneUrl) {
+                repoCloneUrl.textContent = repo.cloneUrl;
+                repoCloneUrl.href = repo.cloneUrl;
+                repoCloneUrl.style.display = '';
+            } else {
+                repoCloneUrl.textContent = '-';
+                repoCloneUrl.href = '#';
+                repoCloneUrl.style.display = '';
+            }
+        }
         
         // Update fileContent display if available
         this.updateFileContentDisplay(repo);
@@ -1319,25 +1346,192 @@ export class MarketplaceUI {
     }
 
     /**
+     * Update tabs based on winccoaPackage availability
+     */
+    private updateTabs(repo: Repository): void {
+        const tabsContainer = document.getElementById('repo-tabs');
+        if (!tabsContainer) return;
+        
+        // Clear existing tabs
+        tabsContainer.innerHTML = '';
+        
+        // Always add Overview tab
+        const overviewTab = document.createElement('ix-tab-item');
+        overviewTab.textContent = 'Overview';
+        overviewTab.setAttribute('selected', ''); // Select by default
+        tabsContainer.appendChild(overviewTab);
+        
+        // Add subproject tab if winccoaPackage exists
+        if ((repo as any).winccoaPackage) {
+            const packageData = typeof (repo as any).winccoaPackage === 'string' 
+                ? JSON.parse((repo as any).winccoaPackage)
+                : (repo as any).winccoaPackage;
+            
+            if (packageData && packageData.Subproject) {
+                const subprojectTab = document.createElement('ix-tab-item');
+                subprojectTab.textContent = packageData.Subproject;
+                tabsContainer.appendChild(subprojectTab);
+            }
+        }
+        
+        // Re-initialize tab listeners
+        this.initializeTabs();
+    }
+
+    /**
      * Load tab-specific content
      */
     private async loadTabContent(tabIndex: number): Promise<void> {
         if (!this.currentRepository) return;
         
         switch (tabIndex) {
-            case 1: // README tab
-                // README loading functionality can be implemented here when needed
-                const readmeContent = document.getElementById('readme-content');
-                if (readmeContent) {
-                    readmeContent.innerHTML = `
-                        <div style="text-align: center; padding: 48px; color: var(--theme-color-weak-text);">
-                            <ix-icon name="info" size="32"></ix-icon>
-                            <p style="margin: 16px 0 0 0;">README view not yet implemented</p>
-                        </div>
-                    `;
-                }
+            case 0: // Overview tab - already rendered
+                break;
+            case 1: // Subproject tab (if exists)
+                this.renderSubprojectContent();
                 break;
         }
+    }
+
+    /**
+     * Render subproject metadata content
+     */
+    private renderSubprojectContent(): void {
+        if (!this.currentRepository) return;
+        
+        const subprojectContent = document.getElementById('subproject-content');
+        if (!subprojectContent) return;
+        
+        const repo = this.currentRepository;
+        const winccoaPackage = (repo as any).winccoaPackage;
+        
+        if (!winccoaPackage) {
+            subprojectContent.innerHTML = `
+                <div style="text-align: center; padding: 48px; color: var(--theme-color-weak-text);">
+                    <ix-icon name="info" size="32"></ix-icon>
+                    <p style="margin: 16px 0 0 0;">No subproject metadata available</p>
+                </div>
+            `;
+            return;
+        }
+        
+        const packageData = typeof winccoaPackage === 'string' 
+            ? JSON.parse(winccoaPackage)
+            : winccoaPackage;
+        
+        let html = '<div class="overview-grid">';
+        
+        // Basic Information Card
+        html += `
+            <div class="overview-card">
+                <h4>Package Information</h4>
+                ${packageData.Subproject ? `
+                <div class="stat-item">
+                    <span class="stat-label">Subproject Name:</span>
+                    <span>${packageData.Subproject}</span>
+                </div>` : ''}
+                ${packageData.Version ? `
+                <div class="stat-item">
+                    <span class="stat-label">Version:</span>
+                    <span>${packageData.Version}</span>
+                </div>` : ''}
+                ${packageData.OaVersion ? `
+                <div class="stat-item">
+                    <span class="stat-label">WinCC OA Version:</span>
+                    <span>${packageData.OaVersion}</span>
+                </div>` : ''}
+                ${packageData.RepoName ? `
+                <div class="stat-item">
+                    <span class="stat-label">Repository Name:</span>
+                    <span>${packageData.RepoName}</span>
+                </div>` : ''}
+                ${packageData.Description ? `
+                <div class="stat-item">
+                    <span class="stat-label">Description:</span>
+                    <span>${packageData.Description}</span>
+                </div>` : ''}
+            </div>
+        `;
+        
+        // Dplists Card
+        if (packageData.Dplists && Array.isArray(packageData.Dplists) && packageData.Dplists.length > 0) {
+            html += `
+                <div class="overview-card">
+                    <h4>Data Point Lists (${packageData.Dplists.length})</h4>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+            `;
+            packageData.Dplists.forEach((dpl: string) => {
+                html += `
+                        <div style="display: flex; align-items: center; gap: 8px; color: var(--theme-color-std-text);">
+                            <ix-icon name="document" size="16" style="color: var(--theme-color-primary);"></ix-icon>
+                            <span>${dpl}</span>
+                        </div>
+                `;
+            });
+            html += `
+                    </div>
+                </div>`;
+        }
+        
+        // Managers List
+        if (packageData.Managers && Array.isArray(packageData.Managers) && packageData.Managers.length > 0) {
+            html += `
+                <div class="overview-card">
+                    <h4>Managers (${packageData.Managers.length})</h4>
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+            `;
+            
+            packageData.Managers.forEach((manager: any) => {
+                html += `
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <div style="display: flex; align-items: center; gap: 8px; color: var(--theme-color-std-text); font-weight: 600;">
+                                <ix-icon name="rocket" size="16" style="color: var(--theme-color-success);"></ix-icon>
+                                <span>${manager.Name || 'Unknown Manager'}</span>
+                            </div>
+                            <div style="margin-left: 24px; display: flex; flex-direction: column; gap: 4px;">
+                `;
+                
+                if (manager.StartMode) {
+                    html += `
+                                <div style="color: var(--theme-color-weak-text); font-size: 13px;">
+                                    <span style="font-weight: 500;">Start Mode:</span> ${manager.StartMode}
+                                </div>
+                    `;
+                }
+                
+                if (manager.Options) {
+                    html += `
+                                <div style="color: var(--theme-color-weak-text); font-size: 13px;">
+                                    <span style="font-weight: 500;">Options:</span> <span style="font-family: 'Courier New', monospace;">${manager.Options}</span>
+                                </div>
+                    `;
+                }
+                
+                // Add any other manager properties
+                Object.keys(manager).forEach(key => {
+                    if (key !== 'Name' && key !== 'StartMode' && key !== 'Options') {
+                        html += `
+                                <div style="color: var(--theme-color-weak-text); font-size: 13px;">
+                                    <span style="font-weight: 500;">${key}:</span> ${manager[key]}
+                                </div>
+                        `;
+                    }
+                });
+                
+                html += `
+                            </div>
+                        </div>
+                `;
+            });
+            
+            html += `
+                    </div>
+                </div>`;
+        }
+        
+        html += '</div>';
+        
+        subprojectContent.innerHTML = html;
     }
 
     /**
