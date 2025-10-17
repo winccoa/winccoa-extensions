@@ -1193,15 +1193,11 @@ export class MarketplaceUI {
         const isLoading = !!repo.loadingAction;
         const hasUpdate = repo.hasUpdate || false;
         
-        const statusElement = document.getElementById('local-status');
         const cloneBtn = document.getElementById('clone-btn');
         const pullBtn = document.getElementById('pull-btn');
         const registerBtn = document.getElementById('register-btn');
         const unregisterBtn = document.getElementById('unregister-btn');
         const removeBtn = document.getElementById('remove-btn');
-        
-        // Update version information display
-        this.updateVersionInfo(repo);
         
         // Update status pills
         this.updateStatusPills(repo);
@@ -1213,16 +1209,10 @@ export class MarketplaceUI {
             registerBtn?.setAttribute('disabled', '');
             unregisterBtn?.setAttribute('disabled', '');
             removeBtn?.setAttribute('disabled', '');
-            return; // Don't update status text while loading
+            return; // Don't update button states while loading
         }
         
         if (isRegistered) {
-            if (statusElement) {
-                statusElement.innerHTML = `
-                    <ix-icon name="success" class="status-icon" style="color: var(--theme-color-success);"></ix-icon>
-                    <span>Installed as subproject</span>
-                `;
-            }
             cloneBtn?.setAttribute('disabled', '');
             // Only show pull button if there's an update available
             if (hasUpdate) {
@@ -1235,12 +1225,6 @@ export class MarketplaceUI {
             removeBtn?.setAttribute('disabled', ''); // Can't delete if registered
             removeBtn?.setAttribute('title', 'Cannot delete: Repository is installed. Uninstall it first.');
         } else if (isCloned) {
-            if (statusElement) {
-                statusElement.innerHTML = `
-                    <ix-icon name="download" class="status-icon" style="color: var(--theme-color-primary);"></ix-icon>
-                    <span>Downloaded locally</span>
-                `;
-            }
             cloneBtn?.setAttribute('disabled', '');
             // Only show pull button if there's an update available
             if (hasUpdate) {
@@ -1262,12 +1246,6 @@ export class MarketplaceUI {
             removeBtn?.removeAttribute('disabled'); // Enable remove for downloaded but not installed
             removeBtn?.setAttribute('title', 'Remove the downloaded repository from local storage');
         } else {
-            if (statusElement) {
-                statusElement.innerHTML = `
-                    <ix-icon name="info" class="status-icon"></ix-icon>
-                    <span>Not downloaded locally</span>
-                `;
-            }
             cloneBtn?.removeAttribute('disabled');
             pullBtn?.setAttribute('disabled', '');
             registerBtn?.removeAttribute('disabled'); // Enable register - will download first if needed
@@ -1275,48 +1253,6 @@ export class MarketplaceUI {
             unregisterBtn?.setAttribute('disabled', '');
             removeBtn?.setAttribute('disabled', ''); // Can't remove if not downloaded
             removeBtn?.setAttribute('title', 'Cannot remove: Repository is not downloaded');
-        }
-    }
-
-    /**
-     * Update version information display
-     */
-    private updateVersionInfo(repo: Repository): void {
-        const versionInfoContainer = document.getElementById('version-info');
-        const currentVersionElement = document.getElementById('current-version');
-        const latestVersionElement = document.getElementById('latest-version');
-        const updateAvailableContainer = document.getElementById('update-available');
-        
-        if (repo.cloned && repo.currentVersion) {
-            // Show version info
-            if (versionInfoContainer) {
-                versionInfoContainer.style.display = 'block';
-            }
-            
-            // Display current version
-            if (currentVersionElement) {
-                currentVersionElement.textContent = repo.currentVersion;
-            }
-            
-            // Display latest version if an update is available
-            if (repo.hasUpdate && repo.latestVersion) {
-                if (updateAvailableContainer) {
-                    updateAvailableContainer.style.display = 'flex';
-                }
-                if (latestVersionElement) {
-                    latestVersionElement.textContent = repo.latestVersion;
-                }
-            } else {
-                // No update available, hide latest version
-                if (updateAvailableContainer) {
-                    updateAvailableContainer.style.display = 'none';
-                }
-            }
-        } else {
-            // Not cloned, hide version info
-            if (versionInfoContainer) {
-                versionInfoContainer.style.display = 'none';
-            }
         }
     }
 
