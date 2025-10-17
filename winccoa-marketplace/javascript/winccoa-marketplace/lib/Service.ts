@@ -181,6 +181,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
         repositoryPath,
         config.Subproject,
         deleteFiles,
+        config,
       );
       winccoa.logDebugF(
         "addonHandler",
@@ -227,7 +228,8 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       },
     );
 
-    const customRepos = this._addOnHandler.listCustomRepositories();
+    const customReposData = this._addOnHandler.listCustomRepositories();
+    const customRepos = customReposData.repositories;
 
     const repos = [...orgRepos, ...customRepos];
 
