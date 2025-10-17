@@ -23,6 +23,12 @@ export interface Manager {
   startParams: string;
 }
 
+export interface PmonCredentials {
+  session: string;
+  user: string;
+  password: string;
+}
+
 // Export the class for use in other modules
 export { AddOnHandler };
 
@@ -263,8 +269,7 @@ class AddOnHandler {
   private isAuthenticated: boolean = false;
   private _defaultDirectory: string;
   private _oaVersion: string;
-  private pmonUser: string = "";
-  private pmonPassword: string = "";
+  private pmonCredentials: PmonCredentials[] = [];
 
   constructor() {
     // Initialize octokit without authentication first
@@ -380,12 +385,32 @@ class AddOnHandler {
     return this._defaultDirectory;
   }
 
-  setPmonUser(user: string): void {
-    this.pmonUser = user;
+  addPmonCredentials(session: string, user: string, password: string): void {
+    this.pmonCredentials.push({ session, user, password });
   }
 
-  setPmonPassword(password: string): void {
-    this.pmonPassword = password;
+  removePmonCredentials(session: string): void {
+    this.pmonCredentials = this.pmonCredentials.filter(
+      (cred) => cred.session !== session,
+    );
+  }
+
+  async verifyPmonCredentials(session: string): Promise<boolean> {
+    let user: string = "",
+      password: string = "";
+    const credentials = this.pmonCredentials.find(
+      (cred) => cred.session === session,
+    );
+    if (credentials) {
+      user = credentials.user;
+      password = credentials.password;
+    }
+
+    return (await this.ctrlScript.start(
+      "verifyPmonCredentials",
+      [user, password],
+      [WinccoaCtrlType.string, WinccoaCtrlType.string],
+    )) as boolean;
   }
 
   /**
@@ -517,6 +542,13 @@ class AddOnHandler {
 #uses "CtrlPv2Admin"
 #uses "classes/projectEnvironment/ProjEnvProject"
 
+bool verifyPmonCredentials(string user, string password)
+{
+  int err;
+  paVerifyPassword(PROJ, user, password, err);
+  return err == 0;
+}
+
 string getProjectName()
 {
   return PROJ;
@@ -591,6 +623,7 @@ bool addManager(string manager, string startMode, string options, string user, s
     repoPath: string,
     projectName: string,
     config: AddonConfig,
+    session: string,
   ): Promise<number> {
     const ret = (await this.ctrlScript.start(
       "registerSubProj",
@@ -618,6 +651,12 @@ bool addManager(string manager, string startMode, string options, string user, s
       winccoa.logDebugF("addonHandler", "No dplist files to import");
     }
 
+    const sessionCredentials = this.pmonCredentials.find(
+      (cred) => cred.session === session,
+    );
+    const pmonUser = sessionCredentials?.user || "";
+    const pmonPassword = sessionCredentials?.password || "";
+
     for (const manager of config.Managers || []) {
       winccoa.logDebugF(
         "addonHandler",
@@ -630,8 +669,8 @@ bool addManager(string manager, string startMode, string options, string user, s
           manager.Name,
           manager.StartMode.toLowerCase(),
           manager.Options,
-          this.pmonUser,
-          this.pmonPassword,
+          pmonUser,
+          pmonPassword,
         ],
         [
           WinccoaCtrlType.string,

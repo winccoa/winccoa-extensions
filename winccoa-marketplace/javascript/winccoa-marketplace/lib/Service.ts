@@ -28,6 +28,15 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       "setPmonCredentials",
       this.setPmonCredentials.bind(this),
     );
+    this.registerFunction(
+      "verifyPmonCredentials",
+      this.verifyPmonCredentials.bind(this),
+    );
+    this.registerFunction(
+      "removePmonCredentials",
+      this.removePmonCredentials.bind(this),
+    );
+
     this._addOnHandler = new AddOnHandler();
   }
 
@@ -81,6 +90,11 @@ export class MarketplaceService extends Vrpc.ServiceBase {
         throw new Error(`Invalid JSON in fileContent: ${error}`);
       }
 
+      const sessionVariant = requestMapping.get(
+        Vrpc.Variant.createString("session"),
+      );
+      const session = sessionVariant ? sessionVariant.getString() : "";
+
       // Map each parsed config to AddonConfig interface
       const configs: AddonConfig[] = addonConfigs.map((jsonConfig: any) =>
         this._addOnHandler.mapPackageJsonToAddonConfig(jsonConfig),
@@ -99,6 +113,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
           repositoryPath,
           config.Subproject,
           config,
+          session
         );
         results.push(result);
         winccoa.logDebugF(
@@ -350,15 +365,57 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     const passwordVariant = requestMapping.get(
       Vrpc.Variant.createString("password"),
     );
+    const sessionVariant = requestMapping.get(
+      Vrpc.Variant.createString("session"),
+    );
 
-    if (!userVariant || !passwordVariant) {
+    if (!userVariant || !passwordVariant || !sessionVariant) {
       throw new Error(
         'Missing required "user" or "password" parameter in mapping',
       );
     }
 
-    this._addOnHandler.setPmonUser(userVariant.getString());
-    this._addOnHandler.setPmonPassword(passwordVariant.getString());
+    this._addOnHandler.addPmonCredentials(
+      sessionVariant.getString(),
+      userVariant.getString(),
+      passwordVariant.getString(),
+    );
+
+    return Vrpc.Variant.createBool(
+      await this._addOnHandler.verifyPmonCredentials(
+        sessionVariant.getString(),
+      ),
+    );
+  }
+
+  // eslint-disable-next-line require-await
+  private async removePmonCredentials(
+    serverContext: Vrpc.ServerContext,
+    request: Vrpc.Variant,
+  ): Promise<Vrpc.Variant> {
+    const session = request.getString();
+
+    if (!session) {
+      throw new Error('Missing required "session" parameter in mapping');
+    }
+
+    this._addOnHandler.removePmonCredentials(session);
     return Vrpc.Variant.createBool(true);
+  }
+
+  // eslint-disable-next-line require-await
+  private async verifyPmonCredentials(
+    serverContext: Vrpc.ServerContext,
+    request: Vrpc.Variant,
+  ): Promise<Vrpc.Variant> {
+    const session = request.getString();
+
+    if (!session) {
+      throw new Error('Missing required "session" parameter in mapping');
+    }
+
+    return Vrpc.Variant.createBool(
+      await this._addOnHandler.verifyPmonCredentials(session),
+    );
   }
 }
