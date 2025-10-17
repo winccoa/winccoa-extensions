@@ -268,15 +268,17 @@ class AddOnHandler {
     try {
       const authMethods = this.getSupportedAuthMethods();
 
+      console.log("auth methods", authMethods);
+
       if (authMethods.length === 0) {
-        winccoa.logDebugF(
+        winccoa.logInfo(
           "addonHandler",
           "No authentication methods configured - using public access only",
         );
         return;
       }
 
-      winccoa.logDebugF(
+      winccoa.logInfo(
         "addonHandler",
         `Configured authentication methods: ${authMethods.join(", ")}`,
       );
@@ -285,34 +287,34 @@ class AddOnHandler {
       const hasToken = authMethods.includes("Token");
 
       if (hasToken) {
-        // Check for Token authentication first
-        const envToken = process.env.GITHUB_TOKEN;
-        if (envToken) {
-          winccoa.logDebugF(
+        // Check for Token authentication using multiple sources
+        const authToken = this.readGitHubToken();
+        if (authToken) {
+          winccoa.logInfo(
             "addonHandler",
-            "Using GITHUB_TOKEN environment variable (Token method)",
+            "Using GitHub token for authentication (Token method)",
           );
           this.octokit = new Octokit({
-            auth: envToken,
+            auth: authToken,
           });
           this.isAuthenticated = true;
           return;
         } else {
-          winccoa.logDebugF(
+          winccoa.logWarning(
             "addonHandler",
-            "Token authentication configured but GITHUB_TOKEN environment variable not found",
+            "Token authentication configured but no GitHub token found",
           );
-          winccoa.logDebugF(
+          winccoa.logWarning(
             "addonHandler",
             "To authenticate, use one of these methods:",
           );
-          winccoa.logDebugF("addonHandler", "   - Set GITHUB_TOKEN environment variable");
-          winccoa.logDebugF("addonHandler", "   - await handler.authenticateWithToken()");
+          winccoa.logWarning("addonHandler", "   - Set GITHUB_TOKEN environment variable");
+          winccoa.logWarning("addonHandler", "   - Create .env file with GITHUB_TOKEN=\"your_token\"");
         }
       }
     } catch (error) {
       winccoa.logWarning("Error setting up authentication:", error);
-      winccoa.logDebugF("addonHandler", "Using public access only");
+      winccoa.logInfo("addonHandler", "Using public access only");
     }
   }
 
@@ -371,24 +373,56 @@ class AddOnHandler {
   }
 
   /**
+   * Read GitHub token from multiple sources in order of preference:
+   * 1. Environment variable GITHUB_TOKEN
+   * 2. .env file in project root
+   * @returns The token string or null if not found
+   */
+  private readGitHubToken(): string | null {
+    // Try environment variable first
+    const envToken = process.env.GITHUB_TOKEN;
+    if (envToken) {
+      winccoa.logInfo("addonHandler", "Found GITHUB_TOKEN in environment variable");
+      return envToken;
+    }
+
+    // Try .env file in project root
+    try {
+      const envPath = path.join(__dirname, "..", ".env");
+      if (fs.existsSync(envPath)) {
+        const envContent = fs.readFileSync(envPath, "utf8");
+        const lines = envContent.split("\n");
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith("GITHUB_TOKEN=")) {
+            const token = trimmed.substring("GITHUB_TOKEN=".length).replace(/['"]/g, "");
+            if (token) {
+              winccoa.logInfo("addonHandler", "Found GITHUB_TOKEN in .env file");
+              return token;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      winccoa.logInfo("addonHandler", "Could not read .env file");
+    }
+
+    winccoa.logInfo("addonHandler", "GITHUB_TOKEN not found in any source");
+    return null;
+  }
+
+  /**
    * Authenticate with GitHub using a personal access token
-   * Uses GITHUB_TOKEN environment variable for secure authentication
+   * Uses multiple sources to find GITHUB_TOKEN for secure authentication
    * @returns Promise<boolean> indicating success/failure
    */
   async authenticateWithToken(): Promise<boolean> {
     try {
-      // Check for environment variable
-      const authToken = process.env.GITHUB_TOKEN;
-
-      if (authToken) {
-        winccoa.logDebugF("addonHandler", "Using GITHUB_TOKEN environment variable");
-      } else {
-        winccoa.logDebugF("addonHandler", "GITHUB_TOKEN environment variable not found");
-        return false;
-      }
+      // Check for token from multiple sources
+      const authToken = this.readGitHubToken();
 
       if (!authToken) {
-        winccoa.logDebugF("addonHandler", "No token provided");
+        winccoa.logWarning("addonHandler", "No GitHub token found in any source");
         return false;
       }
 
