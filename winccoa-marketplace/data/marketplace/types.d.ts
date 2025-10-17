@@ -5,7 +5,6 @@
 // Interface definitions for IX modals and components
 export interface IxModalAction {
     text: string;
-    handler?: () => void;
 }
 
 export interface IxModalConfig {
@@ -17,14 +16,6 @@ export interface IxModalConfig {
 export interface IxModalResult {
     actionIndex: number;
     action: string;
-}
-
-export interface IxInputModalConfig {
-    title?: string;
-    message?: string;
-    label?: string;
-    placeholder?: string;
-    defaultValue?: string;
 }
 
 export interface IxUnregisterConfirmResult {
@@ -49,10 +40,12 @@ export interface Repository {
     fileContent?: string; // JSON content from .winccoa-marketplace.json file
     localPath?: string; // Local filesystem path where repository is cloned
     subprojectName?: string; // Subproject name from package.winccoa.json (used for registration)
-    loadingAction?: 'clone' | 'pull' | 'register' | 'unregister' | null; // Track which action is in progress
+    loadingAction?: 'download' | 'update' | 'install' | 'uninstall' | 'remove' | null; // Track which action is in progress
     currentVersion?: string; // Currently installed version (from local repo)
     latestVersion?: string; // Latest version from GitHub
     hasUpdate?: boolean; // Whether an update is available
+    keywords?: string[]; // Keywords/tags from winccoaPackage
+    localWinccoaPackage?: any; // Local winccoaPackage data from listLocalRepos
 }
 
 export interface ApiError extends Error {
@@ -68,8 +61,8 @@ export type ToastType = 'info' | 'success' | 'error' | 'warning';
 declare global {
     interface Window {
         ixShowMessage?: (config: IxModalConfig) => Promise<IxModalResult>;
-        ixShowInput?: (config: IxInputModalConfig) => Promise<string | null>;
         ixShowUnregisterConfirm?: (repositoryName: string) => Promise<IxUnregisterConfirmResult | null>;
+        ixShowDeleteConfirm?: (repositoryName: string) => Promise<boolean>;
         marketplaceUI?: import('./marketplace').MarketplaceUI;
         ixIcons?: any;
     }

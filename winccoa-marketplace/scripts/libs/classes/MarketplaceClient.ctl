@@ -27,7 +27,6 @@ class MarketplaceClient
   public anytype listRepos(string organization = "winccoa")
   {
     VrpcResponseData response = stub.callFunction("listRepos", organization);
-    DebugTN(__FUNCTION__, "VRPC STATUS: ", response.getStatus());
     return jsonDecode(response.getResponse());
   }
 
@@ -35,14 +34,12 @@ class MarketplaceClient
   {
     mapping request = makeMapping("url", url, "targetDirectory", path);
     VrpcResponseData response = stub.callFunction("clone", request);
-    DebugTN(__FUNCTION__, "VRPC STATUS: ", response.getStatus());
     return response.getResponse();
   }
 
   public mapping pull(string urlOrName)
   {
     VrpcResponseData response = stub.callFunction("pull", urlOrName);
-    DebugTN(__FUNCTION__, "VRPC STATUS: ", response.getStatus());
     return response.getResponse();
   }
 
@@ -78,6 +75,28 @@ class MarketplaceClient
   public string listLocalRepos()
   {
     VrpcResponseData response = stub.callFunction("localRepos", nullptr);
+    return response.getResponse();
+  }
+
+  public bool setPmonCredentials(string session, string user, string password)
+  {
+    mapping requestMap;
+    requestMap.insert("session", session);
+    requestMap.insert("user", user);
+    requestMap.insert("password", password);
+    VrpcResponseData response = stub.callFunction("setPmonCredentials", requestMap);
+    return response.getResponse();
+  }
+
+  public bool verifyPmonCredentials(string session)
+  {
+    VrpcResponseData response = stub.callFunction("verifyPmonCredentials", session);
+    return response.getResponse();
+  }
+
+  public bool removePmonCredentials(string session)
+  {
+    VrpcResponseData response = stub.callFunction("removePmonCredentials", session);
     return response.getResponse();
   }
 };

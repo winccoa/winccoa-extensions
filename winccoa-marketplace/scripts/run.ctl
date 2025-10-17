@@ -36,6 +36,7 @@ void main()
   mapping mRepo;
   mRepo.insert("repositoryPath", "D:/test/greece_test_addon");
   mRepo.insert("fileContent", "{\"RepoName\":\"greece_test_addon\",\"Keywords\":[\"javascript\"],\"Subproject\":\"testSubProject\",\"Version\":\"1.0.0\",\"Description\":\"This is a test\",\"OaVersion\":\"^3.21.0\",\"Managers\":[{\"Name\":\"WCCOActrl\",\"StartMode\":\"always\",\"Options\":\"-num 10 test.ctl\"}],\"Dplists\":[\"test.dpl\"]}");
+  mRepo.insert("session", "0");
 
   DebugTN("result of 'register project'", client.registerSubProjects(mRepo)); // GEHT
 
