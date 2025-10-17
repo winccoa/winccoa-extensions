@@ -406,11 +406,19 @@ class AddOnHandler {
       password = credentials.password;
     }
 
-    return (await this.ctrlScript.start(
-      "verifyPmonCredentials",
-      [user, password],
-      [WinccoaCtrlType.string, WinccoaCtrlType.string],
-    )) as boolean;
+    const pmonPath = await this.ctrlScript.start(
+      "getPmonPath",
+    );
+
+    const configFilePath = await this.ctrlScript.start(
+      "getConfigFilePath",
+    );
+
+    const result = await CommandExecutor.execute(
+      `"${pmonPath}" -config "${configFilePath}" -auth "${user}" "${password}" "${user}" "${password}"`,
+    )
+
+    return result.exitCode == 0;
   }
 
   /**
@@ -541,12 +549,20 @@ class AddOnHandler {
     `
 #uses "CtrlPv2Admin"
 #uses "classes/projectEnvironment/ProjEnvProject"
+#uses "pmon"
 
-bool verifyPmonCredentials(string user, string password)
+string getPmonPath()
 {
-  int err;
-  paVerifyPassword(PROJ, user, password, err);
-  return err == 0;
+  string sPvssPath;
+  paGetProjAttr(PROJ, "pvss_path", sPvssPath);
+  return makeNativePath(sPvssPath + "/bin/" + getComponentName(PMON_COMPONENT));
+}
+
+string getConfigFilePath()
+{
+  string config;
+  paProjName2ConfigFile(PROJ, config);
+  return config;
 }
 
 string getProjectName()

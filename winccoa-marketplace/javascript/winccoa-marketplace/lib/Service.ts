@@ -113,7 +113,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
           repositoryPath,
           config.Subproject,
           config,
-          session
+          session,
         );
         results.push(result);
         winccoa.logDebugF(
