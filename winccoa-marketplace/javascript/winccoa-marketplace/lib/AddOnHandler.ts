@@ -217,10 +217,10 @@ function getWinCCOAInstallDir(winccoa: WinccoaManager): string | null {
       return envInstallBase;
     }
 
-    winccoa.logSevere("Could not determine WinCC OA installation directory");
+    winccoa.logWarning("Could not determine WinCC OA installation directory");
     return null;
   } catch (error) {
-    winccoa.logSevere(
+    winccoa.logWarning(
       "Error while determining WinCC OA installation directory:",
       (error as Error).message,
     );
@@ -269,13 +269,15 @@ class AddOnHandler {
       const authMethods = this.getSupportedAuthMethods();
 
       if (authMethods.length === 0) {
-        console.log(
+        winccoa.logDebugF(
+          "addonHandler",
           "No authentication methods configured - using public access only",
         );
         return;
       }
 
-      console.log(
+      winccoa.logDebugF(
+        "addonHandler",
         `Configured authentication methods: ${authMethods.join(", ")}`,
       );
 
@@ -286,24 +288,31 @@ class AddOnHandler {
         // Check for Token authentication first
         const envToken = process.env.GITHUB_TOKEN;
         if (envToken) {
-          console.log("Using GITHUB_TOKEN environment variable (Token method)");
+          winccoa.logDebugF(
+            "addonHandler",
+            "Using GITHUB_TOKEN environment variable (Token method)",
+          );
           this.octokit = new Octokit({
             auth: envToken,
           });
           this.isAuthenticated = true;
           return;
         } else {
-          console.log(
+          winccoa.logDebugF(
+            "addonHandler",
             "Token authentication configured but GITHUB_TOKEN environment variable not found",
           );
-          console.log("To authenticate, use one of these methods:");
-          console.log("   - Set GITHUB_TOKEN environment variable");
-          console.log("   - await handler.authenticateWithToken()");
+          winccoa.logDebugF(
+            "addonHandler",
+            "To authenticate, use one of these methods:",
+          );
+          winccoa.logDebugF("addonHandler", "   - Set GITHUB_TOKEN environment variable");
+          winccoa.logDebugF("addonHandler", "   - await handler.authenticateWithToken()");
         }
       }
     } catch (error) {
-      console.error("Error setting up authentication:", error);
-      console.log("Using public access only");
+      winccoa.logWarning("Error setting up authentication:", error);
+      winccoa.logDebugF("addonHandler", "Using public access only");
     }
   }
 
@@ -353,7 +362,7 @@ class AddOnHandler {
       await this.octokit.rest.users.getAuthenticated();
       return true;
     } catch (error) {
-      winccoa.logSevere(
+      winccoa.logWarning(
         "Authentication validation failed:",
         (error as any).message,
       );
@@ -372,14 +381,14 @@ class AddOnHandler {
       const authToken = process.env.GITHUB_TOKEN;
 
       if (authToken) {
-        console.log("Using GITHUB_TOKEN environment variable");
+        winccoa.logDebugF("addonHandler", "Using GITHUB_TOKEN environment variable");
       } else {
-        console.log("GITHUB_TOKEN environment variable not found");
+        winccoa.logDebugF("addonHandler", "GITHUB_TOKEN environment variable not found");
         return false;
       }
 
       if (!authToken) {
-        console.log("No token provided");
+        winccoa.logDebugF("addonHandler", "No token provided");
         return false;
       }
 
@@ -393,14 +402,14 @@ class AddOnHandler {
         this.octokit = testOctokit;
         this.isAuthenticated = true;
 
-        console.log("GitHub token authentication successful!");
+        winccoa.logDebugF("addonHandler", "GitHub token authentication successful!");
         return true;
       } catch (tokenError: unknown) {
-        console.error("Invalid GitHub token:", (tokenError as Error).message);
+        winccoa.logWarning("Invalid GitHub token:", (tokenError as Error).message);
         return false;
       }
     } catch (error: unknown) {
-      console.error("Token authentication failed:", error);
+      winccoa.logWarning("Token authentication failed:", error);
       return false;
     }
   }
@@ -582,11 +591,11 @@ bool addManager(string manager, string startMode, string options, string user, s
         console.log("Uninstall scripts completed successfully");
       } catch (error) {
         if (error instanceof Error && error.message.includes("timed out")) {
-          console.error(
+          winccoa.logWarning(
             "Uninstall scripts execution timed out after 5 minutes",
           );
         } else {
-          console.error("Error executing uninstall scripts:", error);
+          winccoa.logWarning("Error executing uninstall scripts:", error);
         }
         // Continue with unregistration even if scripts fail
         console.log(
@@ -1262,11 +1271,11 @@ bool addManager(string manager, string startMode, string options, string user, s
                   error instanceof Error &&
                   error.message.includes("timed out")
                 ) {
-                  console.error(
+                  winccoa.logWarning(
                     "Update scripts execution timed out after 5 minutes",
                   );
                 } else {
-                  console.error("Error executing update scripts:", error);
+                  winccoa.logWarning("Error executing update scripts:", error);
                 }
                 throw error;
               }
@@ -1534,7 +1543,7 @@ bool addManager(string manager, string startMode, string options, string user, s
         authMethods,
       };
     } catch (error) {
-      console.error(
+      winccoa.logWarning(
         "[listCustomRepositories] Failed to read repositories.config.json:",
         error,
       );
@@ -1563,7 +1572,7 @@ bool addManager(string manager, string startMode, string options, string user, s
 
       return config.authMethods || [];
     } catch (error) {
-      console.error(
+      winccoa.logWarning(
         "[getSupportedAuthMethods] Failed to read repositories.config.json:",
         error,
       );
@@ -1702,13 +1711,13 @@ bool addManager(string manager, string startMode, string options, string user, s
             break;
 
           default:
-            console.log(
+            winccoa.logWarning(
               `Unknown ${scriptType} type '${fileExtension}' for file: ${scriptFile}`,
             );
             break;
         }
       } catch (error) {
-        console.error(`Failed to execute ${scriptType} ${scriptFile}:`, error);
+        winccoa.logWarning(`Failed to execute ${scriptType} ${scriptFile}:`, error);
       }
     }
 
