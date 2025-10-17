@@ -1562,6 +1562,32 @@ export class MarketplaceUI {
     }
 
     /**
+     * Show update confirmation modal
+     */
+    private async showUpdateConfirmation(): Promise<boolean> {
+        if (!window.ixShowMessage) {
+            console.error('ixShowMessage not available');
+            return false;
+        }
+        
+        try {
+            const result = await window.ixShowMessage({
+                title: 'Update Repository',
+                message: 'The Update will be downloaded. Changed Managers have to be added/removed manually.',
+                actions: [
+                    { text: 'Cancel' },
+                    { text: 'Update' }
+                ]
+            });
+            
+            return result.actionIndex === 1; // Return true if "Update" was clicked
+        } catch (error) {
+            console.error('Error showing update confirmation:', error);
+            return false;
+        }
+    }
+
+    /**
      * Show clone modal using IX showMessage API
      */
     private async showCloneModal(): Promise<void> {
@@ -1766,6 +1792,10 @@ export class MarketplaceUI {
      */
     private async pullRepository(): Promise<void> {
         if (!this.currentRepository) return;
+        
+        // Show confirmation modal
+        const confirmed = await this.showUpdateConfirmation();
+        if (!confirmed) return;
         
         // Capture the repository being pulled to avoid issues if user switches repos during operation
         const repositoryBeingPulled = this.currentRepository;
