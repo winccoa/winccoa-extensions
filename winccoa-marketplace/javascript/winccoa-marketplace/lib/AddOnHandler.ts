@@ -171,10 +171,13 @@ function getDefaultProjDir(): string {
     if (fs.existsSync(configPath)) {
       const fileContent = fs.readFileSync(configPath, "utf8");
       const config = JSON.parse(fileContent);
-      
+
       if (config.storePath && typeof config.storePath === "string") {
         // Check if the storePath exists and is a directory
-        if (fs.existsSync(config.storePath) && fs.statSync(config.storePath).isDirectory()) {
+        if (
+          fs.existsSync(config.storePath) &&
+          fs.statSync(config.storePath).isDirectory()
+        ) {
           winccoa.logDebugF(
             "addonHandler",
             `Using storePath from repositories.config.json: ${config.storePath}`,
@@ -335,8 +338,14 @@ class AddOnHandler {
             "addonHandler",
             "To authenticate, use one of these methods:",
           );
-          winccoa.logWarning("addonHandler", "   - Set GITHUB_TOKEN environment variable");
-          winccoa.logWarning("addonHandler", "   - Create .env file with GITHUB_TOKEN=\"your_token\"");
+          winccoa.logWarning(
+            "addonHandler",
+            "   - Set GITHUB_TOKEN environment variable",
+          );
+          winccoa.logWarning(
+            "addonHandler",
+            '   - Create .env file with GITHUB_TOKEN="your_token"',
+          );
         }
       }
     } catch (error) {
@@ -409,7 +418,10 @@ class AddOnHandler {
     // Try environment variable first
     const envToken = process.env.GITHUB_TOKEN;
     if (envToken) {
-      winccoa.logInfo("addonHandler", "Found GITHUB_TOKEN in environment variable");
+      winccoa.logInfo(
+        "addonHandler",
+        "Found GITHUB_TOKEN in environment variable",
+      );
       return envToken;
     }
 
@@ -422,14 +434,25 @@ class AddOnHandler {
         for (const line of lines) {
           const trimmed = line.trim();
           if (trimmed.startsWith("GITHUB_TOKEN=")) {
-            const token = trimmed.substring("GITHUB_TOKEN=".length).replace(/['"]/g, "");
+            const token = trimmed
+              .substring("GITHUB_TOKEN=".length)
+              .replace(/['"]/g, "");
             if (token && token !== "your_token_here") {
-              winccoa.logInfo("addonHandler", "Found GITHUB_TOKEN in .env file");
+              winccoa.logInfo(
+                "addonHandler",
+                "Found GITHUB_TOKEN in .env file",
+              );
               return token;
             } else if (token === "your_token_here") {
-              winccoa.logInfo("addonHandler", ".env file contains placeholder token - ignoring");
+              winccoa.logInfo(
+                "addonHandler",
+                ".env file contains placeholder token - ignoring",
+              );
             } else {
-              winccoa.logInfo("addonHandler", ".env file contains empty token - ignoring");
+              winccoa.logInfo(
+                "addonHandler",
+                ".env file contains empty token - ignoring",
+              );
             }
           }
         }
@@ -453,7 +476,10 @@ class AddOnHandler {
       const authToken = this.readGitHubToken();
 
       if (!authToken) {
-        winccoa.logWarning("addonHandler", "No GitHub token found in any source");
+        winccoa.logWarning(
+          "addonHandler",
+          "No GitHub token found in any source",
+        );
         return false;
       }
 
@@ -467,10 +493,16 @@ class AddOnHandler {
         this.octokit = testOctokit;
         this.isAuthenticated = true;
 
-        winccoa.logDebugF("addonHandler", "GitHub token authentication successful!");
+        winccoa.logDebugF(
+          "addonHandler",
+          "GitHub token authentication successful!",
+        );
         return true;
       } catch (tokenError: unknown) {
-        winccoa.logWarning("Invalid GitHub token:", (tokenError as Error).message);
+        winccoa.logWarning(
+          "Invalid GitHub token:",
+          (tokenError as Error).message,
+        );
         return false;
       }
     } catch (error: unknown) {
@@ -648,7 +680,7 @@ bool addManager(string manager, string startMode, string options, string user, s
         await Promise.race([
           this.executeScripts(
             path.join(repoPath, projectName),
-            config.UnInstallScripts
+            config.UnInstallScripts,
           ),
           timeoutPromise,
         ]);
@@ -1324,7 +1356,7 @@ bool addManager(string manager, string startMode, string options, string user, s
                 await Promise.race([
                   this.executeScripts(
                     repositoryDirectory,
-                    updatedAddonConfig.UpdateScripts
+                    updatedAddonConfig.UpdateScripts,
                   ),
                   timeoutPromise,
                 ]);
@@ -1672,13 +1704,8 @@ bool addManager(string manager, string startMode, string options, string user, s
    * @param scriptFile The JavaScript file to execute
    * @param scriptType The type of script (for logging purposes)
    */
-  private async startWinCCOAnodeManager(
-    scriptFile: string,
-  ): Promise<void> {
-    winccoa.logDebugF(
-      "addonHandler",
-      `Executing script: ${scriptFile}`,
-    );
+  private async startWinCCOAnodeManager(scriptFile: string): Promise<void> {
+    winccoa.logDebugF("addonHandler", `Executing script: ${scriptFile}`);
 
     // Get current project name from WinCC OA
     const projectName = (await this.ctrlScript.start(
@@ -1719,8 +1746,6 @@ bool addManager(string manager, string startMode, string options, string user, s
     }
   }
 
-
-
   /**
    * Execute scripts based on their file extensions
    * @param repositoryPath The path to the repository
@@ -1752,16 +1777,12 @@ bool addManager(string manager, string startMode, string options, string user, s
 
             // Execute the transpiled JavaScript file
             const jsScriptFile = scriptFile.replace(/\.ts$/, ".js");
-            await this.startWinCCOAnodeManager(
-              jsScriptFile
-            );
+            await this.startWinCCOAnodeManager(jsScriptFile);
             break;
 
           case ".js":
             // For .js files, execute with Node.js using WinCC OA bootstrap
-            await this.startWinCCOAnodeManager(
-              scriptFile
-            );
+            await this.startWinCCOAnodeManager(scriptFile);
             break;
 
           default:
