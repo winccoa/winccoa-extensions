@@ -14,6 +14,9 @@
     <script type="module" src="https://cdn.jsdelivr.net/npm/@siemens/ix-icons@3.2.0/dist/ix-icons/ix-icons.esm.js"></script>
     <script nomodule src="https://cdn.jsdelivr.net/npm/@siemens/ix-icons@3.2.0/dist/ix-icons/ix-icons.js"></script>
 
+    <!-- Marked.js for markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+
     <link rel="icon" type="image/x-icon" href="favicon.png">
     
     <!-- IX Modal using REAL IX components only -->
@@ -510,41 +513,33 @@
                         
                         <div class="tab-content">
                             <div id="overview-tab" class="tab-pane active">
-                                <div class="overview-grid">
-                                    <div class="overview-card">
-                                        <h4>Repository Stats</h4>
-                                        <div class="stat-item">
-                                            <span class="stat-label">Size:</span>
-                                            <span id="repo-size">-</span>
-                                        </div>
-                                        <div class="stat-item">
-                                            <span class="stat-label">Created:</span>
-                                            <span id="repo-created">-</span>
-                                        </div>
-                                        <div class="stat-item">
-                                            <span class="stat-label">Updated:</span>
-                                            <span id="repo-updated">-</span>
-                                        </div>
-                                        <div class="stat-item">
-                                            <span class="stat-label">Clone URL:</span>
-                                            <a id="repo-clone-url" href="#" target="_blank" rel="noopener noreferrer" style="font-family: 'Courier New', monospace; font-size: 12px; word-break: break-all; color: var(--theme-color-primary); text-decoration: none;">-</a>
+                                <div class="overview-layout">
+                                    <!-- README Section (Left) -->
+                                    <div id="readme-section" class="readme-column" style="display: none;">
+                                        <div id="readme-content" class="readme-content">
+                                            <!-- README will be rendered here -->
                                         </div>
                                     </div>
                                     
-                                    <div class="overview-card">
-                                        <h4>Local Status</h4>
-                                        <div id="local-status" class="status-info">
-                                            <ix-icon name="info" class="status-icon"></ix-icon>
-                                            <span>Not cloned locally</span>
-                                        </div>
-                                        <div id="version-info" class="version-info" style="display: none; margin-top: 12px;">
+                                    <!-- Repository Information (Right) -->
+                                    <div class="stats-column">
+                                        <div class="overview-card">
+                                            <h4>Repository Information</h4>
                                             <div class="stat-item">
-                                                <span class="stat-label">Current Version:</span>
-                                                <span id="current-version">-</span>
+                                                <span class="stat-label">Size:</span>
+                                                <span id="repo-size">-</span>
                                             </div>
-                                            <div id="update-available" class="stat-item" style="display: none;">
-                                                <span class="stat-label">Latest Version:</span>
-                                                <span id="latest-version" style="color: var(--theme-color-success); font-weight: 600;">-</span>
+                                            <div class="stat-item">
+                                                <span class="stat-label">Created:</span>
+                                                <span id="repo-created">-</span>
+                                            </div>
+                                            <div class="stat-item">
+                                                <span class="stat-label">Updated:</span>
+                                                <span id="repo-updated">-</span>
+                                            </div>
+                                            <div class="stat-item">
+                                                <span class="stat-label">Clone URL:</span>
+                                                <a id="repo-clone-url" href="#" target="_blank" rel="noopener noreferrer" style="font-family: 'Courier New', monospace; font-size: 12px; word-break: break-all; color: var(--theme-color-primary); text-decoration: none;">-</a>
                                             </div>
                                         </div>
                                     </div>

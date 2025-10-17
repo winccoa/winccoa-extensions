@@ -316,6 +316,36 @@ ix-menu ix-menu-item ix-icon {
 }
 
 /* Overview Tab */
+.overview-layout {
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    gap: 24px;
+    max-width: none;
+}
+
+/* On smaller screens, stack vertically */
+@media (max-width: 1200px) {
+    .overview-layout {
+        grid-template-columns: 1fr;
+    }
+    
+    .readme-column {
+        order: 2;
+    }
+    
+    .stats-column {
+        order: 1;
+    }
+}
+
+.readme-column {
+    min-width: 0; /* Prevent overflow */
+}
+
+.stats-column {
+    min-width: 0; /* Prevent overflow */
+}
+
 .overview-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
