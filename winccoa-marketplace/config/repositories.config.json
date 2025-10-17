@@ -1,5 +1,6 @@
 {
   "authMethods": ["Token"],
+  "storePath": "D:\\WinCC_OA_Proj\\3.21",
   "customRepos": [
     {
       "name": "Example Repository 1",

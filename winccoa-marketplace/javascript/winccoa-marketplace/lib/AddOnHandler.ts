@@ -164,10 +164,46 @@ function getWinCCOARegistryValue(
 }
 
 /**
- * Get the target clone directory from Windows registry or fall back to current directory
- * Registry path: HKEY_LOCAL_MACHINE\SOFTWARE\ETM\WinCC_OA\3.21
+ * Get the target clone directory from repositories.config.json storePath, Windows registry, or fall back to current directory
+ * Priority order:
+ * 1. storePath from repositories.config.json (if exists and is a valid directory)
+ * 2. Windows registry PROJECTDIR key
+ * 3. Current working directory
  */
 function getDefaultProjDir(): string {
+  // First, try to read storePath from repositories.config.json
+  try {
+    const configPath = path.resolve(
+      __dirname,
+      "../../../config/repositories.config.json",
+    );
+    if (fs.existsSync(configPath)) {
+      const fileContent = fs.readFileSync(configPath, "utf8");
+      const config = JSON.parse(fileContent);
+      
+      if (config.storePath && typeof config.storePath === "string") {
+        // Check if the storePath exists and is a directory
+        if (fs.existsSync(config.storePath) && fs.statSync(config.storePath).isDirectory()) {
+          winccoa.logDebugF(
+            "addonHandler",
+            `Using storePath from repositories.config.json: ${config.storePath}`,
+          );
+          return config.storePath;
+        } else {
+          winccoa.logWarning(
+            `storePath from repositories.config.json does not exist or is not a directory: ${config.storePath}`,
+          );
+        }
+      }
+    }
+  } catch (error) {
+    winccoa.logDebugF(
+      "addonHandler",
+      `Could not read storePath from repositories.config.json: ${(error as Error).message}`,
+    );
+  }
+
+  // Fall back to Windows registry
   // TODO: check how to read on linux -> pvssInst.conf
   const projDir = getWinCCOARegistryValue("PROJECTDIR", "PROJECTDIR");
   return projDir || process.cwd();
