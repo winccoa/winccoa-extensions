@@ -617,8 +617,7 @@ bool addManager(string manager, string startMode, string options, string user, s
         await Promise.race([
           this.executeScripts(
             path.join(repoPath, projectName),
-            config.UnInstallScripts,
-            ScriptType.UninstallScript,
+            config.UnInstallScripts
           ),
           timeoutPromise,
         ]);
@@ -1294,8 +1293,7 @@ bool addManager(string manager, string startMode, string options, string user, s
                 await Promise.race([
                   this.executeScripts(
                     repositoryDirectory,
-                    updatedAddonConfig.UpdateScripts,
-                    ScriptType.UpdateScript,
+                    updatedAddonConfig.UpdateScripts
                   ),
                   timeoutPromise,
                 ]);
@@ -1645,11 +1643,10 @@ bool addManager(string manager, string startMode, string options, string user, s
    */
   private async startWinCCOAnodeManager(
     scriptFile: string,
-    scriptType: string,
   ): Promise<void> {
     winccoa.logDebugF(
       "addonHandler",
-      `Executing ${scriptType} script: ${scriptFile}`,
+      `Executing script: ${scriptFile}`,
     );
 
     // Get current project name from WinCC OA
@@ -1677,16 +1674,16 @@ bool addManager(string manager, string startMode, string options, string user, s
       if (result.exitCode === 0) {
         winccoa.logDebugF(
           "addonHandler",
-          `Successfully executed ${scriptType} script: ${scriptFile}`,
+          `Successfully executed script: ${scriptFile}`,
         );
       } else {
         winccoa.logWarning(
-          `Failed to execute ${scriptType} script ${scriptFile}. Exit code: ${result.exitCode}, Error: ${result.stderr}`,
+          `Failed to execute script ${scriptFile}. Exit code: ${result.exitCode}, Error: ${result.stderr}`,
         );
       }
     } else {
       winccoa.logWarning(
-        `Could not determine WinCC OA installation directory for ${scriptType} script: ${scriptFile}`,
+        `Could not determine WinCC OA installation directory for script: ${scriptFile}`,
       );
     }
   }
@@ -1702,17 +1699,14 @@ bool addManager(string manager, string startMode, string options, string user, s
   private async executeScripts(
     repositoryPath: string,
     scripts: string[],
-    scriptType: ScriptType = ScriptType.Script,
   ): Promise<void> {
     for (const scriptFile of scripts) {
       try {
         const fileExtension = path.extname(scriptFile).toLowerCase();
-        console.log(`Executing ${scriptType}: ${scriptFile}`);
 
         switch (fileExtension) {
           case ".ctl":
             // For .ctl files, use WCCOActrl manager
-            console.log(`Executing CTRL ${scriptType}: ${scriptFile}`);
             await this.startManagers(repositoryPath, [
               {
                 exeName: "WCCOActrl",
@@ -1723,35 +1717,30 @@ bool addManager(string manager, string startMode, string options, string user, s
 
           case ".ts":
             // For .ts files, build TypeScript project and execute the transpiled JS file
-            console.log(
-              `Building TypeScript project for ${scriptType}: ${scriptFile}`,
-            );
             await NodeInstaller.installAndBuild(repositoryPath);
 
             // Execute the transpiled JavaScript file
             const jsScriptFile = scriptFile.replace(/\.ts$/, ".js");
             await this.startWinCCOAnodeManager(
-              jsScriptFile,
-              `TypeScript ${scriptType}`,
+              jsScriptFile
             );
             break;
 
           case ".js":
             // For .js files, execute with Node.js using WinCC OA bootstrap
             await this.startWinCCOAnodeManager(
-              scriptFile,
-              `JavaScript ${scriptType}`,
+              scriptFile
             );
             break;
 
           default:
             winccoa.logWarning(
-              `Unknown ${scriptType} type '${fileExtension}' for file: ${scriptFile}`,
+              `Unknown type '${fileExtension}' for file: ${scriptFile}`,
             );
             break;
         }
       } catch (error) {
-        winccoa.logWarning(`Failed to execute ${scriptType} ${scriptFile}:`, error);
+        winccoa.logWarning(`Failed to execute ${scriptFile}:`, error);
       }
     }
 
