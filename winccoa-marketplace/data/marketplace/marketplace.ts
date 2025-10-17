@@ -323,7 +323,7 @@ export class MarketplaceUI {
         
         this.currentMode = 'marketplace';
         this.updateMenuSelection();
-        this.updateTitle(); // Update title immediately before loading
+        await this.updateTitle(); // Update title immediately before loading
         
         try {
             await this.loadAllData();
@@ -351,7 +351,7 @@ export class MarketplaceUI {
         
         this.currentMode = 'registered';
         this.updateMenuSelection();
-        this.updateTitle(); // Update title immediately before loading
+        await this.updateTitle(); // Update title immediately before loading
         
         try {
             await this.loadAllData();
@@ -388,13 +388,25 @@ export class MarketplaceUI {
     /**
      * Update the title based on current mode
      */
-    private updateTitle(): void {
+    private async updateTitle(): Promise<void> {
         const title = document.getElementById('repositories-title');
         const orgContainer = document.querySelector('.organization-selector');
         
+        // Fetch current project name
+        let projectName = '';
+        try {
+            const response = await this.makeApiCall('/marketplace/currentProject');
+            if (response.ok) {
+                const data = await response.json();
+                projectName = data.project || '';
+            }
+        } catch (error) {
+            console.warn('Could not fetch current project name:', error);
+        }
+        
         if (title) {
             if (this.currentMode === 'marketplace') {
-                title.textContent = 'Marketplace';
+                title.textContent = projectName ? `Marketplace for ${projectName}` : 'WinCC OA';
                 // Show organization input in marketplace mode
                 if (orgContainer) {
                     (orgContainer as HTMLElement).style.display = '';
@@ -478,7 +490,7 @@ export class MarketplaceUI {
         this.currentLoadController = new AbortController();
         
         // Set initial title immediately
-        this.updateTitle();
+        await this.updateTitle();
         
         // Check PMON credentials status and update icon
         this.updatePmonIconStatus();
@@ -795,7 +807,7 @@ export class MarketplaceUI {
             // Check if registered by comparing subproject name (if available) or repository name
             const isRegistered = this.registeredProjects.includes(this.getRepositoryIdentifier(repo));
             const statusClass = isRegistered ? 'registered' : (repo.cloned ? 'cloned' : '');
-            const statusTooltip = isRegistered ? 'Registered' : (repo.cloned ? 'Cloned' : 'Not cloned');
+            const statusTooltip = isRegistered ? 'Installed' : (repo.cloned ? 'Downloaded' : 'Not downloaded');
             const isLoading = repo.loadingAction != null;
             const loadingText = repo.loadingAction 
                 ? `${repo.loadingAction.charAt(0).toUpperCase() + repo.loadingAction.slice(1)} in progress...`
@@ -1083,15 +1095,10 @@ export class MarketplaceUI {
         // If repository is loading, disable all buttons
         if (isLoading) {
             cloneBtn?.setAttribute('disabled', '');
-            cloneBtn?.setAttribute('title', 'Please wait: Operation in progress');
             pullBtn?.setAttribute('disabled', '');
-            pullBtn?.setAttribute('title', 'Please wait: Operation in progress');
             registerBtn?.setAttribute('disabled', '');
-            registerBtn?.setAttribute('title', 'Please wait: Operation in progress');
             unregisterBtn?.setAttribute('disabled', '');
-            unregisterBtn?.setAttribute('title', 'Please wait: Operation in progress');
             removeBtn?.setAttribute('disabled', '');
-            removeBtn?.setAttribute('title', 'Please wait: Operation in progress');
             return; // Don't update status text while loading
         }
         
@@ -1099,7 +1106,7 @@ export class MarketplaceUI {
             if (statusElement) {
                 statusElement.innerHTML = `
                     <ix-icon name="success" class="status-icon" style="color: var(--theme-color-success);"></ix-icon>
-                    <span>Registered as subproject</span>
+                    <span>Installed as subproject</span>
                 `;
             }
             cloneBtn?.setAttribute('disabled', '');
@@ -1112,12 +1119,12 @@ export class MarketplaceUI {
             registerBtn?.setAttribute('disabled', '');
             unregisterBtn?.removeAttribute('disabled');
             removeBtn?.setAttribute('disabled', ''); // Can't delete if registered
-            removeBtn?.setAttribute('title', 'Cannot delete: Repository is registered. Unregister it first.');
+            removeBtn?.setAttribute('title', 'Cannot delete: Repository is installed. Uninstall it first.');
         } else if (isCloned) {
             if (statusElement) {
                 statusElement.innerHTML = `
                     <ix-icon name="download" class="status-icon" style="color: var(--theme-color-primary);"></ix-icon>
-                    <span>Cloned locally</span>
+                    <span>Downloaded locally</span>
                 `;
             }
             cloneBtn?.setAttribute('disabled', '');
@@ -1138,22 +1145,22 @@ export class MarketplaceUI {
             }
             
             unregisterBtn?.setAttribute('disabled', '');
-            removeBtn?.removeAttribute('disabled'); // Enable remove for cloned but not registered
-            removeBtn?.setAttribute('title', 'Remove the cloned repository from local storage');
+            removeBtn?.removeAttribute('disabled'); // Enable remove for downloaded but not installed
+            removeBtn?.setAttribute('title', 'Remove the downloaded repository from local storage');
         } else {
             if (statusElement) {
                 statusElement.innerHTML = `
                     <ix-icon name="info" class="status-icon"></ix-icon>
-                    <span>Not cloned locally</span>
+                    <span>Not downloaded locally</span>
                 `;
             }
             cloneBtn?.removeAttribute('disabled');
             pullBtn?.setAttribute('disabled', '');
-            registerBtn?.removeAttribute('disabled'); // Enable register - will clone first if needed
+            registerBtn?.removeAttribute('disabled'); // Enable register - will download first if needed
             registerBtn?.setAttribute('title', 'Install subproject (will download first)');
             unregisterBtn?.setAttribute('disabled', '');
-            removeBtn?.setAttribute('disabled', ''); // Can't remove if not cloned
-            removeBtn?.setAttribute('title', 'Cannot remove: Repository is not cloned');
+            removeBtn?.setAttribute('disabled', ''); // Can't remove if not downloaded
+            removeBtn?.setAttribute('title', 'Cannot remove: Repository is not downloaded');
         }
     }
 
@@ -1824,22 +1831,22 @@ export class MarketplaceUI {
                 // Parse the JSON response with changes and fileContent
                 const data = await response.json();
                 
+                // Reload local repositories to get updated version information
+                await this.loadLocalRepositories();
+                
                 // Update in repositories array
                 if (repoIndex !== -1) {
                     if (data.fileContent) {
                         this.repositories[repoIndex].fileContent = data.fileContent;
                     }
                     this.repositories[repoIndex].loadingAction = null;
-                }
-                
-                // If this is still the current repository, update it and refresh UI
-                if (this.currentRepository?.name === repositoryBeingPulled.name) {
-                    if (data.fileContent) {
-                        this.currentRepository.fileContent = data.fileContent;
+                    
+                    // If this is the current repository, update the reference to the reloaded data
+                    if (this.currentRepository?.name === repositoryBeingPulled.name) {
+                        this.currentRepository = this.repositories[repoIndex];
+                        // Refresh details to show updated version and metadata
+                        this.updateRepositoryDetails(this.currentRepository);
                     }
-                    this.currentRepository.loadingAction = null;
-                    // Refresh details to show updated fileContent
-                    this.updateRepositoryDetails(this.currentRepository);
                 }
                 
                 this.renderRepositoryList(); // Re-render to clear loading state
@@ -1966,7 +1973,7 @@ export class MarketplaceUI {
         
         // Check if fileContent is available (should be available after clone or if already cloned)
         if (!repositoryBeingRegistered.fileContent) {
-            this.showError('Cannot register: Repository metadata not available. Please clone or pull the repository first.');
+            this.showError('Cannot install: Repository metadata not available. Please download or update the repository first.');
             return;
         }
         
@@ -1996,7 +2003,7 @@ export class MarketplaceUI {
             const result = await response.text();
             
             if (response.ok) {
-                this.showSuccess('Subproject registered successfully');
+                this.showSuccess('Subproject installed successfully');
                 
                 // Reload local repositories to get updated version and subproject name
                 await this.loadLocalRepositories();
@@ -2030,14 +2037,14 @@ export class MarketplaceUI {
                 
                 this.renderRepositoryList(); // Refresh to show status change
             } else {
-                this.showError('Failed to register subproject: ' + result);
+                this.showError('Failed to install subproject: ' + result);
             }
         } catch (error) {
             const apiError = error as ApiError;
             if (apiError.isSSLError) {
                 this.showError('SSL Certificate Issue: ' + apiError.message);
             } else {
-                this.showError('Failed to register subproject: ' + apiError.message);
+                this.showError('Failed to install subproject: ' + apiError.message);
             }
         } finally {
             // Clear loading state
@@ -2181,7 +2188,7 @@ export class MarketplaceUI {
                 return true; // Success
             } else {
                 const errorText = await response.text();
-                this.showError('Failed to clone repository: ' + errorText);
+                this.showError('Failed to download repository: ' + errorText);
                 return false; // Failed
             }
         } catch (error) {
@@ -2189,7 +2196,7 @@ export class MarketplaceUI {
             if (apiError.isSSLError) {
                 this.showError('SSL Certificate Issue: ' + apiError.message);
             } else {
-                this.showError('Failed to clone repository: ' + apiError.message);
+                this.showError('Failed to download repository: ' + apiError.message);
             }
             return false; // Failed
         } finally {
@@ -2222,13 +2229,13 @@ export class MarketplaceUI {
         
         // Check if fileContent is available
         if (!repositoryBeingUnregistered.fileContent) {
-            this.showError('Cannot unregister: Repository metadata not available.');
+            this.showError('Cannot uninstall: Repository metadata not available.');
             return;
         }
         
         // Check if repository is cloned
         if (!repositoryBeingUnregistered.cloned) {
-            this.showError('Cannot unregister: Repository is not cloned.');
+            this.showError('Cannot uninstall: Repository is not downloaded.');
             return;
         }
         
@@ -2268,8 +2275,8 @@ export class MarketplaceUI {
             
             if (response.ok) {
                 const successMsg = result.deleteRepository 
-                    ? 'Subproject unregistered and repository deleted successfully'
-                    : 'Subproject unregistered successfully';
+                    ? 'Subproject uninstalled and repository deleted successfully'
+                    : 'Subproject uninstalled successfully';
                 this.showSuccess(successMsg);
                 
                 // Remove the subproject name (not repository name) from registered projects
@@ -2323,14 +2330,14 @@ export class MarketplaceUI {
                 
                 this.renderRepositoryList(); // Refresh to show status change
             } else {
-                this.showError('Failed to unregister subproject: ' + resultText);
+                this.showError('Failed to uninstall subproject: ' + resultText);
             }
         } catch (error) {
             const apiError = error as ApiError;
             if (apiError.isSSLError) {
                 this.showError('SSL Certificate Issue: ' + apiError.message);
             } else {
-                this.showError('Failed to unregister subproject: ' + apiError.message);
+                this.showError('Failed to uninstall subproject: ' + apiError.message);
             }
         } finally {
             // Clear loading state

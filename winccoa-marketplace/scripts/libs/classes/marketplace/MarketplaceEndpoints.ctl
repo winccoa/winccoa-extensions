@@ -41,6 +41,7 @@ class MarketplaceEndpoints
     httpConnect(remove, MARKETPLACE_URL_PREFIX + "/remove", "application/json");
     httpConnect(setPmonCredentials, MARKETPLACE_URL_PREFIX + "/setPmonCredentials", "application/json");
     httpConnect(pmonCredentialsAreSet, MARKETPLACE_URL_PREFIX + "/pmonCredentialsAreSet", "application/json");
+    httpConnect(currentProject, MARKETPLACE_URL_PREFIX + "/currentProject", "application/json");
     httpOnConnectionClose(closeCB);
   }
 
@@ -303,6 +304,12 @@ class MarketplaceEndpoints
     {
       return makeDynString(jsonEncode(makeMapping("error", "No valid credentials set")), "Status: 401 Unauthorized");
     }
+  }
+
+  //--------------------------------------------------------------------------------
+  public static dyn_string currentProject()
+  {
+    return makeDynString(jsonEncode(makeMapping("project", PROJ)), "Status: 200 OK");
   }
 
   //--------------------------------------------------------------------------------
