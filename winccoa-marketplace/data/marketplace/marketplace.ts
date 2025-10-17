@@ -1694,13 +1694,6 @@ export class MarketplaceUI {
                 // Hide any previous error
                 if (errorMessage) errorMessage.style.display = 'none';
                 
-                if (!username || !password) {
-                    if (errorMessage && errorText) {
-                        errorText.textContent = 'Please enter both username and password';
-                        errorMessage.style.display = 'block';
-                    }
-                    return;
-                }
                 
                 // Disable button while processing
                 loginBtn.setAttribute('disabled', '');
