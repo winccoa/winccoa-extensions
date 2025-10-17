@@ -8,6 +8,7 @@ interface AddonConfig {
   Managers?: ManagerConfig[];
   Dplists?: string[];
   UpdateScripts?: string[];
+  UnInstallScripts?: string[];
 }
 
 interface ManagerConfig {

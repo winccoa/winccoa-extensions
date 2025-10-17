@@ -8,14 +8,12 @@ import {
   WinccoaCtrlScript,
   WinccoaCtrlType,
   WinccoaManager,
-  WinccoaVersionDetails,
 } from "winccoa-manager";
 import { AsciiManager } from "./AsciiManager";
 import { CommandExecutor } from "./CommandExecutor";
 import { PathResolver } from "./PathResolver";
 import { NodeInstaller } from "./NodeInstaller";
-import { AddonConfig, ManagerConfig } from "./AddonConfig";
-import { connect } from "http2";
+import { AddonConfig } from "./AddonConfig";
 
 /**
  * Interface for manager configuration
@@ -31,25 +29,37 @@ export { AddOnHandler };
 /**
  * WinCC OA AddOn Handler for managing GitHub repositories
  *
- * AUTHENTICATION SETUP:
+ * SECURE AUTHENTICATION METHODS:
  *
- * 1. Personal Access Token (Recommended):
- *    - Go to GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)
- *    - Click "Generate new token"
- *    - Select scopes: "repo" (for private repos) or "public_repo" (for public repos)
- *    - Copy the generated token
- *    - Set environment variable: GITHUB_TOKEN=your_token_here
- *    - Or pass directly to constructor: new AddOnHandler('your_token_here')
+ * 1. Environment Variables (Best for Production & WinCC OA):
+ *    - Set: GITHUB_TOKEN=ghp_your_token_here
+ *    - const handler = new AddOnHandler(); // Auto-detects token
+ *    - Keeps tokens out of source code
+ *    - Secure for scripts and CI/CD
+ *    - Perfect for WinCC OA integration
  *
- * 2. Environment Variable Setup:
- *    Windows PowerShell: $env:GITHUB_TOKEN="your_token_here"
- *    Windows CMD: set GITHUB_TOKEN=your_token_here
- *    Linux/Mac: export GITHUB_TOKEN=your_token_here
+ * 2. Token Auth Factory Method (WinCC OA Compatible):
+ *    - const handler = await AddOnHandler.createWithTokenAuth();
+ *    - Requires GITHUB_TOKEN environment variable to be set
+ *    - No interactive input - perfect for WinCC OA context
+ *    - Clean error messages if token not found
  *
- * 3. Benefits of Authentication:
+ * How to Create Personal Access Token:
+ *    1. GitHub.com > Settings > Developer settings > Personal access tokens
+ *    2. Click "Generate new token (classic)"
+ *    3. Select scopes: "repo" (private) or "public_repo" (public only)
+ *    4. Copy token immediately (shown only once)
+ *
+ * Environment Variable Setup:
+ *    Windows PowerShell: $env:GITHUB_TOKEN="ghp_your_token_here"
+ *    Windows CMD: set GITHUB_TOKEN=ghp_your_token_here
+ *    Linux/Mac: export GITHUB_TOKEN="ghp_your_token_here"
+ *
+ * Authentication Benefits:
  *    - Access private repositories
  *    - Higher rate limits (5000 vs 60 requests/hour)
  *    - Access to organization repositories
+ *    - Full GitHub API functionality
  */
 
 const winccoa = new WinccoaManager();
@@ -145,10 +155,49 @@ function getWinCCOARegistryValue(
 }
 
 /**
- * Get the target clone directory from Windows registry or fall back to current directory
- * Registry path: HKEY_LOCAL_MACHINE\SOFTWARE\ETM\WinCC_OA\3.21
+ * Get the target clone directory from repositories.config.json storePath, Windows registry, or fall back to current directory
+ * Priority order:
+ * 1. storePath from repositories.config.json (if exists and is a valid directory)
+ * 2. Windows registry PROJECTDIR key
+ * 3. Current working directory
  */
 function getDefaultProjDir(): string {
+  // First, try to read storePath from repositories.config.json
+  try {
+    const configPath = path.resolve(
+      __dirname,
+      "../../../config/repositories.config.json",
+    );
+    if (fs.existsSync(configPath)) {
+      const fileContent = fs.readFileSync(configPath, "utf8");
+      const config = JSON.parse(fileContent);
+
+      if (config.storePath && typeof config.storePath === "string") {
+        // Check if the storePath exists and is a directory
+        if (
+          fs.existsSync(config.storePath) &&
+          fs.statSync(config.storePath).isDirectory()
+        ) {
+          winccoa.logDebugF(
+            "addonHandler",
+            `Using storePath from repositories.config.json: ${config.storePath}`,
+          );
+          return config.storePath;
+        } else {
+          winccoa.logWarning(
+            `storePath from repositories.config.json does not exist or is not a directory: ${config.storePath}`,
+          );
+        }
+      }
+    }
+  } catch (error) {
+    winccoa.logDebugF(
+      "addonHandler",
+      `Could not read storePath from repositories.config.json: ${(error as Error).message}`,
+    );
+  }
+
+  // Fall back to Windows registry
   // TODO: check how to read on linux -> pvssInst.conf
   const projDir = getWinCCOARegistryValue("PROJECTDIR", "PROJECTDIR");
   return projDir || process.cwd();
@@ -198,10 +247,10 @@ function getWinCCOAInstallDir(winccoa: WinccoaManager): string | null {
       return envInstallBase;
     }
 
-    winccoa.logSevere("Could not determine WinCC OA installation directory");
+    winccoa.logWarning("Could not determine WinCC OA installation directory");
     return null;
   } catch (error) {
-    winccoa.logSevere(
+    winccoa.logWarning(
       "Error while determining WinCC OA installation directory:",
       (error as Error).message,
     );
@@ -217,19 +266,10 @@ class AddOnHandler {
   private pmonUser: string = "";
   private pmonPassword: string = "";
 
-  constructor(authToken?: string) {
-    if (authToken) {
-      // Initialize octokit with authentication
-      this.octokit = new Octokit({
-        auth: authToken,
-      });
-      this.isAuthenticated = true;
-      winccoa.logDebugF("addonHandler", "GitHub authentication enabled");
-    } else {
-      // Initialize octokit for public repositories only
-      this.octokit = new Octokit();
-      winccoa.logWarning("No authentication - limited to public repositories");
-    }
+  constructor() {
+    // Initialize octokit without authentication first
+    this.octokit = new Octokit();
+    this.isAuthenticated = false;
 
     // Get WinCC OA version
     const details = winccoa.getVersionInfo();
@@ -246,6 +286,94 @@ class AddOnHandler {
 
     // Get WinCC OA default project directory
     this._defaultDirectory = getDefaultProjDir();
+
+    // Setup authentication synchronously
+    this.setupSyncAuthentication();
+  }
+
+  /**
+   * Setup synchronous authentication (Token method only)
+   */
+  private setupSyncAuthentication(): void {
+    try {
+      const authMethods = this.getSupportedAuthMethods();
+
+      console.log("auth methods", authMethods);
+
+      if (authMethods.length === 0) {
+        winccoa.logInfo(
+          "addonHandler",
+          "No authentication methods configured - using public access only",
+        );
+        return;
+      }
+
+      winccoa.logInfo(
+        "addonHandler",
+        `Configured authentication methods: ${authMethods.join(", ")}`,
+      );
+
+      // Check if Token method is available
+      const hasToken = authMethods.includes("Token");
+
+      if (hasToken) {
+        // Check for Token authentication using multiple sources
+        const authToken = this.readGitHubToken();
+        if (authToken) {
+          winccoa.logInfo(
+            "addonHandler",
+            "Using GitHub token for authentication (Token method)",
+          );
+          this.octokit = new Octokit({
+            auth: authToken,
+          });
+          this.isAuthenticated = true;
+          return;
+        } else {
+          winccoa.logWarning(
+            "addonHandler",
+            "Token authentication configured but no GitHub token found",
+          );
+          winccoa.logWarning(
+            "addonHandler",
+            "To authenticate, use one of these methods:",
+          );
+          winccoa.logWarning(
+            "addonHandler",
+            "   - Set GITHUB_TOKEN environment variable",
+          );
+          winccoa.logWarning(
+            "addonHandler",
+            '   - Create .env file with GITHUB_TOKEN="your_token"',
+          );
+        }
+      }
+    } catch (error) {
+      winccoa.logWarning("Error setting up authentication:", error);
+      winccoa.logInfo("addonHandler", "Using public access only");
+    }
+  }
+
+  /**
+   * Create an AddOnHandler instance with token-based authentication
+   * Uses GITHUB_TOKEN environment variable for secure authentication
+   * @returns Promise<AddOnHandler> with authenticated instance
+   */
+  static async createWithTokenAuth(): Promise<AddOnHandler> {
+    const handler = new AddOnHandler();
+    const success = await handler.authenticateWithToken();
+    if (!success) {
+      throw new Error("Token authentication failed");
+    }
+    return handler;
+  }
+
+  /**
+   * Get authentication status
+   * @returns boolean indicating if handler is authenticated
+   */
+  isAuthenticatedUser(): boolean {
+    return this.isAuthenticated;
   }
 
   getDefaultAddonPath(): string {
@@ -272,10 +400,113 @@ class AddOnHandler {
       await this.octokit.rest.users.getAuthenticated();
       return true;
     } catch (error) {
-      winccoa.logSevere(
+      winccoa.logWarning(
         "Authentication validation failed:",
         (error as any).message,
       );
+      return false;
+    }
+  }
+
+  /**
+   * Read GitHub token from multiple sources in order of preference:
+   * 1. Environment variable GITHUB_TOKEN
+   * 2. .env file in project root
+   * @returns The token string or null if not found
+   */
+  private readGitHubToken(): string | null {
+    // Try environment variable first
+    const envToken = process.env.GITHUB_TOKEN;
+    if (envToken) {
+      winccoa.logInfo(
+        "addonHandler",
+        "Found GITHUB_TOKEN in environment variable",
+      );
+      return envToken;
+    }
+
+    // Try .env file in project root
+    try {
+      const envPath = path.join(__dirname, "..", ".env");
+      if (fs.existsSync(envPath)) {
+        const envContent = fs.readFileSync(envPath, "utf8");
+        const lines = envContent.split("\n");
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith("GITHUB_TOKEN=")) {
+            const token = trimmed
+              .substring("GITHUB_TOKEN=".length)
+              .replace(/['"]/g, "");
+            if (token && token !== "your_token_here") {
+              winccoa.logInfo(
+                "addonHandler",
+                "Found GITHUB_TOKEN in .env file",
+              );
+              return token;
+            } else if (token === "your_token_here") {
+              winccoa.logInfo(
+                "addonHandler",
+                ".env file contains placeholder token - ignoring",
+              );
+            } else {
+              winccoa.logInfo(
+                "addonHandler",
+                ".env file contains empty token - ignoring",
+              );
+            }
+          }
+        }
+      }
+    } catch (error) {
+      winccoa.logInfo("addonHandler", "Could not read .env file");
+    }
+
+    winccoa.logInfo("addonHandler", "GITHUB_TOKEN not found in any source");
+    return null;
+  }
+
+  /**
+   * Authenticate with GitHub using a personal access token
+   * Uses multiple sources to find GITHUB_TOKEN for secure authentication
+   * @returns Promise<boolean> indicating success/failure
+   */
+  async authenticateWithToken(): Promise<boolean> {
+    try {
+      // Check for token from multiple sources
+      const authToken = this.readGitHubToken();
+
+      if (!authToken) {
+        winccoa.logWarning(
+          "addonHandler",
+          "No GitHub token found in any source",
+        );
+        return false;
+      }
+
+      // Test the token by creating a new Octokit instance
+      const testOctokit = new Octokit({ auth: authToken });
+
+      try {
+        await testOctokit.rest.users.getAuthenticated();
+
+        // If successful, update the main instance
+        this.octokit = testOctokit;
+        this.isAuthenticated = true;
+
+        winccoa.logDebugF(
+          "addonHandler",
+          "GitHub token authentication successful!",
+        );
+        return true;
+      } catch (tokenError: unknown) {
+        winccoa.logWarning(
+          "Invalid GitHub token:",
+          (tokenError as Error).message,
+        );
+        return false;
+      }
+    } catch (error: unknown) {
+      winccoa.logWarning("Token authentication failed:", error);
       return false;
     }
   }
@@ -418,7 +649,59 @@ bool addManager(string manager, string startMode, string options, string user, s
     repoPath: string,
     projectName: string,
     deleteFiles: boolean,
+    config?: AddonConfig,
   ): Promise<number> {
+    // Execute uninstall scripts if available
+    if (
+      config &&
+      config.UnInstallScripts &&
+      config.UnInstallScripts.length > 0
+    ) {
+      console.log(
+        `Executing ${config.UnInstallScripts.length} uninstall script(s)...`,
+      );
+
+      // Create a timeout promise that rejects after 5 minutes
+      const timeoutPromise = new Promise<void>((_, reject) => {
+        setTimeout(
+          () => {
+            reject(
+              new Error(
+                "Uninstall scripts execution timed out after 5 minutes",
+              ),
+            );
+          },
+          5 * 60 * 1000,
+        ); // 5 minutes in milliseconds
+      });
+
+      // Race the execution against the timeout
+      try {
+        await Promise.race([
+          this.executeScripts(
+            path.join(repoPath, projectName),
+            config.UnInstallScripts,
+          ),
+          timeoutPromise,
+        ]);
+        console.log("Uninstall scripts completed successfully");
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("timed out")) {
+          winccoa.logWarning(
+            "Uninstall scripts execution timed out after 5 minutes",
+          );
+        } else {
+          winccoa.logWarning("Error executing uninstall scripts:", error);
+        }
+        // Continue with unregistration even if scripts fail
+        console.log(
+          "Continuing with project unregistration despite script errors",
+        );
+      }
+    } else {
+      console.log("No uninstall scripts to execute");
+    }
+
     const ret = (await this.ctrlScript.start(
       "unregisterSubProj",
       [repoPath, projectName, deleteFiles],
@@ -889,6 +1172,7 @@ bool addManager(string manager, string startMode, string options, string user, s
         : [],
       Dplists: packageJson.Dplists || [],
       UpdateScripts: packageJson.UpdateScripts || [],
+      UnInstallScripts: packageJson.UnInstallScripts || [],
     };
   }
 
@@ -1070,16 +1354,13 @@ bool addManager(string manager, string startMode, string options, string user, s
               // Race the execution against the timeout
               try {
                 await Promise.race([
-                  this.executeUpdateScripts(
+                  this.executeScripts(
                     repositoryDirectory,
                     updatedAddonConfig.UpdateScripts,
                   ),
                   timeoutPromise,
                 ]);
-                winccoa.logDebugF(
-                  "addonHandler",
-                  "Update scripts completed successfully",
-                );
+                console.log("Update scripts completed successfully");
               } catch (error) {
                 if (
                   error instanceof Error &&
@@ -1326,8 +1607,8 @@ bool addManager(string manager, string startMode, string options, string user, s
     }
   }
 
-  listCustomRepositories(): object[] {
-    // Read repositories.config.json and return an array of repository info objects
+  listCustomRepositories(): { repositories: object[]; authMethods: string[] } {
+    // Read repositories.config.json and return repository info and auth methods
     try {
       const configPath = path.resolve(
         __dirname,
@@ -1337,20 +1618,57 @@ bool addManager(string manager, string startMode, string options, string user, s
         winccoa.logWarning(
           `[listCustomRepositories] repositories.config.json not found at ${configPath}`,
         );
-        return [];
+        return { repositories: [], authMethods: [] };
       }
       const fileContent = fs.readFileSync(configPath, "utf8");
-      const repos = JSON.parse(fileContent);
+      const config = JSON.parse(fileContent);
 
-      return repos
+      // Handle new structure with customRepos array and authMethods
+      const repositories = (config.customRepos || [])
         .filter((repo: any) => !!repo.url)
         .map((repo: any) => ({
           cloneUrl: repo.url,
           name: repo.name,
         }));
+
+      const authMethods = config.authMethods || [];
+
+      return {
+        repositories,
+        authMethods,
+      };
     } catch (error) {
       winccoa.logWarning(
         "[listCustomRepositories] Failed to read repositories.config.json:",
+        error,
+      );
+      return { repositories: [], authMethods: [] };
+    }
+  }
+
+  /**
+   * Get supported authentication methods from repositories.config.json
+   * @returns Array of supported authentication methods
+   */
+  getSupportedAuthMethods(): string[] {
+    try {
+      const configPath = path.resolve(
+        __dirname,
+        "../../../config/repositories.config.json",
+      );
+      if (!fs.existsSync(configPath)) {
+        console.warn(
+          `[getSupportedAuthMethods] repositories.config.json not found at ${configPath}`,
+        );
+        return [];
+      }
+      const fileContent = fs.readFileSync(configPath, "utf8");
+      const config = JSON.parse(fileContent);
+
+      return config.authMethods || [];
+    } catch (error) {
+      winccoa.logWarning(
+        "[getSupportedAuthMethods] Failed to read repositories.config.json:",
         error,
       );
       return [];
@@ -1386,14 +1704,8 @@ bool addManager(string manager, string startMode, string options, string user, s
    * @param scriptFile The JavaScript file to execute
    * @param scriptType The type of script (for logging purposes)
    */
-  private async startWinCCOAnodeManager(
-    scriptFile: string,
-    scriptType: string,
-  ): Promise<void> {
-    winccoa.logDebugF(
-      "addonHandler",
-      `Executing ${scriptType} script: ${scriptFile}`,
-    );
+  private async startWinCCOAnodeManager(scriptFile: string): Promise<void> {
+    winccoa.logDebugF("addonHandler", `Executing script: ${scriptFile}`);
 
     // Get current project name from WinCC OA
     const projectName = (await this.ctrlScript.start(
@@ -1420,44 +1732,37 @@ bool addManager(string manager, string startMode, string options, string user, s
       if (result.exitCode === 0) {
         winccoa.logDebugF(
           "addonHandler",
-          `Successfully executed ${scriptType} script: ${scriptFile}`,
+          `Successfully executed script: ${scriptFile}`,
         );
       } else {
         winccoa.logWarning(
-          `Failed to execute ${scriptType} script ${scriptFile}. Exit code: ${result.exitCode}, Error: ${result.stderr}`,
+          `Failed to execute script ${scriptFile}. Exit code: ${result.exitCode}, Error: ${result.stderr}`,
         );
       }
     } else {
       winccoa.logWarning(
-        `Could not determine WinCC OA installation directory for ${scriptType} script: ${scriptFile}`,
+        `Could not determine WinCC OA installation directory for script: ${scriptFile}`,
       );
     }
   }
 
   /**
-   * Execute update scripts based on their file extensions
+   * Execute scripts based on their file extensions
    * @param repositoryPath The path to the repository
-   * @param updateScripts Array of update script filenames
+   * @param scripts Array of script filenames
+   * @param scriptType Type of scripts being executed (for logging)
    */
-  private async executeUpdateScripts(
+  private async executeScripts(
     repositoryPath: string,
-    updateScripts: string[],
+    scripts: string[],
   ): Promise<void> {
-    for (const scriptFile of updateScripts) {
+    for (const scriptFile of scripts) {
       try {
         const fileExtension = path.extname(scriptFile).toLowerCase();
-        winccoa.logDebugF(
-          "addonHandler",
-          `Executing update script: ${scriptFile}`,
-        );
 
         switch (fileExtension) {
           case ".ctl":
             // For .ctl files, use WCCOActrl manager
-            winccoa.logDebugF(
-              "addonHandler",
-              `Executing CTRL script: ${scriptFile}`,
-            );
             await this.startManagers(repositoryPath, [
               {
                 exeName: "WCCOActrl",
@@ -1468,33 +1773,26 @@ bool addManager(string manager, string startMode, string options, string user, s
 
           case ".ts":
             // For .ts files, build TypeScript project and execute the transpiled JS file
-            winccoa.logDebugF(
-              "addonHandler",
-              `Building TypeScript project for: ${scriptFile}`,
-            );
             await NodeInstaller.installAndBuild(repositoryPath);
 
             // Execute the transpiled JavaScript file
             const jsScriptFile = scriptFile.replace(/\.ts$/, ".js");
-            await this.startWinCCOAnodeManager(jsScriptFile, "TypeScript");
+            await this.startWinCCOAnodeManager(jsScriptFile);
             break;
 
           case ".js":
             // For .js files, execute with Node.js using WinCC OA bootstrap
-            await this.startWinCCOAnodeManager(scriptFile, "JavaScript");
+            await this.startWinCCOAnodeManager(scriptFile);
             break;
 
           default:
             winccoa.logWarning(
-              `Unknown script type '${fileExtension}' for file: ${scriptFile}`,
+              `Unknown type '${fileExtension}' for file: ${scriptFile}`,
             );
             break;
         }
       } catch (error) {
-        winccoa.logWarning(
-          `Failed to execute update script ${scriptFile}:`,
-          error,
-        );
+        winccoa.logWarning(`Failed to execute ${scriptFile}:`, error);
       }
     }
 
