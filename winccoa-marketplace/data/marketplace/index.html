@@ -548,11 +548,6 @@
                                             </div>
                                         </div>
                                     </div>
-                                    
-                                    <div id="metadata-card" class="overview-card" style="display: none;">
-                                        <h4>Repository Metadata</h4>
-                                        <pre id="file-content-json" class="json-display"></pre>
-                                    </div>
                                 </div>
                             </div>
                             
@@ -576,9 +571,19 @@
             id="theme-toggle"
             variant="ghost"
             size="small"
-            style="position: fixed; top: 10px; right: 10px; z-index: 1000;"
-            title="Toggle Theme">
-            <ix-icon name="sun"></ix-icon>
+            style="position: fixed; top: 10px; right: 10px; z-index: 1000; width: 32px; min-width: 32px; padding: 0;"
+            title="Toggle Theme"
+            icon="sun">
+        </ix-button>
+        
+        <!-- PMON Credentials Button -->
+        <ix-button 
+            id="pmon-credentials-btn"
+            variant="ghost"
+            size="small"
+            style="position: fixed; top: 10px; right: 52px; z-index: 1000; width: 32px; min-width: 32px; padding: 0;"
+            title="Set PMON Credentials"
+            icon="lock">
         </ix-button>
         
         <!-- Modals will be created programmatically -->

@@ -39,27 +39,9 @@ class MarketplaceEndpoints
     httpConnect(getDefaultAddonPath, MARKETPLACE_URL_PREFIX + "/getDefaultAddonPath", "application/json");
     httpConnect(listLocalRepos, MARKETPLACE_URL_PREFIX + "/listLocalRepos", "application/json");
     httpConnect(remove, MARKETPLACE_URL_PREFIX + "/remove", "application/json");
-    httpConnect(postTest, MARKETPLACE_URL_PREFIX + "/postTest", "application/json");
+    httpConnect(setPmonCredentials, MARKETPLACE_URL_PREFIX + "/setPmonCredentials", "application/json");
+    httpConnect(pmonCredentialsAreSet, MARKETPLACE_URL_PREFIX + "/pmonCredentialsAreSet", "application/json");
     httpOnConnectionClose(closeCB);
-  }
-
-  public static void closeCB(string ip, int connectionIndex)
-  {
-    DebugTN("Connection closed", ip, connectionIndex);
-  }
-
-  public static dyn_string postTest(const blob &content, string user, string ip, dyn_string headerNames, dyn_string headerValues, int connectionIndex)
-  {
-    DebugTN("postTest");
-    string jsonData;
-    blobGetValue(content, 0, jsonData, bloblen(content));
-    mapping contentMapping = jsonDecode(jsonData);
-    DebugTN(contentMapping);
-    DebugTN(user);
-    DebugTN(ip);
-    DebugTN(headerNames);
-    DebugTN(headerValues);
-    DebugTN(connectionIndex);
   }
 
   //--------------------------------------------------------------------------------
@@ -282,6 +264,56 @@ class MarketplaceEndpoints
     {
       return makeDynString(jsonEncode(makeMapping("error", "Couldn't delete repository " + repoName)), "Status: 500 Internal Server Error");
     }
+  }
+
+  //--------------------------------------------------------------------------------
+  public static dyn_string setPmonCredentials(const blob &content, string user, string ip, dyn_string headerNames, dyn_string headerValues, int connectionIndex)
+  {
+    DebugTN("postTest");
+    string jsonData;
+    blobGetValue(content, 0, jsonData, bloblen(content));
+    mapping contentMapping = jsonDecode(jsonData);
+
+    if (!mappingHasKey(contentMapping, "user") || !mappingHasKey(contentMapping, "password"))
+    {
+      return makeDynString(jsonEncode(makeMapping("error", "Missing required data: user and/or password")), "Status: 400 Bad Request");
+    }
+
+    DebugTN(contentMapping["user"], contentMapping["password"]);
+    DebugTN(connectionIndex);
+
+    //TODO: send credentials to client
+    bool validCredentials = true;
+
+    if (validCredentials)
+    {
+      return makeDynString(jsonEncode("Credentials set"), "Status: 200 OK");
+    }
+    else
+    {
+      return makeDynString(jsonEncode(makeMapping("error", "Invalid user/password")), "Status: 401 Unauthorized");
+    }
+  }
+
+  //--------------------------------------------------------------------------------
+  public static dyn_string pmonCredentialsAreSet(const dyn_string &names, const dyn_string &values, const string user, string ip, dyn_string headerNames, dyn_string headerValues, int connectionIndex)
+  {
+    //TODO: check at client
+    bool validCredentials = true;
+    if (validCredentials)
+    {
+      return makeDynString(jsonEncode("Credentials are set"), "Status: 200 OK");
+    }
+    else
+    {
+      return makeDynString(jsonEncode(makeMapping("error", "No valid credentials set")), "Status: 401 Unauthorized");
+    }
+  }
+
+  //--------------------------------------------------------------------------------
+  public static void closeCB(string ip, int connectionIndex)
+  {
+    DebugTN("Connection closed", ip, connectionIndex);
   }
 
 //--------------------------------------------------------------------------------

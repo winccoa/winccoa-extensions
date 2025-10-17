@@ -45,6 +45,7 @@ export interface Repository {
     latestVersion?: string; // Latest version from GitHub
     hasUpdate?: boolean; // Whether an update is available
     keywords?: string[]; // Keywords/tags from winccoaPackage
+    localWinccoaPackage?: any; // Local winccoaPackage data from listLocalRepos
 }
 
 export interface ApiError extends Error {

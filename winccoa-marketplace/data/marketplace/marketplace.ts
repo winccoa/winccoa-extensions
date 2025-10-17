@@ -87,7 +87,6 @@ export class MarketplaceUI {
     private setTheme(theme: Theme): void {
         const body = document.body;
         const themeToggle = document.getElementById('theme-toggle');
-        const themeIcon = themeToggle?.querySelector('ix-icon');
         
         // Remove existing theme classes
         body.classList.remove('theme-classic-dark', 'theme-classic-light');
@@ -96,11 +95,11 @@ export class MarketplaceUI {
         if (theme === 'dark') {
             body.classList.add('theme-classic-dark');
             body.setAttribute('data-theme', 'dark');
-            if (themeIcon) themeIcon.setAttribute('name', 'moon');
+            if (themeToggle) themeToggle.setAttribute('icon', 'moon');
         } else {
             body.classList.add('theme-classic-light');
             body.setAttribute('data-theme', 'light');
-            if (themeIcon) themeIcon.setAttribute('name', 'sun');
+            if (themeToggle) themeToggle.setAttribute('icon', 'sun');
         }
     }
 
@@ -303,6 +302,11 @@ export class MarketplaceUI {
             this.toggleTheme();
         });
         
+        // PMON credentials button
+        document.getElementById('pmon-credentials-btn')?.addEventListener('click', () => {
+            this.showPmonCredentialsModal();
+        });
+        
         // Initialize theme
         this.initializeTheme();
     }
@@ -475,6 +479,9 @@ export class MarketplaceUI {
         
         // Set initial title immediately
         this.updateTitle();
+        
+        // Check PMON credentials status and update icon
+        this.updatePmonIconStatus();
         
         try {
             // Load repositories and status information in sequence to ensure proper state
@@ -732,6 +739,9 @@ export class MarketplaceUI {
                             
                             // Store local file content as JSON string
                             repo.fileContent = JSON.stringify(localRepo.fileContent);
+                            
+                            // Store local winccoaPackage data
+                            repo.localWinccoaPackage = localRepo.fileContent;
                             
                             // Extract subproject name from local content (for registration check)
                             if (localRepo.fileContent && localRepo.fileContent.Subproject) {
@@ -1042,35 +1052,8 @@ export class MarketplaceUI {
             }
         }
         
-        // Update fileContent display if available
-        this.updateFileContentDisplay(repo);
-        
         // Update local status and action buttons
         this.updateLocalStatus(repo);
-    }
-
-    /**
-     * Update file content display in overview tab
-     */
-    private updateFileContentDisplay(repo: Repository): void {
-        const metadataCard = document.getElementById('metadata-card');
-        const fileContentElement = document.getElementById('file-content-json');
-        
-        if (repo.fileContent && metadataCard && fileContentElement) {
-            try {
-                // Parse and pretty-print the JSON
-                const jsonObj = JSON.parse(repo.fileContent);
-                fileContentElement.textContent = JSON.stringify(jsonObj, null, 2);
-                metadataCard.style.display = 'block';
-            } catch (error) {
-                // If parsing fails, show the raw content
-                fileContentElement.textContent = repo.fileContent;
-                metadataCard.style.display = 'block';
-            }
-        } else if (metadataCard) {
-            // Hide the metadata card if no fileContent
-            metadataCard.style.display = 'none';
-        }
     }
 
     /**
@@ -1403,9 +1386,10 @@ export class MarketplaceUI {
         if (!subprojectContent) return;
         
         const repo = this.currentRepository;
-        const winccoaPackage = (repo as any).winccoaPackage;
+        const localWinccoaPackage = repo.localWinccoaPackage;
+        const remoteWinccoaPackage = (repo as any).winccoaPackage;
         
-        if (!winccoaPackage) {
+        if (!localWinccoaPackage && !remoteWinccoaPackage) {
             subprojectContent.innerHTML = `
                 <div style="text-align: center; padding: 48px; color: var(--theme-color-weak-text);">
                     <ix-icon name="info" size="32"></ix-icon>
@@ -1415,10 +1399,53 @@ export class MarketplaceUI {
             return;
         }
         
-        const packageData = typeof winccoaPackage === 'string' 
-            ? JSON.parse(winccoaPackage)
-            : winccoaPackage;
+        let html = '';
         
+        // Show local version (current state)
+        if (localWinccoaPackage) {
+            html += `
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                    <h3 style="margin: 0; color: var(--theme-color-std-text);">Current Version</h3>
+                    <ix-pill variant="info" size="small" icon="info">
+                        Installed
+                    </ix-pill>
+                </div>
+            `;
+            html += this.renderPackageCards(localWinccoaPackage);
+        }
+        
+        // Show remote version if there's an update available
+        if (repo.hasUpdate && remoteWinccoaPackage) {
+            const remotePackageData = typeof remoteWinccoaPackage === 'string' 
+                ? JSON.parse(remoteWinccoaPackage)
+                : remoteWinccoaPackage;
+            
+            html += `
+                <div style="display: flex; align-items: center; gap: 12px; margin: 32px 0 16px 0;">
+                    <h3 style="margin: 0; color: var(--theme-color-std-text);">Latest Version</h3>
+                    <ix-pill variant="warning" size="small" icon="arrow-up">
+                        Update Available
+                    </ix-pill>
+                </div>
+            `;
+            html += this.renderPackageCards(remotePackageData);
+        }
+        
+        // If not cloned yet, show only remote data
+        if (!localWinccoaPackage && remoteWinccoaPackage) {
+            const remotePackageData = typeof remoteWinccoaPackage === 'string' 
+                ? JSON.parse(remoteWinccoaPackage)
+                : remoteWinccoaPackage;
+            html += this.renderPackageCards(remotePackageData);
+        }
+        
+        subprojectContent.innerHTML = html;
+    }
+
+    /**
+     * Render package cards for winccoaPackage data
+     */
+    private renderPackageCards(packageData: any): string {
         let html = '<div class="overview-grid">';
         
         // Basic Information Card
@@ -1531,7 +1558,7 @@ export class MarketplaceUI {
         
         html += '</div>';
         
-        subprojectContent.innerHTML = html;
+        return html;
     }
 
     /**
@@ -1586,8 +1613,160 @@ export class MarketplaceUI {
             this.showError('Failed to get default download path: ' + (error as Error).message);
         }
     }
-    
 
+    /**
+     * Show PMON credentials modal
+     */
+    private async showPmonCredentialsModal(): Promise<void> {
+        return new Promise(async (resolve) => {
+            // Create the modal
+            const modal = document.createElement('ix-modal') as any;
+            modal.size = 'medium';
+            modal.closeOnBackdropClick = false;
+            modal.centered = true;
+            
+            // Create header
+            const header = document.createElement('ix-modal-header');
+            header.textContent = 'Set PMON Credentials';
+            modal.appendChild(header);
+            
+            // Create content with input fields
+            const content = document.createElement('ix-modal-content');
+            content.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                    <p style="margin: 0 0 8px 0; color: var(--theme-color-std-text);">
+                        Enter your PMON credentials to authenticate:
+                    </p>
+                    <div id="pmon-error-message" style="display: none; padding: 12px; background-color: var(--theme-color-alarm); border-radius: 4px; color: var(--theme-color-std-text); font-size: 14px; margin-bottom: 8px;">
+                        <ix-icon name="error" size="16" style="vertical-align: middle; margin-right: 8px;"></ix-icon>
+                        <span id="pmon-error-text"></span>
+                    </div>
+                    <ix-input
+                        id="pmon-username"
+                        label="Username"
+                        placeholder="Enter username"
+                        style="width: 100%;">
+                    </ix-input>
+                    <ix-input
+                        id="pmon-password"
+                        label="Password"
+                        type="password"
+                        placeholder="Enter password"
+                        style="width: 100%;">
+                    </ix-input>
+                </div>
+            `;
+            modal.appendChild(content);
+            
+            // Create footer with buttons
+            const footer = document.createElement('ix-modal-footer');
+            
+            const cancelBtn = document.createElement('ix-button') as any;
+            cancelBtn.variant = 'secondary';
+            cancelBtn.textContent = 'Cancel';
+            
+            const loginBtn = document.createElement('ix-button') as any;
+            loginBtn.variant = 'primary';
+            loginBtn.textContent = 'Login';
+            
+            footer.appendChild(cancelBtn);
+            footer.appendChild(loginBtn);
+            modal.appendChild(footer);
+            
+            // Add modal to DOM
+            document.body.appendChild(modal);
+            
+            // Button event handlers
+            cancelBtn.addEventListener('click', async () => {
+                await modal.dismissModal();
+                resolve();
+            });
+            
+            loginBtn.addEventListener('click', async () => {
+                const usernameInput = document.getElementById('pmon-username') as any;
+                const passwordInput = document.getElementById('pmon-password') as any;
+                const errorMessage = document.getElementById('pmon-error-message') as HTMLElement;
+                const errorText = document.getElementById('pmon-error-text') as HTMLElement;
+                
+                const username = usernameInput?.value?.trim() || '';
+                const password = passwordInput?.value?.trim() || '';
+                
+                // Hide any previous error
+                if (errorMessage) errorMessage.style.display = 'none';
+                
+                if (!username || !password) {
+                    if (errorMessage && errorText) {
+                        errorText.textContent = 'Please enter both username and password';
+                        errorMessage.style.display = 'block';
+                    }
+                    return;
+                }
+                
+                // Disable button while processing
+                loginBtn.setAttribute('disabled', '');
+                loginBtn.textContent = 'Authenticating...';
+                
+                try {
+                    const response = await this.makeApiCall('/marketplace/setPmonCredentials', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            user: username,
+                            password: password
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        this.showToast('PMON credentials set successfully', 'success');
+                        await this.updatePmonIconStatus(); // Update icon to unlock
+                        await modal.dismissModal();
+                        resolve();
+                    } else if (response.status === 401) {
+                        if (errorMessage && errorText) {
+                            errorText.textContent = 'Authentication failed: Invalid credentials';
+                            errorMessage.style.display = 'block';
+                        }
+                        loginBtn.removeAttribute('disabled');
+                        loginBtn.textContent = 'Login';
+                    } else {
+                        if (errorMessage && errorText) {
+                            errorText.textContent = 'Failed to set credentials: ' + response.statusText;
+                            errorMessage.style.display = 'block';
+                        }
+                        loginBtn.removeAttribute('disabled');
+                        loginBtn.textContent = 'Login';
+                    }
+                } catch (error) {
+                    if (errorMessage && errorText) {
+                        errorText.textContent = 'Failed to set credentials: ' + (error as Error).message;
+                        errorMessage.style.display = 'block';
+                    }
+                    loginBtn.removeAttribute('disabled');
+                    loginBtn.textContent = 'Login';
+                }
+            });
+            
+            // Listen to dialogDismiss event
+            modal.addEventListener('dialogDismiss', () => {
+                setTimeout(() => {
+                    if (modal.parentNode) {
+                        modal.parentNode.removeChild(modal);
+                    }
+                }, 300);
+            });
+            
+            // Show modal
+            setTimeout(async () => {
+                try {
+                    await modal.showModal();
+                } catch (error) {
+                    console.error('Failed to open PMON credentials modal:', error);
+                }
+            }, 200);
+        });
+    }
 
     /**
      * Pull repository updates
@@ -1671,10 +1850,77 @@ export class MarketplaceUI {
     }
 
     /**
+     * Update PMON credentials icon based on login status
+     */
+    private async updatePmonIconStatus(): Promise<void> {
+        try {
+            const response = await this.makeApiCall('/marketplace/pmonCredentialsAreSet');
+            const pmonBtn = document.getElementById('pmon-credentials-btn');
+            
+            if (pmonBtn) {
+                if (response.ok) {
+                    // Credentials are set - show unlock icon
+                    pmonBtn.setAttribute('icon', 'unlock');
+                    pmonBtn.setAttribute('title', 'PMON Credentials Set (Click to change)');
+                } else {
+                    // Credentials not set - show lock icon
+                    pmonBtn.setAttribute('icon', 'lock');
+                    pmonBtn.setAttribute('title', 'Set PMON Credentials');
+                }
+            }
+        } catch (error) {
+            // On error, default to lock icon
+            const pmonBtn = document.getElementById('pmon-credentials-btn');
+            if (pmonBtn) {
+                pmonBtn.setAttribute('icon', 'lock');
+                pmonBtn.setAttribute('title', 'Set PMON Credentials');
+            }
+        }
+    }
+
+    /**
+     * Check if PMON credentials are set, if not show login modal
+     */
+    private async checkPmonCredentials(): Promise<boolean> {
+        try {
+            const response = await this.makeApiCall('/marketplace/pmonCredentialsAreSet');
+            
+            if (response.ok) {
+                // Credentials are set
+                return true;
+            } else if (response.status === 401) {
+                // Credentials not set, show login modal
+                await this.showPmonCredentialsModal();
+                
+                // Check again if credentials are now set
+                const recheckResponse = await this.makeApiCall('/marketplace/pmonCredentialsAreSet');
+                const isSet = recheckResponse.ok;
+                
+                // Update icon after login attempt
+                await this.updatePmonIconStatus();
+                
+                return isSet;
+            } else {
+                this.showError('Failed to check PMON credentials: ' + response.statusText);
+                return false;
+            }
+        } catch (error) {
+            this.showError('Failed to check PMON credentials: ' + (error as Error).message);
+            return false;
+        }
+    }
+
+    /**
      * Register subproject
      */
     private async registerSubProject(): Promise<void> {
         if (!this.currentRepository) {
+            return;
+        }
+        
+        // Check PMON credentials first
+        const credentialsSet = await this.checkPmonCredentials();
+        if (!credentialsSet) {
             return;
         }
         
@@ -1905,7 +2151,7 @@ export class MarketplaceUI {
                     if (!skipUIUpdate) {
                         this.updateLocalStatus(this.currentRepository);
                     }
-                    this.updateRepositoryDetails(this.currentRepository); // Refresh details to show fileContent
+                    this.updateRepositoryDetails(this.currentRepository); // Refresh details
                 }
                 
                 this.renderRepositoryList(); // Re-render to show updated status
@@ -1941,6 +2187,12 @@ export class MarketplaceUI {
      */
     private async unregisterSubProject(): Promise<void> {
         if (!this.currentRepository) return;
+        
+        // Check PMON credentials first
+        const credentialsSet = await this.checkPmonCredentials();
+        if (!credentialsSet) {
+            return;
+        }
         
         // Capture the repository being unregistered to avoid issues if user switches repos during operation
         const repositoryBeingUnregistered = this.currentRepository;
