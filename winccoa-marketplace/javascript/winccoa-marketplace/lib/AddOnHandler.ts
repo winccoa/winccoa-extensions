@@ -23,15 +23,6 @@ export interface Manager {
   startParams: string;
 }
 
-/**
- * Enum for script types
- */
-export enum ScriptType {
-  Script = 0,
-  UpdateScript = 1,
-  UninstallScript = 2,
-}
-
 // Export the class for use in other modules
 export { AddOnHandler };
 
@@ -432,9 +423,13 @@ class AddOnHandler {
           const trimmed = line.trim();
           if (trimmed.startsWith("GITHUB_TOKEN=")) {
             const token = trimmed.substring("GITHUB_TOKEN=".length).replace(/['"]/g, "");
-            if (token) {
+            if (token && token !== "your_token_here") {
               winccoa.logInfo("addonHandler", "Found GITHUB_TOKEN in .env file");
               return token;
+            } else if (token === "your_token_here") {
+              winccoa.logInfo("addonHandler", ".env file contains placeholder token - ignoring");
+            } else {
+              winccoa.logInfo("addonHandler", ".env file contains empty token - ignoring");
             }
           }
         }
