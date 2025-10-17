@@ -14,6 +14,9 @@
     <script type="module" src="https://cdn.jsdelivr.net/npm/@siemens/ix-icons@3.2.0/dist/ix-icons/ix-icons.esm.js"></script>
     <script nomodule src="https://cdn.jsdelivr.net/npm/@siemens/ix-icons@3.2.0/dist/ix-icons/ix-icons.js"></script>
 
+    <!-- Marked.js for markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+
     <link rel="icon" type="image/x-icon" href="favicon.png">
     
     <!-- IX Modal using REAL IX components only -->
@@ -546,6 +549,16 @@
                                                 <span class="stat-label">Latest Version:</span>
                                                 <span id="latest-version" style="color: var(--theme-color-success); font-weight: 600;">-</span>
                                             </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- README Section -->
+                                <div id="readme-section" style="margin-top: 24px; display: none;">
+                                    <div class="overview-card">
+                                        <h4>README</h4>
+                                        <div id="readme-content" class="readme-content" style="padding: 0;">
+                                            <!-- README will be rendered here -->
                                         </div>
                                     </div>
                                 </div>

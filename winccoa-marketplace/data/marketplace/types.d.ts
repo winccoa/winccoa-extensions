@@ -39,6 +39,9 @@ export interface Repository {
     cloned?: boolean;
     fileContent?: string; // JSON content from .winccoa-marketplace.json file
     localPath?: string; // Local filesystem path where repository is cloned
+    owner?: string; // GitHub owner/organization name
+    repo?: string; // GitHub repository name
+    defaultBranch?: string; // Default branch name (main, master, etc.)
     subprojectName?: string; // Subproject name from package.winccoa.json (used for registration)
     loadingAction?: 'download' | 'update' | 'install' | 'uninstall' | 'remove' | null; // Track which action is in progress
     currentVersion?: string; // Currently installed version (from local repo)

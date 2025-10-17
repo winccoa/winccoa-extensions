@@ -1064,8 +1064,122 @@ export class MarketplaceUI {
             }
         }
         
+        // Fetch and render README if it's a GitHub repository
+        this.fetchAndRenderReadme(repo);
+        
         // Update local status and action buttons
         this.updateLocalStatus(repo);
+    }
+
+    /**
+     * Fetch and render README from GitHub
+     */
+    private async fetchAndRenderReadme(repo: Repository): Promise<void> {
+        const readmeSection = document.getElementById('readme-section');
+        const readmeContent = document.getElementById('readme-content');
+        
+        if (!readmeSection || !readmeContent) return;
+        
+        // Check if this is a GitHub repository
+        if (!repo.cloneUrl || !repo.cloneUrl.includes('github.com')) {
+            readmeSection.style.display = 'none';
+            return;
+        }
+        
+        // Extract owner and repo name from clone URL
+        // Format: https://github.com/owner/repo.git
+        const match = repo.cloneUrl.match(/github\.com[/:]([\w-]+)\/([\w-]+?)(\.git)?$/);
+        if (!match) {
+            readmeSection.style.display = 'none';
+            return;
+        }
+        
+        const owner = match[1];
+        const repoName = match[2];
+        const defaultBranch = repo.defaultBranch;
+        
+        try {
+            // Try to fetch README.md from the default branch
+            let readmeUrl = `https://raw.githubusercontent.com/${owner}/${repoName}/${defaultBranch}/README.md`;
+            let response = await fetch(readmeUrl);
+            
+            if (response.ok) {
+                const markdown = await response.text();
+                
+                // Convert markdown to HTML using a simple renderer
+                // Replace relative image paths with absolute GitHub URLs
+                const baseUrl = `https://raw.githubusercontent.com/${owner}/${repoName}/${defaultBranch}/`;
+                const htmlContent = this.renderMarkdown(markdown, baseUrl);
+                
+                readmeContent.innerHTML = htmlContent;
+                readmeSection.style.display = 'block';
+            } else {
+                readmeSection.style.display = 'none';
+            }
+        } catch (error) {
+            console.warn('Could not fetch README:', error);
+            readmeSection.style.display = 'none';
+        }
+    }
+
+    /**
+     * Render markdown to HTML using marked.js with relative path resolution
+     */
+    private renderMarkdown(markdown: string, baseUrl: string): string {
+        // Check if marked is available
+        if (typeof (window as any).marked === 'undefined') {
+            console.error('marked.js is not loaded');
+            return '<p>Error: Markdown renderer not available</p>';
+        }
+        
+        const marked = (window as any).marked;
+        
+        // Configure marked for GitHub-flavored markdown
+        marked.setOptions({
+            gfm: true, // GitHub Flavored Markdown
+            breaks: true, // Convert \n to <br>
+            headerIds: true, // Add IDs to headers
+            mangle: false, // Don't escape autolinked emails
+        });
+        
+        // Create a custom renderer to handle relative paths
+        const renderer = new marked.Renderer();
+        
+        // Override image rendering to convert relative paths to absolute
+        const originalImage = renderer.image.bind(renderer);
+        renderer.image = (href: string, title: string | null, text: string) => {
+            // If href is relative (doesn't start with http:// or https://), make it absolute
+            if (href && !href.match(/^https?:\/\//)) {
+                href = baseUrl + href.replace(/^\.\//, '');
+            }
+            // Add styling to images
+            const titleAttr = title ? ` title="${title}"` : '';
+            return `<img src="${href}" alt="${text}"${titleAttr} style="max-width: 100%; height: auto; display: block; margin: 10px 0;" />`;
+        };
+        
+        // Override link rendering to convert relative paths to absolute GitHub URLs
+        const originalLink = renderer.link.bind(renderer);
+        renderer.link = (href: string, title: string | null, text: string) => {
+            // If href is relative (doesn't start with http:// or https:// and isn't an anchor)
+            if (href && !href.match(/^https?:\/\//) && !href.startsWith('#')) {
+                // Convert to GitHub blob URL
+                const parts = baseUrl.split('/');
+                const owner = parts[3];
+                const repo = parts[4];
+                const branch = parts[5];
+                href = `https://github.com/${owner}/${repo}/blob/${branch}/${href.replace(/^\.\//, '')}`;
+            }
+            return originalLink(href, title, text);
+        };
+        
+        // Parse and render the markdown
+        try {
+            const html = marked.parse(markdown, { renderer });
+            return html;
+        } catch (error) {
+            console.error('Error rendering markdown:', error);
+            return '<p>Error rendering markdown content</p>';
+        }
     }
 
     /**
@@ -1820,7 +1934,7 @@ export class MarketplaceUI {
             this.renderRepositoryList(); // Re-render to show loading state
         }
         
-        this.showActionLoading();
+        this.showActionLoading(); 
         
         try {
             const repoName = repositoryBeingPulled.name;
