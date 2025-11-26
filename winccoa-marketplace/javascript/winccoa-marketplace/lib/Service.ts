@@ -78,14 +78,10 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       const fileContent = fileContentVariant.getString();
       winccoa.logDebugF("addonHandler", "-------- fileContent:", fileContent);
 
-      // Parse the JSON string to get addon configurations
-      let addonConfigs: any[];
+      // Parse the JSON string to get addon configuration
+      let parsedContent: any;
       try {
-        const parsedContent = JSON.parse(fileContent);
-        // Handle both single object and array of objects
-        addonConfigs = Array.isArray(parsedContent)
-          ? parsedContent
-          : [parsedContent];
+        parsedContent = JSON.parse(fileContent);
       } catch (error) {
         throw new Error(`Invalid JSON in fileContent: ${error}`);
       }
@@ -95,37 +91,37 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       );
       const session = sessionVariant ? sessionVariant.getString() : "";
 
-      // Map each parsed config to AddonConfig interface
-      const configs: AddonConfig[] = addonConfigs.map((jsonConfig: any) =>
-        this._addOnHandler.mapPackageJsonToAddonConfig(jsonConfig),
-      );
+      // Map to AddonConfig interface (now contains Subprojects array)
+      const config: AddonConfig =
+        this._addOnHandler.mapPackageJsonToAddonConfig(parsedContent);
 
       winccoa.logDebugF(
         "addonHandler",
-        "--------- Parsed addon configurations:",
-        configs,
+        "--------- Parsed addon configuration:",
+        config,
       );
 
-      // Register each addon configuration
+      // Register each subproject
       const results: any[] = [];
-      for (const config of configs) {
+      for (const subproject of config.Subprojects) {
         const result = await this._addOnHandler.registerSubProject(
           repositoryPath,
-          config.Subproject,
+          subproject.Name,
           config,
+          subproject,
           session,
         );
         results.push(result);
         winccoa.logDebugF(
           "addonHandler",
-          `Sub-project ${config.RepoName || "unnamed"} at ${repositoryPath} registered with result code:`,
+          `Sub-project ${subproject.Name} at ${repositoryPath} registered with result code:`,
           result,
         );
       }
 
       winccoa.logDebugF(
         "addonHandler",
-        `All ${configs.length} sub-projects registered successfully`,
+        `All ${config.Subprojects.length} sub-projects registered successfully`,
       );
       return Vrpc.Variant.createBool(true);
     } catch (error) {
@@ -174,33 +170,29 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     const fileContent = fileContentVariant.getString();
     winccoa.logDebugF("addonHandler", "-------- fileContent:", fileContent);
 
-    // Parse the JSON string to get addon configurations
-    let addonConfigs: any[];
+    // Parse the JSON string to get addon configuration
+    let parsedContent: any;
     try {
-      const parsedContent = JSON.parse(fileContent);
-      // Handle both single object and array of objects
-      addonConfigs = Array.isArray(parsedContent)
-        ? parsedContent
-        : [parsedContent];
+      parsedContent = JSON.parse(fileContent);
     } catch (error) {
       throw new Error(`Invalid JSON in fileContent: ${error}`);
     }
 
-    // Map each parsed config to AddonConfig interface
-    const configs: AddonConfig[] = addonConfigs.map((jsonConfig: any) =>
-      this._addOnHandler.mapPackageJsonToAddonConfig(jsonConfig),
-    );
+    // Map to AddonConfig interface (now contains Subprojects array)
+    const config: AddonConfig =
+      this._addOnHandler.mapPackageJsonToAddonConfig(parsedContent);
 
-    for (const config of configs) {
+    // Unregister each subproject
+    for (const subproject of config.Subprojects) {
       const result = await this._addOnHandler.unregisterSubProject(
         repositoryPath,
-        config.Subproject,
+        subproject.Name,
         deleteFiles,
-        config,
+        subproject,
       );
       winccoa.logDebugF(
         "addonHandler",
-        `Sub-project ${config.Subproject} unregistered with result code:`,
+        `Sub-project ${subproject.Name} unregistered with result code:`,
         result,
       );
     }

@@ -22,6 +22,7 @@ export class MarketplaceUI {
     private predefinedOrganizations: string[] = ['winccoa'];
     private currentLoadController: AbortController | null = null; // Track ongoing load requests
     private selectedKeywords: string[] = []; // Track selected keywords for filtering (empty = all)
+    private currentSubprojectTab: string | null = null; // Track currently selected subproject tab
 
     constructor() {
         // Auto-detect backend URL based on current frontend URL
@@ -460,18 +461,33 @@ export class MarketplaceUI {
      * Initialize tab functionality
      */
     private initializeTabs(): void {
-        const tabs = document.querySelectorAll('ix-tab-item');
-        const tabPanes = document.querySelectorAll('.tab-pane');
+        const tabs = document.querySelectorAll('#repo-tabs ix-tab-item');
+        const overviewPane = document.getElementById('overview-tab');
+        const subprojectPane = document.getElementById('subproject-tab');
 
         tabs.forEach((tab, index) => {
             tab.addEventListener('click', () => {
-                // Remove active class from all tabs and panes
+                // Remove active class from all tabs
                 tabs.forEach(t => t.removeAttribute('selected'));
-                tabPanes.forEach(pane => pane.classList.remove('active'));
 
-                // Add active class to clicked tab and corresponding pane
+                // Hide all panes
+                overviewPane?.classList.remove('active');
+                subprojectPane?.classList.remove('active');
+
+                // Add active class to clicked tab
                 tab.setAttribute('selected', '');
-                tabPanes[index]?.classList.add('active');
+
+                // Track current subproject tab
+                this.currentSubprojectTab = tab.getAttribute('data-subproject');
+
+                // Show appropriate pane
+                if (index === 0) {
+                    // Overview tab
+                    overviewPane?.classList.add('active');
+                } else {
+                    // All subproject tabs share the same pane
+                    subprojectPane?.classList.add('active');
+                }
 
                 // Load tab-specific content
                 this.loadTabContent(index);
@@ -555,29 +571,64 @@ export class MarketplaceUI {
 
     /**
      * Extract version and keywords from winccoaPackage field
+     * Handles new structure with Subprojects array
      */
     private extractPackageData(repo: Repository): void {
         if ((repo as any).winccoaPackage) {
             try {
-                const packageData = typeof (repo as any).winccoaPackage === 'string' 
+                const packageData = typeof (repo as any).winccoaPackage === 'string'
                     ? JSON.parse((repo as any).winccoaPackage)
                     : (repo as any).winccoaPackage;
-                
+
+                // Package-level Version (new structure)
                 if (packageData.Version) {
                     repo.latestVersion = packageData.Version;
                 }
-                
+
+                // Package-level Keywords (new structure)
                 if (packageData.Keywords && Array.isArray(packageData.Keywords)) {
                     repo.keywords = packageData.Keywords;
                 }
-                
-                if (packageData.Subproject) {
+
+                // Handle both old (Subproject) and new (Subprojects array) structures
+                if (packageData.Subprojects && Array.isArray(packageData.Subprojects) && packageData.Subprojects.length > 0) {
+                    // New structure - use first subproject name for backwards compatibility
+                    repo.subprojectName = packageData.Subprojects[0].Name;
+                } else if (packageData.Subproject) {
+                    // Legacy single subproject format
                     repo.subprojectName = packageData.Subproject;
                 }
             } catch (e) {
                 console.warn(`Failed to parse winccoaPackage for ${repo.name}`);
             }
         }
+    }
+
+    /**
+     * Get subprojects array from package data
+     * Handles both old (single Subproject) and new (Subprojects array) formats
+     */
+    private getSubprojects(packageData: any): any[] {
+        if (!packageData) return [];
+
+        // New structure with Subprojects array
+        if (packageData.Subprojects && Array.isArray(packageData.Subprojects)) {
+            return packageData.Subprojects;
+        }
+
+        // Legacy single subproject format - convert to array
+        if (packageData.Subproject) {
+            return [{
+                Name: packageData.Subproject,
+                Description: packageData.Description,
+                Managers: packageData.Managers,
+                Dplists: packageData.Dplists,
+                UpdateScripts: packageData.UpdateScripts,
+                UnInstallScripts: packageData.UnInstallScripts
+            }];
+        }
+
+        return [];
     }
 
     /**
@@ -739,7 +790,7 @@ export class MarketplaceUI {
             });
             if (response.ok) {
                 const localRepos: Array<{ addon: string; fileContent: any }> = await response.json();
-                
+
                 // Update repositories array with local information
                 if (Array.isArray(localRepos)) {
                     localRepos.forEach(localRepo => {
@@ -748,22 +799,28 @@ export class MarketplaceUI {
                         if (repo) {
                             // Mark as cloned
                             repo.cloned = true;
-                            
+
                             // Store local file content as JSON string
                             repo.fileContent = JSON.stringify(localRepo.fileContent);
-                            
+
                             // Store local winccoaPackage data
                             repo.localWinccoaPackage = localRepo.fileContent;
-                            
+
                             // Extract subproject name from local content (for registration check)
-                            if (localRepo.fileContent && localRepo.fileContent.Subproject) {
-                                repo.subprojectName = localRepo.fileContent.Subproject;
+                            // Handle both old (Subproject) and new (Subprojects array) formats
+                            if (localRepo.fileContent) {
+                                const subprojects = this.getSubprojects(localRepo.fileContent);
+                                if (subprojects.length > 0) {
+                                    repo.subprojectName = subprojects[0].Name;
+                                } else if (localRepo.fileContent.Subproject) {
+                                    repo.subprojectName = localRepo.fileContent.Subproject;
+                                }
                             }
-                            
-                            // Extract current version from local content
+
+                            // Extract current version from local content (package-level)
                             if (localRepo.fileContent && localRepo.fileContent.Version) {
                                 repo.currentVersion = localRepo.fileContent.Version;
-                                
+
                                 // Compare with latest version from GitHub (if available)
                                 if (repo.latestVersion) {
                                     repo.hasUpdate = repo.currentVersion !== repo.latestVersion;
@@ -773,7 +830,7 @@ export class MarketplaceUI {
                             }
                         }
                     });
-                    
+
                     // Don't render here - will be rendered after all status info is loaded
                 }
             }
@@ -1063,7 +1120,10 @@ export class MarketplaceUI {
                 repoCloneUrl.style.display = '';
             }
         }
-        
+
+        // Update package information card in overview
+        this.updatePackageInfoCard(repo);
+
         // Fetch and render README if it's a GitHub repository
         this.fetchAndRenderReadme(repo);
 
@@ -1072,6 +1132,45 @@ export class MarketplaceUI {
 
         // Re-render subproject content if the tab exists
         this.renderSubprojectContent();
+    }
+
+    /**
+     * Update package information section in overview tab
+     */
+    private updatePackageInfoCard(repo: Repository): void {
+        const pkgInfoSection = document.getElementById('pkg-info-section');
+        const pkgVersion = document.getElementById('pkg-version');
+        const pkgOaVersion = document.getElementById('pkg-oa-version');
+        const pkgDescription = document.getElementById('pkg-description');
+
+        if (!pkgInfoSection) return;
+
+        // Get package data from local or remote
+        const localPackageData = repo.localWinccoaPackage;
+        const remotePackageData = (repo as any).winccoaPackage
+            ? (typeof (repo as any).winccoaPackage === 'string'
+                ? JSON.parse((repo as any).winccoaPackage)
+                : (repo as any).winccoaPackage)
+            : null;
+
+        // Use local data if available, otherwise remote
+        const packageData = localPackageData || remotePackageData;
+
+        if (packageData) {
+            pkgInfoSection.style.display = '';
+
+            if (pkgVersion) {
+                pkgVersion.textContent = packageData.Version || '-';
+            }
+            if (pkgOaVersion) {
+                pkgOaVersion.textContent = packageData.OaVersion || '-';
+            }
+            if (pkgDescription) {
+                pkgDescription.textContent = packageData.Description || '-';
+            }
+        } else {
+            pkgInfoSection.style.display = 'none';
+        }
     }
 
     /**
@@ -1390,35 +1489,79 @@ export class MarketplaceUI {
 
     /**
      * Update tabs based on winccoaPackage availability
+     * Creates one tab per unique subproject name from both local and remote data
+     * @param repo - The repository to create tabs for
+     * @param selectSubprojectName - Optional subproject name to select (instead of Overview)
      */
-    private updateTabs(repo: Repository): void {
+    private updateTabs(repo: Repository, selectSubprojectName?: string): void {
         const tabsContainer = document.getElementById('repo-tabs');
         if (!tabsContainer) return;
-        
+
         // Clear existing tabs
         tabsContainer.innerHTML = '';
-        
+
+        // Collect subprojects from both local and remote data
+        const localPackageData = repo.localWinccoaPackage;
+        const remotePackageData = (repo as any).winccoaPackage
+            ? (typeof (repo as any).winccoaPackage === 'string'
+                ? JSON.parse((repo as any).winccoaPackage)
+                : (repo as any).winccoaPackage)
+            : null;
+
+        const localSubprojects = this.getSubprojects(localPackageData);
+        const remoteSubprojects = this.getSubprojects(remotePackageData);
+
+        // Collect unique subproject names (preserve order: local first, then new remote ones)
+        const subprojectNames: string[] = [];
+        localSubprojects.forEach(sp => {
+            if (sp.Name && !subprojectNames.includes(sp.Name)) {
+                subprojectNames.push(sp.Name);
+            }
+        });
+        remoteSubprojects.forEach(sp => {
+            if (sp.Name && !subprojectNames.includes(sp.Name)) {
+                subprojectNames.push(sp.Name);
+            }
+        });
+
+        // Determine which tab should be selected
+        const shouldSelectSubproject = selectSubprojectName && subprojectNames.includes(selectSubprojectName);
+
         // Always add Overview tab
         const overviewTab = document.createElement('ix-tab-item');
         overviewTab.textContent = 'Overview';
-        overviewTab.setAttribute('selected', ''); // Select by default
-        tabsContainer.appendChild(overviewTab);
-        
-        // Add subproject tab if winccoaPackage exists
-        if ((repo as any).winccoaPackage) {
-            const packageData = typeof (repo as any).winccoaPackage === 'string' 
-                ? JSON.parse((repo as any).winccoaPackage)
-                : (repo as any).winccoaPackage;
-            
-            if (packageData && packageData.Subproject) {
-                const subprojectTab = document.createElement('ix-tab-item');
-                subprojectTab.textContent = packageData.Subproject;
-                tabsContainer.appendChild(subprojectTab);
-            }
+        if (!shouldSelectSubproject) {
+            overviewTab.setAttribute('selected', '');
         }
-        
+        tabsContainer.appendChild(overviewTab);
+
+        // Create a tab for each unique subproject
+        subprojectNames.forEach(name => {
+            const subprojectTab = document.createElement('ix-tab-item');
+            subprojectTab.textContent = name;
+            subprojectTab.setAttribute('data-subproject', name);
+            if (shouldSelectSubproject && name === selectSubprojectName) {
+                subprojectTab.setAttribute('selected', '');
+            }
+            tabsContainer.appendChild(subprojectTab);
+        });
+
         // Re-initialize tab listeners
         this.initializeTabs();
+
+        // Set correct pane visibility and render content
+        const overviewPane = document.getElementById('overview-tab');
+        const subprojectPane = document.getElementById('subproject-tab');
+        if (shouldSelectSubproject) {
+            this.currentSubprojectTab = selectSubprojectName!;
+            overviewPane?.classList.remove('active');
+            subprojectPane?.classList.add('active');
+            this.renderSubprojectContent(selectSubprojectName);
+        } else {
+            this.currentSubprojectTab = null;
+            overviewPane?.classList.add('active');
+            subprojectPane?.classList.remove('active');
+        }
     }
 
     /**
@@ -1426,30 +1569,56 @@ export class MarketplaceUI {
      */
     private async loadTabContent(tabIndex: number): Promise<void> {
         if (!this.currentRepository) return;
-        
-        switch (tabIndex) {
-            case 0: // Overview tab - already rendered
-                break;
-            case 1: // Subproject tab (if exists)
-                this.renderSubprojectContent();
-                break;
+
+        if (tabIndex === 0) {
+            // Overview tab - already rendered
+            return;
+        }
+
+        // For subproject tabs (index 1+), get subproject name from tab data attribute
+        const tabs = document.querySelectorAll('#repo-tabs ix-tab-item');
+        const subprojectName = tabs[tabIndex]?.getAttribute('data-subproject');
+        if (subprojectName) {
+            this.renderSubprojectContent(subprojectName);
         }
     }
 
     /**
-     * Render subproject metadata content
+     * Render subproject metadata content for a specific subproject
+     * @param subprojectName - The name of the subproject to render (optional for backwards compatibility)
      */
-    private renderSubprojectContent(): void {
+    private renderSubprojectContent(subprojectName?: string): void {
         if (!this.currentRepository) return;
-        
+
         const subprojectContent = document.getElementById('subproject-content');
         if (!subprojectContent) return;
-        
+
         const repo = this.currentRepository;
-        const localWinccoaPackage = repo.localWinccoaPackage;
-        const remoteWinccoaPackage = (repo as any).winccoaPackage;
-        
-        if (!localWinccoaPackage && !remoteWinccoaPackage) {
+        const localPackageData = repo.localWinccoaPackage;
+        const remotePackageData = (repo as any).winccoaPackage
+            ? (typeof (repo as any).winccoaPackage === 'string'
+                ? JSON.parse((repo as any).winccoaPackage)
+                : (repo as any).winccoaPackage)
+            : null;
+
+        // Get subprojects arrays
+        const localSubprojects = this.getSubprojects(localPackageData);
+        const remoteSubprojects = this.getSubprojects(remotePackageData);
+
+        // If no subproject name provided, try to get from first tab or first available subproject
+        if (!subprojectName) {
+            const tabs = document.querySelectorAll('#repo-tabs ix-tab-item');
+            if (tabs.length > 1) {
+                subprojectName = tabs[1]?.getAttribute('data-subproject') || undefined;
+            }
+            if (!subprojectName && localSubprojects.length > 0) {
+                subprojectName = localSubprojects[0].Name;
+            } else if (!subprojectName && remoteSubprojects.length > 0) {
+                subprojectName = remoteSubprojects[0].Name;
+            }
+        }
+
+        if (!subprojectName) {
             subprojectContent.innerHTML = `
                 <div style="text-align: center; padding: 48px; color: var(--theme-color-weak-text);">
                     <ix-icon name="info" size="32"></ix-icon>
@@ -1458,96 +1627,161 @@ export class MarketplaceUI {
             `;
             return;
         }
-        
+
+        // Find local and remote subproject by name
+        const localSubproject = localSubprojects.find(sp => sp.Name === subprojectName);
+        const remoteSubproject = remoteSubprojects.find(sp => sp.Name === subprojectName);
+
+        // Get package-level data for version info
+        const localVersion = localPackageData?.Version;
+        const remoteVersion = remotePackageData?.Version;
+
+        // Check if this subproject is actually registered (installed)
+        const isRegistered = this.registeredProjects.includes(subprojectName);
+
         let html = '';
-        
-        // Show local version (current state)
-        if (localWinccoaPackage) {
+
+        // Scenario 1: Exists in both local and remote
+        if (localSubproject && remoteSubproject) {
+            const versionsMatch = localVersion === remoteVersion;
+
+            // Show local/current version with appropriate status pill
             html += `
                 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
                     <h3 style="margin: 0; color: var(--theme-color-std-text);">Current Version</h3>
-                    <ix-pill variant="info" size="small" icon="info">
-                        Installed
-                    </ix-pill>
+                    ${isRegistered ? `
+                        <ix-pill variant="success" size="small" icon="success">
+                            Installed
+                        </ix-pill>
+                    ` : `
+                        <ix-pill variant="neutral" size="small" icon="download">
+                            Cloned locally
+                        </ix-pill>
+                    `}
                 </div>
             `;
-            html += this.renderPackageCards(localWinccoaPackage);
+            html += this.renderSubprojectCards(localSubproject, localPackageData);
+
+            // Show remote version only if versions differ
+            if (!versionsMatch) {
+                html += `
+                    <div style="display: flex; align-items: center; gap: 12px; margin: 32px 0 16px 0;">
+                        <h3 style="margin: 0; color: var(--theme-color-std-text);">Latest Version</h3>
+                        <ix-pill variant="warning" size="small" icon="arrow-up">
+                            Update available
+                        </ix-pill>
+                    </div>
+                `;
+                html += this.renderSubprojectCards(remoteSubproject, remotePackageData);
+            }
         }
-        
-        // Show remote version if there's an update available
-        if (repo.hasUpdate && remoteWinccoaPackage) {
-            const remotePackageData = typeof remoteWinccoaPackage === 'string' 
-                ? JSON.parse(remoteWinccoaPackage)
-                : remoteWinccoaPackage;
-            
+        // Scenario 2: Only in remote (new subproject or not cloned yet)
+        else if (!localSubproject && remoteSubproject) {
+            if (repo.cloned) {
+                // Repository is cloned but this subproject doesn't exist in the local version
+                html += `
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                        <h3 style="margin: 0; color: var(--theme-color-std-text);">Current Version</h3>
+                        <ix-pill variant="neutral" size="small" icon="info">
+                            Not in local version
+                        </ix-pill>
+                    </div>
+                    <div style="text-align: center; padding: 24px; color: var(--theme-color-weak-text); background: var(--theme-color-2); border-radius: 8px; margin-bottom: 24px;">
+                        <ix-icon name="info" size="24"></ix-icon>
+                        <p style="margin: 8px 0 0 0;">This subproject was added in a newer version. Update to get it.</p>
+                    </div>
+                `;
+            }
             html += `
-                <div style="display: flex; align-items: center; gap: 12px; margin: 32px 0 16px 0;">
-                    <h3 style="margin: 0; color: var(--theme-color-std-text);">Latest Version</h3>
-                    <ix-pill variant="warning" size="small" icon="arrow-up">
-                        Update available
-                    </ix-pill>
+                <div style="display: flex; align-items: center; gap: 12px; margin: ${repo.cloned ? '32px' : '0'} 0 16px 0;">
+                    <h3 style="margin: 0; color: var(--theme-color-std-text);">${repo.cloned ? 'Latest Version' : 'Subproject Information'}</h3>
+                    ${repo.cloned ? `
+                        <ix-pill variant="info" size="small" icon="add">
+                            New subproject
+                        </ix-pill>
+                    ` : ''}
                 </div>
             `;
-            html += this.renderPackageCards(remotePackageData);
+            html += this.renderSubprojectCards(remoteSubproject, remotePackageData);
         }
-        
-        // If not cloned yet, show only remote data
-        if (!localWinccoaPackage && remoteWinccoaPackage) {
-            const remotePackageData = typeof remoteWinccoaPackage === 'string' 
-                ? JSON.parse(remoteWinccoaPackage)
-                : remoteWinccoaPackage;
-            html += this.renderPackageCards(remotePackageData);
+        // Scenario 3: Only in local (will be removed with update)
+        else if (localSubproject && !remoteSubproject) {
+            html += `
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                    <h3 style="margin: 0; color: var(--theme-color-std-text);">Current Version</h3>
+                    ${isRegistered ? `
+                        <ix-pill variant="success" size="small" icon="success">
+                            Installed
+                        </ix-pill>
+                    ` : `
+                        <ix-pill variant="neutral" size="small" icon="download">
+                            Cloned locally
+                        </ix-pill>
+                    `}
+                </div>
+            `;
+            html += this.renderSubprojectCards(localSubproject, localPackageData);
+
+            // Show warning that this subproject will be removed
+            if (repo.hasUpdate) {
+                html += `
+                    <div style="display: flex; align-items: center; gap: 12px; margin: 32px 0 16px 0;">
+                        <h3 style="margin: 0; color: var(--theme-color-std-text);">Latest Version</h3>
+                        <ix-pill variant="alarm" size="small" icon="warning">
+                            Will be removed with update
+                        </ix-pill>
+                    </div>
+                    <div style="text-align: center; padding: 24px; color: var(--theme-color-alarm); background: var(--theme-color-2); border-radius: 8px;">
+                        <ix-icon name="warning" size="24"></ix-icon>
+                        <p style="margin: 8px 0 0 0;">This subproject is not available in the latest version and will be removed when you update</p>
+                    </div>
+                `;
+            }
         }
-        
+        // Scenario 4: Neither local nor remote (shouldn't happen)
+        else {
+            html = `
+                <div style="text-align: center; padding: 48px; color: var(--theme-color-weak-text);">
+                    <ix-icon name="info" size="32"></ix-icon>
+                    <p style="margin: 16px 0 0 0;">No data available for this subproject</p>
+                </div>
+            `;
+        }
+
         subprojectContent.innerHTML = html;
     }
 
     /**
-     * Render package cards for winccoaPackage data
+     * Render cards for a specific subproject (subproject-specific info only)
      */
-    private renderPackageCards(packageData: any): string {
+    private renderSubprojectCards(subproject: any, _packageData: any): string {
         let html = '<div class="overview-grid">';
-        
-        // Basic Information Card
+
+        // Subproject Information Card (subproject-specific info only)
         html += `
             <div class="overview-card">
-                <h4>Package Information</h4>
-                ${packageData.Subproject ? `
+                <h4>Subproject Information</h4>
+                ${subproject.Name ? `
                 <div class="stat-item">
                     <span class="stat-label">Subproject Name:</span>
-                    <span>${packageData.Subproject}</span>
+                    <span>${subproject.Name}</span>
                 </div>` : ''}
-                ${packageData.Version ? `
-                <div class="stat-item">
-                    <span class="stat-label">Version:</span>
-                    <span>${packageData.Version}</span>
-                </div>` : ''}
-                ${packageData.OaVersion ? `
-                <div class="stat-item">
-                    <span class="stat-label">WinCC OA Version:</span>
-                    <span>${packageData.OaVersion}</span>
-                </div>` : ''}
-                ${packageData.RepoName ? `
-                <div class="stat-item">
-                    <span class="stat-label">Repository Name:</span>
-                    <span>${packageData.RepoName}</span>
-                </div>` : ''}
-                ${packageData.Description ? `
+                ${subproject.Description ? `
                 <div class="stat-item">
                     <span class="stat-label">Description:</span>
-                    <span>${packageData.Description}</span>
+                    <span>${subproject.Description}</span>
                 </div>` : ''}
             </div>
         `;
-        
+
         // Dplists Card
-        if (packageData.Dplists && Array.isArray(packageData.Dplists) && packageData.Dplists.length > 0) {
+        if (subproject.Dplists && Array.isArray(subproject.Dplists) && subproject.Dplists.length > 0) {
             html += `
                 <div class="overview-card">
-                    <h4>Data Point Lists (${packageData.Dplists.length})</h4>
+                    <h4>Data Point Lists (${subproject.Dplists.length})</h4>
                     <div style="display: flex; flex-direction: column; gap: 8px;">
             `;
-            packageData.Dplists.forEach((dpl: string) => {
+            subproject.Dplists.forEach((dpl: string) => {
                 html += `
                         <div style="display: flex; align-items: center; gap: 8px; color: var(--theme-color-std-text);">
                             <ix-icon name="document" size="16" style="color: var(--theme-color-primary);"></ix-icon>
@@ -1559,16 +1793,16 @@ export class MarketplaceUI {
                     </div>
                 </div>`;
         }
-        
+
         // Managers List
-        if (packageData.Managers && Array.isArray(packageData.Managers) && packageData.Managers.length > 0) {
+        if (subproject.Managers && Array.isArray(subproject.Managers) && subproject.Managers.length > 0) {
             html += `
                 <div class="overview-card">
-                    <h4>Managers (${packageData.Managers.length})</h4>
+                    <h4>Managers (${subproject.Managers.length})</h4>
                     <div style="display: flex; flex-direction: column; gap: 16px;">
             `;
-            
-            packageData.Managers.forEach((manager: any) => {
+
+            subproject.Managers.forEach((manager: any) => {
                 html += `
                         <div style="display: flex; flex-direction: column; gap: 4px;">
                             <div style="display: flex; align-items: center; gap: 8px; color: var(--theme-color-std-text); font-weight: 600;">
@@ -1577,7 +1811,7 @@ export class MarketplaceUI {
                             </div>
                             <div style="margin-left: 24px; display: flex; flex-direction: column; gap: 4px;">
                 `;
-                
+
                 if (manager.StartMode) {
                     html += `
                                 <div style="color: var(--theme-color-weak-text); font-size: 13px;">
@@ -1585,7 +1819,7 @@ export class MarketplaceUI {
                                 </div>
                     `;
                 }
-                
+
                 if (manager.Options) {
                     html += `
                                 <div style="color: var(--theme-color-weak-text); font-size: 13px;">
@@ -1593,40 +1827,49 @@ export class MarketplaceUI {
                                 </div>
                     `;
                 }
-                
-                // Add any other manager properties
-                Object.keys(manager).forEach(key => {
-                    if (key !== 'Name' && key !== 'StartMode' && key !== 'Options') {
-                        html += `
-                                <div style="color: var(--theme-color-weak-text); font-size: 13px;">
-                                    <span style="font-weight: 500;">${key}:</span> ${manager[key]}
-                                </div>
-                        `;
-                    }
-                });
-                
+
                 html += `
                             </div>
                         </div>
                 `;
             });
-            
+
             html += `
                     </div>
                 </div>`;
         }
 
         // Update Scripts Card
-        if (packageData.UpdateScripts && Array.isArray(packageData.UpdateScripts) && packageData.UpdateScripts.length > 0) {
+        if (subproject.UpdateScripts && Array.isArray(subproject.UpdateScripts) && subproject.UpdateScripts.length > 0) {
             html += `
                 <div class="overview-card">
-                    <h4>Update Scripts (${packageData.UpdateScripts.length})</h4>
+                    <h4>Update Scripts (${subproject.UpdateScripts.length})</h4>
                     <div style="display: flex; flex-direction: column; gap: 8px;">
             `;
-            packageData.UpdateScripts.forEach((script: string) => {
+            subproject.UpdateScripts.forEach((script: string) => {
                 html += `
                         <div style="display: flex; align-items: center; gap: 8px; color: var(--theme-color-std-text);">
                             <ix-icon name="code" size="16" style="color: var(--theme-color-warning);"></ix-icon>
+                            <span>${script}</span>
+                        </div>
+                `;
+            });
+            html += `
+                    </div>
+                </div>`;
+        }
+
+        // UnInstall Scripts Card
+        if (subproject.UnInstallScripts && Array.isArray(subproject.UnInstallScripts) && subproject.UnInstallScripts.length > 0) {
+            html += `
+                <div class="overview-card">
+                    <h4>Uninstall Scripts (${subproject.UnInstallScripts.length})</h4>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+            `;
+            subproject.UnInstallScripts.forEach((script: string) => {
+                html += `
+                        <div style="display: flex; align-items: center; gap: 8px; color: var(--theme-color-std-text);">
+                            <ix-icon name="trashcan" size="16" style="color: var(--theme-color-alarm);"></ix-icon>
                             <span>${script}</span>
                         </div>
                 `;
@@ -2092,37 +2335,43 @@ export class MarketplaceUI {
             
             if (response.ok) {
                 this.showSuccess('Subproject installed successfully');
-                
+
                 // Reload local repositories to get updated version and subproject name
                 await this.loadLocalRepositories();
-                
-                // Add the subproject name (not repository name) to registered projects
-                // Get the updated subproject name from the reloaded data
+
+                // Add ALL subproject names to registered projects (for multiple subprojects)
                 const updatedRepo = this.repositories[repoIndex];
-                const subprojectName = updatedRepo?.subprojectName || repositoryBeingRegistered.name;
-                if (!this.registeredProjects.includes(subprojectName)) {
-                    this.registeredProjects.push(subprojectName);
+                if (updatedRepo?.localWinccoaPackage) {
+                    const subprojects = this.getSubprojects(updatedRepo.localWinccoaPackage);
+                    for (const sp of subprojects) {
+                        if (sp.Name && !this.registeredProjects.includes(sp.Name)) {
+                            this.registeredProjects.push(sp.Name);
+                        }
+                    }
                 }
-                
+
                 // Clear loading state
                 if (repoIndex !== -1) {
                     this.repositories[repoIndex].loadingAction = null;
                 }
-                
+
                 // If this is still the current repository, sync it from the array and update UI
                 if (this.currentRepository?.name === repositoryBeingRegistered.name) {
                     // Sync currentRepository with the updated data from repositories array
-                    const updatedRepo = this.repositories[repoIndex];
-                    if (updatedRepo) {
-                        this.currentRepository.fileContent = updatedRepo.fileContent;
-                        this.currentRepository.subprojectName = updatedRepo.subprojectName;
-                        this.currentRepository.currentVersion = updatedRepo.currentVersion;
-                        this.currentRepository.hasUpdate = updatedRepo.hasUpdate;
+                    const syncedRepo = this.repositories[repoIndex];
+                    if (syncedRepo) {
+                        this.currentRepository.fileContent = syncedRepo.fileContent;
+                        this.currentRepository.subprojectName = syncedRepo.subprojectName;
+                        this.currentRepository.currentVersion = syncedRepo.currentVersion;
+                        this.currentRepository.hasUpdate = syncedRepo.hasUpdate;
+                        this.currentRepository.localWinccoaPackage = syncedRepo.localWinccoaPackage;
                     }
                     this.currentRepository.loadingAction = null;
                     this.updateLocalStatus(this.currentRepository);
+                    // Re-render subproject content to show updated "Installed" status
+                    this.renderSubprojectContent();
                 }
-                
+
                 this.renderRepositoryList(); // Refresh to show status change
             } else {
                 this.showError('Failed to install subproject: ' + result);
@@ -2247,12 +2496,24 @@ export class MarketplaceUI {
                     }
                     if (data.fileContent) {
                         this.repositories[repoIndex].fileContent = data.fileContent;
+                        // Also set localWinccoaPackage with parsed content
+                        try {
+                            const parsedContent = typeof data.fileContent === 'string'
+                                ? JSON.parse(data.fileContent)
+                                : data.fileContent;
+                            this.repositories[repoIndex].localWinccoaPackage = parsedContent;
+                            if (parsedContent.Version) {
+                                this.repositories[repoIndex].currentVersion = parsedContent.Version;
+                            }
+                        } catch (e) {
+                            console.warn('Could not parse fileContent after clone:', e);
+                        }
                     }
                     if (data.repositoryPath) {
                         this.repositories[repoIndex].localPath = data.repositoryPath;
                     }
                 }
-                
+
                 // If this is still the current repository, update it and refresh UI
                 if (this.currentRepository?.name === repository.name) {
                     this.currentRepository.cloned = true;
@@ -2261,6 +2522,18 @@ export class MarketplaceUI {
                     }
                     if (data.fileContent) {
                         this.currentRepository.fileContent = data.fileContent;
+                        // Also set localWinccoaPackage with parsed content
+                        try {
+                            const parsedContent = typeof data.fileContent === 'string'
+                                ? JSON.parse(data.fileContent)
+                                : data.fileContent;
+                            this.currentRepository.localWinccoaPackage = parsedContent;
+                            if (parsedContent.Version) {
+                                this.currentRepository.currentVersion = parsedContent.Version;
+                            }
+                        } catch (e) {
+                            console.warn('Could not parse fileContent after clone:', e);
+                        }
                     }
                     if (data.repositoryPath) {
                         this.currentRepository.localPath = data.repositoryPath;
@@ -2362,23 +2635,30 @@ export class MarketplaceUI {
             const resultText = await response.text();
             
             if (response.ok) {
-                const successMsg = result.deleteRepository 
+                const successMsg = result.deleteRepository
                     ? 'Subproject uninstalled and repository deleted successfully'
                     : 'Subproject uninstalled successfully';
                 this.showSuccess(successMsg);
-                
-                // Remove the subproject name (not repository name) from registered projects
-                const subprojectName = repositoryBeingUnregistered.subprojectName || repositoryBeingUnregistered.name;
-                const index = this.registeredProjects.indexOf(subprojectName);
-                if (index > -1) {
-                    this.registeredProjects.splice(index, 1);
+
+                // Remove ALL subproject names from registered projects (for multiple subprojects)
+                const packageData = repositoryBeingUnregistered.localWinccoaPackage;
+                if (packageData) {
+                    const subprojects = this.getSubprojects(packageData);
+                    for (const sp of subprojects) {
+                        if (sp.Name) {
+                            const index = this.registeredProjects.indexOf(sp.Name);
+                            if (index > -1) {
+                                this.registeredProjects.splice(index, 1);
+                            }
+                        }
+                    }
                 }
-                
+
                 // Reload local repositories if not deleted (to update version info)
                 if (!result.deleteRepository) {
                     await this.loadLocalRepositories();
                 }
-                
+
                 // Update the repository in the repositories array
                 if (repoIndex !== -1) {
                     // If repository was deleted, reset the cloned state
@@ -2389,12 +2669,16 @@ export class MarketplaceUI {
                         this.repositories[repoIndex].currentVersion = undefined;
                         this.repositories[repoIndex].subprojectName = undefined;
                         this.repositories[repoIndex].hasUpdate = false;
+                        this.repositories[repoIndex].localWinccoaPackage = undefined;
                     }
                     this.repositories[repoIndex].loadingAction = null;
                 }
-                
+
                 // If this is still the current repository, sync it and refresh UI
                 if (this.currentRepository?.name === repositoryBeingUnregistered.name) {
+                    // Use tracked subproject tab name
+                    const currentSubprojectName = this.currentSubprojectTab || undefined;
+
                     if (result.deleteRepository) {
                         this.currentRepository.cloned = false;
                         this.currentRepository.localPath = undefined;
@@ -2402,6 +2686,9 @@ export class MarketplaceUI {
                         this.currentRepository.currentVersion = undefined;
                         this.currentRepository.subprojectName = undefined;
                         this.currentRepository.hasUpdate = false;
+                        this.currentRepository.localWinccoaPackage = undefined;
+                        // Regenerate tabs to show only remote subprojects, keeping same tab selected
+                        this.updateTabs(this.currentRepository, currentSubprojectName);
                     } else {
                         // Sync currentRepository with updated data from repositories array
                         const updatedRepo = this.repositories[repoIndex];
@@ -2410,12 +2697,15 @@ export class MarketplaceUI {
                             this.currentRepository.subprojectName = updatedRepo.subprojectName;
                             this.currentRepository.currentVersion = updatedRepo.currentVersion;
                             this.currentRepository.hasUpdate = updatedRepo.hasUpdate;
+                            this.currentRepository.localWinccoaPackage = updatedRepo.localWinccoaPackage;
                         }
+                        // Re-render subproject content to show updated "Cloned locally" status
+                        this.renderSubprojectContent(currentSubprojectName);
                     }
                     this.currentRepository.loadingAction = null;
                     this.updateLocalStatus(this.currentRepository);
                 }
-                
+
                 this.renderRepositoryList(); // Refresh to show status change
             } else {
                 this.showError('Failed to uninstall subproject: ' + resultText);

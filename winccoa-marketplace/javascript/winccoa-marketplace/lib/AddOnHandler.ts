@@ -13,7 +13,7 @@ import { AsciiManager } from "./AsciiManager";
 import { CommandExecutor } from "./CommandExecutor";
 import { PathResolver } from "./PathResolver";
 import { NodeInstaller } from "./NodeInstaller";
-import { AddonConfig } from "./AddonConfig";
+import { AddonConfig, SubprojectConfig } from "./AddonConfig";
 
 /**
  * Interface for manager configuration
@@ -655,7 +655,8 @@ bool addManager(string manager, string startMode, string options, string user, s
   async registerSubProject(
     repoPath: string,
     projectName: string,
-    config: AddonConfig,
+    addonConfig: AddonConfig,
+    subprojectConfig: SubprojectConfig,
     session: string,
   ): Promise<number> {
     const ret = (await this.ctrlScript.start(
@@ -666,18 +667,18 @@ bool addManager(string manager, string startMode, string options, string user, s
 
     await NodeInstaller.installAndBuild(path.join(repoPath, projectName));
 
-    // Import dplist files if available
+    // Import dplist files if available (from subproject config)
     if (
-      config.Dplists &&
-      Array.isArray(config.Dplists) &&
-      config.Dplists.length > 0
+      subprojectConfig.Dplists &&
+      Array.isArray(subprojectConfig.Dplists) &&
+      subprojectConfig.Dplists.length > 0
     ) {
       winccoa.logDebugF(
         "addonHandler",
-        `Importing ${config.Dplists.length} dplist file(s)...`,
+        `Importing ${subprojectConfig.Dplists.length} dplist file(s)...`,
       );
       await this.importAsciiFiles(
-        config.Dplists,
+        subprojectConfig.Dplists,
         path.join(repoPath, projectName, "dplist"),
       );
     } else {
@@ -690,7 +691,8 @@ bool addManager(string manager, string startMode, string options, string user, s
     const pmonUser = sessionCredentials?.user || "";
     const pmonPassword = sessionCredentials?.password || "";
 
-    for (const manager of config.Managers || []) {
+    // Add managers from subproject config
+    for (const manager of subprojectConfig.Managers || []) {
       winccoa.logDebugF(
         "addonHandler",
         `Adding manager ${manager.Name} with start mode ${manager.StartMode} and options ${manager.Options}`,
@@ -721,16 +723,16 @@ bool addManager(string manager, string startMode, string options, string user, s
     repoPath: string,
     projectName: string,
     deleteFiles: boolean,
-    config?: AddonConfig,
+    subprojectConfig?: SubprojectConfig,
   ): Promise<number> {
-    // Execute uninstall scripts if available
+    // Execute uninstall scripts if available (from subproject config)
     if (
-      config &&
-      config.UnInstallScripts &&
-      config.UnInstallScripts.length > 0
+      subprojectConfig &&
+      subprojectConfig.UnInstallScripts &&
+      subprojectConfig.UnInstallScripts.length > 0
     ) {
       console.log(
-        `Executing ${config.UnInstallScripts.length} uninstall script(s)...`,
+        `Executing ${subprojectConfig.UnInstallScripts.length} uninstall script(s)...`,
       );
 
       // Create a timeout promise that rejects after 5 minutes
@@ -752,7 +754,7 @@ bool addManager(string manager, string startMode, string options, string user, s
         await Promise.race([
           this.executeScripts(
             path.join(repoPath, projectName),
-            config.UnInstallScripts,
+            subprojectConfig.UnInstallScripts,
           ),
           timeoutPromise,
         ]);
@@ -1230,21 +1232,24 @@ bool addManager(string manager, string startMode, string options, string user, s
   mapPackageJsonToAddonConfig(packageJson: any): AddonConfig {
     return {
       RepoName: packageJson.RepoName,
-      Keywords: packageJson.Keywords,
-      Subproject: packageJson.Subproject,
+      Keywords: packageJson.Keywords || [],
       Version: packageJson.Version,
       Description: packageJson.Description,
       OaVersion: packageJson.OaVersion,
-      Managers: packageJson.Managers
-        ? packageJson.Managers.map((manager: any) => ({
-            Name: manager.Name || "",
-            StartMode: manager.StartMode || "Unknown",
-            Options: manager.Options || "",
-          }))
-        : [],
-      Dplists: packageJson.Dplists || [],
-      UpdateScripts: packageJson.UpdateScripts || [],
-      UnInstallScripts: packageJson.UnInstallScripts || [],
+      Subprojects: (packageJson.Subprojects || []).map((sp: any) => ({
+        Name: sp.Name,
+        Description: sp.Description,
+        Managers: sp.Managers
+          ? sp.Managers.map((manager: any) => ({
+              Name: manager.Name || "",
+              StartMode: manager.StartMode || "Unknown",
+              Options: manager.Options || "",
+            }))
+          : [],
+        Dplists: sp.Dplists || [],
+        UpdateScripts: sp.UpdateScripts || [],
+        UnInstallScripts: sp.UnInstallScripts || [],
+      })),
     };
   }
 
@@ -1391,63 +1396,68 @@ bool addManager(string manager, string startMode, string options, string user, s
             updatedAddonConfig =
               this.mapPackageJsonToAddonConfig(parsedPackage);
 
-            if (updatedAddonConfig.Dplists) {
-              this.importAsciiFiles(
-                updatedAddonConfig.Dplists,
-                path.join(
-                  repositoryDirectory,
-                  updatedAddonConfig.Subproject,
-                  "dplist",
-                ),
-              );
-            }
-
-            // Execute update scripts if any
-            if (updatedAddonConfig.UpdateScripts) {
-              winccoa.logDebugF(
-                "addonHandler",
-                `Executing ${updatedAddonConfig.UpdateScripts.length} update script(s)...`,
-              );
-
-              // Create a timeout promise that rejects after 5 minutes
-              const timeoutPromise = new Promise<void>((_, reject) => {
-                setTimeout(
-                  () => {
-                    reject(
-                      new Error(
-                        "Update scripts execution timed out after 5 minutes",
-                      ),
-                    );
-                  },
-                  5 * 60 * 1000,
-                ); // 5 minutes in milliseconds
-              });
-
-              // Race the execution against the timeout
-              try {
-                await Promise.race([
-                  this.executeScripts(
+            // Process each subproject
+            for (const subproject of updatedAddonConfig.Subprojects) {
+              // Import dplist files if available
+              if (subproject.Dplists && subproject.Dplists.length > 0) {
+                this.importAsciiFiles(
+                  subproject.Dplists,
+                  path.join(
                     repositoryDirectory,
-                    updatedAddonConfig.UpdateScripts,
+                    subproject.Name,
+                    "dplist",
                   ),
-                  timeoutPromise,
-                ]);
-                console.log("Update scripts completed successfully");
-              } catch (error) {
-                if (
-                  error instanceof Error &&
-                  error.message.includes("timed out")
-                ) {
-                  winccoa.logWarning(
-                    "Update scripts execution timed out after 5 minutes",
-                  );
-                } else {
-                  winccoa.logWarning("Error executing update scripts:", error);
-                }
-                throw error;
+                );
               }
-            } else {
-              winccoa.logDebugF("addonHandler", "No update scripts to execute");
+
+              // Execute update scripts if any
+              if (subproject.UpdateScripts && subproject.UpdateScripts.length > 0) {
+                winccoa.logDebugF(
+                  "addonHandler",
+                  `Executing ${subproject.UpdateScripts.length} update script(s) for subproject ${subproject.Name}...`,
+                );
+
+                // Create a timeout promise that rejects after 5 minutes
+                const timeoutPromise = new Promise<void>((_, reject) => {
+                  setTimeout(
+                    () => {
+                      reject(
+                        new Error(
+                          "Update scripts execution timed out after 5 minutes",
+                        ),
+                      );
+                    },
+                    5 * 60 * 1000,
+                  ); // 5 minutes in milliseconds
+                });
+
+                // Race the execution against the timeout
+                try {
+                  // eslint-disable-next-line no-await-in-loop
+                  await Promise.race([
+                    this.executeScripts(
+                      path.join(repositoryDirectory, subproject.Name),
+                      subproject.UpdateScripts,
+                    ),
+                    timeoutPromise,
+                  ]);
+                  console.log(`Update scripts for ${subproject.Name} completed successfully`);
+                } catch (error) {
+                  if (
+                    error instanceof Error &&
+                    error.message.includes("timed out")
+                  ) {
+                    winccoa.logWarning(
+                      `Update scripts execution for ${subproject.Name} timed out after 5 minutes`,
+                    );
+                  } else {
+                    winccoa.logWarning(`Error executing update scripts for ${subproject.Name}:`, error);
+                  }
+                  throw error;
+                }
+              } else {
+                winccoa.logDebugF("addonHandler", `No update scripts to execute for subproject ${subproject.Name}`);
+              }
             }
           } catch (error) {
             winccoa.logWarning(
