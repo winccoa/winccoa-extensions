@@ -1612,9 +1612,29 @@ export class MarketplaceUI {
                     </div>
                 </div>`;
         }
-        
+
+        // Update Scripts Card
+        if (packageData.UpdateScripts && Array.isArray(packageData.UpdateScripts) && packageData.UpdateScripts.length > 0) {
+            html += `
+                <div class="overview-card">
+                    <h4>Update Scripts (${packageData.UpdateScripts.length})</h4>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+            `;
+            packageData.UpdateScripts.forEach((script: string) => {
+                html += `
+                        <div style="display: flex; align-items: center; gap: 8px; color: var(--theme-color-std-text);">
+                            <ix-icon name="code" size="16" style="color: var(--theme-color-warning);"></ix-icon>
+                            <span>${script}</span>
+                        </div>
+                `;
+            });
+            html += `
+                    </div>
+                </div>`;
+        }
+
         html += '</div>';
-        
+
         return html;
     }
 
