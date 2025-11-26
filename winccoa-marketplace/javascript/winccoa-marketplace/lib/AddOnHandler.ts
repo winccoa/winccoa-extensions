@@ -726,11 +726,11 @@ bool addManager(string manager, string startMode, string options, string user, s
     // Execute uninstall scripts if available
     if (
       config &&
-      config.UnInstallScripts &&
-      config.UnInstallScripts.length > 0
+      config.UninstallScripts &&
+      config.UninstallScripts.length > 0
     ) {
       console.log(
-        `Executing ${config.UnInstallScripts.length} uninstall script(s)...`,
+        `Executing ${config.UninstallScripts.length} uninstall script(s)...`,
       );
 
       // Create a timeout promise that rejects after 5 minutes
@@ -752,7 +752,7 @@ bool addManager(string manager, string startMode, string options, string user, s
         await Promise.race([
           this.executeScripts(
             path.join(repoPath, projectName),
-            config.UnInstallScripts,
+            config.UninstallScripts,
           ),
           timeoutPromise,
         ]);
@@ -1244,7 +1244,7 @@ bool addManager(string manager, string startMode, string options, string user, s
         : [],
       Dplists: packageJson.Dplists || [],
       UpdateScripts: packageJson.UpdateScripts || [],
-      UnInstallScripts: packageJson.UnInstallScripts || [],
+      UninstallScripts: packageJson.UnInstallScripts || [],
     };
   }
 
