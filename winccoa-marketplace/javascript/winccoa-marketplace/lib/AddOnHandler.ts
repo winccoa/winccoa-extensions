@@ -13,7 +13,7 @@ import { AsciiManager } from "./AsciiManager";
 import { CommandExecutor } from "./CommandExecutor";
 import { PathResolver } from "./PathResolver";
 import { NodeInstaller } from "./NodeInstaller";
-import { AddonConfig, SubprojectConfig, ManagerConfig } from "./AddonConfig";
+import { AddonConfig, SubprojectConfig } from "./AddonConfig";
 
 /**
  * Interface for manager configuration
@@ -685,7 +685,6 @@ void removeManager(int manIdx)
   async registerSubProject(
     repoPath: string,
     projectName: string,
-    addonConfig: AddonConfig,
     subprojectConfig: SubprojectConfig,
     session: string,
   ): Promise<number> {
