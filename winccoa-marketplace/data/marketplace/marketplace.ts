@@ -1066,9 +1066,12 @@ export class MarketplaceUI {
         
         // Fetch and render README if it's a GitHub repository
         this.fetchAndRenderReadme(repo);
-        
+
         // Update local status and action buttons
         this.updateLocalStatus(repo);
+
+        // Re-render subproject content if the tab exists
+        this.renderSubprojectContent();
     }
 
     /**
@@ -1908,9 +1911,24 @@ export class MarketplaceUI {
                 if (repoIndex !== -1) {
                     if (data.fileContent) {
                         this.repositories[repoIndex].fileContent = data.fileContent;
+                        // Also update localWinccoaPackage with parsed content
+                        try {
+                            const parsedContent = typeof data.fileContent === 'string'
+                                ? JSON.parse(data.fileContent)
+                                : data.fileContent;
+                            this.repositories[repoIndex].localWinccoaPackage = parsedContent;
+                            // Update version info from new content
+                            if (parsedContent.Version) {
+                                this.repositories[repoIndex].currentVersion = parsedContent.Version;
+                                // After update, current version should match latest
+                                this.repositories[repoIndex].hasUpdate = false;
+                            }
+                        } catch (e) {
+                            console.warn('Could not parse fileContent after pull:', e);
+                        }
                     }
                     this.repositories[repoIndex].loadingAction = null;
-                    
+
                     // If this is the current repository, update the reference to the reloaded data
                     if (this.currentRepository?.name === repositoryBeingPulled.name) {
                         this.currentRepository = this.repositories[repoIndex];
