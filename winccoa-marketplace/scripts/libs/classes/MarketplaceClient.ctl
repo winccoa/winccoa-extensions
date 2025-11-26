@@ -37,9 +37,9 @@ class MarketplaceClient
     return response.getResponse();
   }
 
-  public mapping pull(string urlOrName)
+  public mapping pull(mapping request)
   {
-    VrpcResponseData response = stub.callFunction("pull", urlOrName);
+    VrpcResponseData response = stub.callFunction("pull", request);
     return response.getResponse();
   }
 

@@ -13,7 +13,7 @@ import { AsciiManager } from "./AsciiManager";
 import { CommandExecutor } from "./CommandExecutor";
 import { PathResolver } from "./PathResolver";
 import { NodeInstaller } from "./NodeInstaller";
-import { AddonConfig } from "./AddonConfig";
+import { AddonConfig, ManagerConfig } from "./AddonConfig";
 
 /**
  * Interface for manager configuration
@@ -654,6 +654,23 @@ bool addManager(string manager, string startMode, string options, string user, s
   pmonInsertManager(err, PROJ, dynlen(managers), makeDynString(manager, startMode, 2, 2, 30, options), user, pwd);
   return err;
 }
+
+
+int managerExists(string manager, string options)
+{
+  ProjEnvProject proj  = new ProjEnvProject(PROJ);
+  dyn_anytype managerOptions = proj.getListOfManagerOptions();
+
+  bool exists;
+
+  for (int i = 0; i < dynlen(managerOptions); i++)
+  {
+    ProjEnvManagerOptions managerOption = managerOptions[i + 1];
+    if (managerOption.component == manager && managerOption.startOptions == options)
+      return i;
+  }
+  return -1;
+}
   `,
   );
 
@@ -1091,32 +1108,6 @@ bool addManager(string manager, string startMode, string options, string user, s
   }
 
   /**
-   * Extract version from package.winccoa.json file
-   * @param repositoryPath The full path to the repository directory
-   * @returns The version string or null if not found
-   */
-  private extractVersionFromPackageJson(repositoryPath: string): string | null {
-    try {
-      const packageWinCCoAPath = path.join(
-        repositoryPath,
-        "package.winccoa.json",
-      );
-
-      if (fs.existsSync(packageWinCCoAPath)) {
-        const fileContent = fs.readFileSync(packageWinCCoAPath, "utf8");
-        const parseResult = JSON.parse(fileContent);
-        return parseResult.version || parseResult.Version || null;
-      }
-      return null;
-    } catch (error: any) {
-      winccoa.logWarning(
-        `Failed to extract version from package.winccoa.json: ${error.message}`,
-      );
-      return null;
-    }
-  }
-
-  /**
    * Check if the current WinCC OA version is compatible with the required version
    * @param requiredVersion Version requirement string (e.g., "^3.21.0", ">=3.20.0")
    * @returns True if the current version is compatible
@@ -1245,6 +1236,8 @@ bool addManager(string manager, string startMode, string options, string user, s
             Name: manager.Name || "",
             StartMode: manager.StartMode || "Unknown",
             Options: manager.Options || "",
+            RestartOnUpdate:
+              manager.RestartOnUpdate != null ? manager.RestartOnUpdate : true,
           }))
         : [],
       Dplists: packageJson.Dplists || [],
@@ -1329,34 +1322,45 @@ bool addManager(string manager, string startMode, string options, string user, s
    * @param repositoryDirectory Absolute path to the repository directory
    * @returns Pull result with summary information
    */
-  async pullRepository(repositoryDirectory: string): Promise<any> {
+  async pullRepository(repositoryPath: string, session: string): Promise<any> {
     try {
       // Verify the directory exists
-      if (!fs.existsSync(repositoryDirectory)) {
+      if (!fs.existsSync(repositoryPath)) {
         throw new Error(
-          `Repository directory does not exist: ${repositoryDirectory}`,
+          `Repository directory does not exist: ${repositoryPath}`,
         );
       }
 
       // Verify it's a git repository (check for .git directory)
-      const gitDir = path.join(repositoryDirectory, ".git");
+      const gitDir = path.join(repositoryPath, ".git");
       if (!fs.existsSync(gitDir)) {
-        throw new Error(
-          `Directory is not a git repository: ${repositoryDirectory}`,
-        );
+        throw new Error(`Directory is not a git repository: ${repositoryPath}`);
       }
 
       // Read version before pull
-      const versionBeforePull =
-        this.extractVersionFromPackageJson(repositoryDirectory);
+      let updatedAddonConfigBeforePull;
+
+      try {
+        const packageJsonContentBeforePull =
+          this.readWinCCOAPackageJson(repositoryPath);
+        if (!packageJsonContentBeforePull) {
+          throw new Error("package.winccoa.json not found before pull");
+        }
+        const parsedPackage = JSON.parse(packageJsonContentBeforePull);
+        updatedAddonConfigBeforePull =
+          this.mapPackageJsonToAddonConfig(parsedPackage);
+      } catch (error) {
+        console.log("Could not read package.winccoa.json before pull:", error);
+        return;
+      }
 
       winccoa.logDebugF(
         "addonHandler",
-        `Pulling latest changes from repository: ${repositoryDirectory}`,
+        `Pulling latest changes from repository: ${repositoryPath}`,
       );
 
       // Use simple-git for pull operation
-      const git = simpleGit(repositoryDirectory);
+      const git = simpleGit(repositoryPath);
       const pullResult = await git.pull();
 
       if (pullResult.summary.changes) {
@@ -1371,36 +1375,34 @@ bool addManager(string manager, string startMode, string options, string user, s
       winccoa.logDebugF("addonHandler", "Git pull completed successfully!");
 
       // Read version after pull and compare
-      const versionAfterPull =
-        this.extractVersionFromPackageJson(repositoryDirectory);
       // TEMP: hardcoded for testing
-      // const versionAfterPull = "2.0.1"
       let updatedAddonConfig: AddonConfig | null = null;
 
-      if (
-        versionBeforePull &&
-        versionAfterPull &&
-        this.isVersionHigher(versionAfterPull, versionBeforePull)
-      ) {
-        winccoa.logDebugF(
-          "addonHandler",
-          `INFO: Version updated from ${versionBeforePull} to ${versionAfterPull}`,
-        );
+      // Read and parse the updated package.winccoa.json as AddonConfig
+      const packageJsonContent = this.readWinCCOAPackageJson(repositoryPath);
+      if (packageJsonContent) {
+        try {
+          const parsedPackage = JSON.parse(packageJsonContent);
+          updatedAddonConfig = this.mapPackageJsonToAddonConfig(parsedPackage);
 
-        // Read and parse the updated package.winccoa.json as AddonConfig
-        const packageJsonContent =
-          this.readWinCCOAPackageJson(repositoryDirectory);
-        if (packageJsonContent) {
-          try {
-            const parsedPackage = JSON.parse(packageJsonContent);
-            updatedAddonConfig =
-              this.mapPackageJsonToAddonConfig(parsedPackage);
+          if (
+            updatedAddonConfigBeforePull.Version &&
+            updatedAddonConfig.Version &&
+            this.isVersionHigher(
+              updatedAddonConfig.Version,
+              updatedAddonConfigBeforePull.Version,
+            )
+          ) {
+            winccoa.logDebugF(
+              "addonHandler",
+              `INFO: Version updated from ${updatedAddonConfigBeforePull.Version} to ${updatedAddonConfig.Version}`,
+            );
 
             if (updatedAddonConfig.Dplists) {
               await this.importAsciiFiles(
                 updatedAddonConfig.Dplists,
                 path.join(
-                  repositoryDirectory,
+                  repositoryPath,
                   updatedAddonConfig.Subproject,
                   "dplist",
                 ),
@@ -1432,7 +1434,7 @@ bool addManager(string manager, string startMode, string options, string user, s
               try {
                 await Promise.race([
                   this.executeScripts(
-                    repositoryDirectory,
+                    repositoryPath,
                     updatedAddonConfig.UpdateScripts,
                   ),
                   timeoutPromise,
@@ -1454,52 +1456,99 @@ bool addManager(string manager, string startMode, string options, string user, s
             } else {
               winccoa.logDebugF("addonHandler", "No update scripts to execute");
             }
-          } catch (error) {
-            winccoa.logWarning(
-              `Failed to parse updated package.winccoa.json as AddonConfig:`,
-              error,
-            );
+
+            // update node managers
+            await NodeInstaller.installAndBuild(repositoryPath);
+
+            if (updatedAddonConfig.Managers) {
+              const sessionCredentials = this.pmonCredentials.find(
+                (cred) => cred.session === session,
+              );
+              const pmonUser = sessionCredentials?.user || "";
+              const pmonPassword = sessionCredentials?.password || "";
+
+              for (const manager of updatedAddonConfig.Managers) {
+                // eslint-disable-next-line no-await-in-loop
+                const managerIdx = await this.ctrlScript.start(
+                  "managerExists",
+                  [manager.Name, manager.Options],
+                  [WinccoaCtrlType.string, WinccoaCtrlType.string],
+                );
+
+                if (managerIdx !== -1 && manager.RestartOnUpdate) {
+                  // eslint-disable-next-line no-await-in-loop
+                  await this.ctrlScript.start(
+                    "restartManager",
+                    [managerIdx],
+                    [WinccoaCtrlType.int],
+                  );
+                } else {
+                  // add manager if it does not exist
+                  // eslint-disable-next-line no-await-in-loop
+                  await this.ctrlScript.start(
+                    "addManager",
+                    [
+                      manager.Name,
+                      manager.StartMode.toLowerCase(),
+                      manager.Options,
+                      pmonUser,
+                      pmonPassword,
+                    ],
+                    [
+                      WinccoaCtrlType.string,
+                      WinccoaCtrlType.string,
+                      WinccoaCtrlType.string,
+                      WinccoaCtrlType.string,
+                      WinccoaCtrlType.string,
+                    ],
+                  );
+                }
+              }
+            }
           }
+        } catch (error) {
+          winccoa.logWarning(
+            `Failed to parse updated package.winccoa.json as AddonConfig:`,
+            error,
+          );
         }
       }
 
       return {
         success: true,
         message: "Repository updated successfully",
-        directory: repositoryDirectory,
+        directory: repositoryPath,
         changes: pullResult.summary.changes || 0,
         insertions: pullResult.summary.insertions || 0,
         deletions: pullResult.summary.deletions || 0,
         files: pullResult.files || [],
         updatedAt: new Date().toISOString(),
-        fileContent: this.readWinCCOAPackageJson(repositoryDirectory),
+        fileContent: this.readWinCCOAPackageJson(repositoryPath),
         updatedAddonConfig: updatedAddonConfig,
       };
     } catch (error: any) {
       winccoa.logWarning(
-        `Failed to pull repository at ${repositoryDirectory}:`,
+        `Failed to pull repository at ${repositoryPath}:`,
         error.message,
       );
 
       // Provide more specific error messages
       if (error.message.includes("not a git repository")) {
-        throw new Error(
-          `Directory is not a git repository: ${repositoryDirectory}`,
-        );
+        throw new Error(`Directory is not a git repository: ${repositoryPath}`);
       } else if (error.message.includes("does not exist")) {
         throw new Error(
-          `Repository directory does not exist: ${repositoryDirectory}`,
+          `Repository directory does not exist: ${repositoryPath}`,
         );
       } else if (
         error.message.includes("Permission denied") ||
         error.message.includes("authentication")
       ) {
         throw new Error(
-          `Authentication failed for repository at: ${repositoryDirectory}`,
+          `Authentication failed for repository at: ${repositoryPath}`,
         );
       } else if (error.message.includes("merge conflict")) {
         throw new Error(
-          `Merge conflicts detected in repository at: ${repositoryDirectory}. Please resolve conflicts manually.`,
+          `Merge conflicts detected in repository at: ${repositoryPath}. Please resolve conflicts manually.`,
         );
       } else {
         throw new Error(`Failed to pull repository: ${error.message}`);

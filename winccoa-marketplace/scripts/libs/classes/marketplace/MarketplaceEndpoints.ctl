@@ -106,11 +106,20 @@ class MarketplaceEndpoints
     }
     string repoName = values.at(idx);
 
+    string session = "";
+    idx = names.indexOf("session");
+    if (idx >= 0)
+    {
+      session = values.at(idx);
+    }
 
     try
     {
+      mapping requestMapping;
       string path = joinPath(client.repoPath(), repoName);
-      mapping result = client.pull(path);
+      requestMapping.insert("repoPath", path);
+      requestMapping.insert("session", session);
+      mapping result = client.pull(requestMapping);
       result.insert("message", "Successfully pulled repository " + repoName);
       return makeDynString(jsonEncode(result), "Status: 200 OK");
     }
@@ -138,10 +147,18 @@ class MarketplaceEndpoints
     }
     string fileContent = values.at(idx);
 
+    string session = "";
+    idx = names.indexOf("session");
+    if (idx >= 0)
+    {
+      session = values.at(idx);
+    }
+
     mapping requestMapping;
     string path = joinPath(client.repoPath(), repoName);
     requestMapping.insert("repositoryPath", path);
     requestMapping.insert("fileContent", fileContent);
+    requestMapping.insert("session", session);
 
     bool success = client.registerSubProjects(requestMapping);
 

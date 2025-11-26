@@ -1,5 +1,15 @@
 {
+  "name": "winccoa-marketplace-frontend",
+  "version": "1.0.0",
+  "description": "Frontend for WinCC OA Marketplace",
+  "private": true,
+  "scripts": {
+    "build": "npm run format && npx tsc",
+    "format": "prettier . --write --end-of-line auto",
+    "watch": "npx tsc --watch"
+  },
   "devDependencies": {
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "prettier": "^3.3.3"
   }
 }
