@@ -1392,7 +1392,7 @@ bool addManager(string manager, string startMode, string options, string user, s
               this.mapPackageJsonToAddonConfig(parsedPackage);
 
             if (updatedAddonConfig.Dplists) {
-              this.importAsciiFiles(
+              await this.importAsciiFiles(
                 updatedAddonConfig.Dplists,
                 path.join(
                   repositoryDirectory,
