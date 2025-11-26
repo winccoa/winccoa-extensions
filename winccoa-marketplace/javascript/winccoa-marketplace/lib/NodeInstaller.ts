@@ -59,8 +59,10 @@ export class NodeInstaller {
         [
           "install",
           "--save-dev",
-          winccoa.getPaths()[winccoa.getPaths().length - 1] +
-            "javascript/@types/winccoa-manager",
+          '"' +
+            winccoa.getPaths()[winccoa.getPaths().length - 1] +
+            "javascript/@types/winccoa-manager" +
+            '"',
         ],
         dir,
       );

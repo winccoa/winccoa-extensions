@@ -2047,30 +2047,6 @@ export class MarketplaceUI {
   }
 
   /**
-   * Show update confirmation modal
-   */
-  private async showUpdateConfirmation(): Promise<boolean> {
-    if (!window.ixShowMessage) {
-      console.error("ixShowMessage not available");
-      return false;
-    }
-
-    try {
-      const result = await window.ixShowMessage({
-        title: "Update Repository",
-        message:
-          "The Update will be downloaded. Changed Managers have to be added/removed manually.",
-        actions: [{ text: "Cancel" }, { text: "Update" }],
-      });
-
-      return result.actionIndex === 1; // Return true if "Update" was clicked
-    } catch (error) {
-      console.error("Error showing update confirmation:", error);
-      return false;
-    }
-  }
-
-  /**
    * Show clone modal using IX showMessage API
    */
   private async showCloneModal(): Promise<void> {
@@ -2288,10 +2264,6 @@ export class MarketplaceUI {
    */
   private async pullRepository(): Promise<void> {
     if (!this.currentRepository) return;
-
-    // Show confirmation modal
-    const confirmed = await this.showUpdateConfirmation();
-    if (!confirmed) return;
 
     // Capture the repository being pulled to avoid issues if user switches repos during operation
     const repositoryBeingPulled = this.currentRepository;
@@ -3026,18 +2998,25 @@ export class MarketplaceUI {
           this.repositories[repoIndex].currentVersion = undefined;
           this.repositories[repoIndex].subprojectName = undefined;
           this.repositories[repoIndex].hasUpdate = false;
+          this.repositories[repoIndex].localWinccoaPackage = undefined;
           this.repositories[repoIndex].loadingAction = null;
         }
 
         // If this is still the current repository, update it and refresh UI
         if (this.currentRepository?.name === repositoryBeingDeleted.name) {
+          // Get currently selected subproject tab name
+          const currentSubprojectName = this.currentSubprojectTab || undefined;
+
           this.currentRepository.cloned = false;
           this.currentRepository.localPath = undefined;
           this.currentRepository.fileContent = undefined;
           this.currentRepository.currentVersion = undefined;
           this.currentRepository.subprojectName = undefined;
           this.currentRepository.hasUpdate = false;
+          this.currentRepository.localWinccoaPackage = undefined;
           this.currentRepository.loadingAction = null;
+          // Regenerate tabs to show only remote subprojects, keeping same tab selected
+          this.updateTabs(this.currentRepository, currentSubprojectName);
           this.updateLocalStatus(this.currentRepository);
         }
 
