@@ -15,7 +15,9 @@
     "build:frontend": "npm run build --workspace=winccoa-marketplace/data/marketplace",
     "install:all": "npm install",
     "lint": "npm run lint --workspace=winccoa-marketplace/javascript/winccoa-marketplace",
-    "format": "npm run format --workspace=winccoa-marketplace/javascript/winccoa-marketplace",
+    "format": "npm run format --workspace=winccoa-marketplace/javascript/winccoa-marketplace && npm run format --workspace=winccoa-marketplace/data/marketplace",
+    "format:backend": "npm run format --workspace=winccoa-marketplace/javascript/winccoa-marketplace",
+    "format:frontend": "npm run format --workspace=winccoa-marketplace/data/marketplace",
     "dev": "npm run build -- --watch"
   },
   "devDependencies": {
