@@ -469,8 +469,11 @@ class AddOnHandler {
 
     // Try .env file in workspace root
     try {
-      const envPath = path.resolve(__dirname, "../../../../../.env");
+      // From lib/AddOnHandler.js, go up to workspace root: lib -> winccoa-marketplace -> javascript -> winccoa-marketplace -> github_integration
+      const envPath = path.resolve(__dirname, "../../../../.env");
+      winccoa.logDebugF("addonHandler", `Looking for .env file at: ${envPath}`);
       if (fs.existsSync(envPath)) {
+        winccoa.logDebugF("addonHandler", `.env file found at: ${envPath}`);
         const envContent = fs.readFileSync(envPath, "utf8");
         const lines = envContent.split("\n");
         for (const line of lines) {
@@ -498,6 +501,8 @@ class AddOnHandler {
             }
           }
         }
+      } else {
+        winccoa.logDebugF("addonHandler", `.env file NOT found at: ${envPath}`);
       }
     } catch (error) {
       winccoa.logInfo("addonHandler", "Could not read .env file");
@@ -1244,7 +1249,7 @@ bool addManager(string manager, string startMode, string options, string user, s
         : [],
       Dplists: packageJson.Dplists || [],
       UpdateScripts: packageJson.UpdateScripts || [],
-      UninstallScripts: packageJson.UnInstallScripts || [],
+      UninstallScripts: packageJson.UninstallScripts || [],
     };
   }
 
