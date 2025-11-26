@@ -1402,16 +1402,15 @@ bool addManager(string manager, string startMode, string options, string user, s
               if (subproject.Dplists && subproject.Dplists.length > 0) {
                 this.importAsciiFiles(
                   subproject.Dplists,
-                  path.join(
-                    repositoryDirectory,
-                    subproject.Name,
-                    "dplist",
-                  ),
+                  path.join(repositoryDirectory, subproject.Name, "dplist"),
                 );
               }
 
               // Execute update scripts if any
-              if (subproject.UpdateScripts && subproject.UpdateScripts.length > 0) {
+              if (
+                subproject.UpdateScripts &&
+                subproject.UpdateScripts.length > 0
+              ) {
                 winccoa.logDebugF(
                   "addonHandler",
                   `Executing ${subproject.UpdateScripts.length} update script(s) for subproject ${subproject.Name}...`,
@@ -1441,7 +1440,9 @@ bool addManager(string manager, string startMode, string options, string user, s
                     ),
                     timeoutPromise,
                   ]);
-                  console.log(`Update scripts for ${subproject.Name} completed successfully`);
+                  console.log(
+                    `Update scripts for ${subproject.Name} completed successfully`,
+                  );
                 } catch (error) {
                   if (
                     error instanceof Error &&
@@ -1451,12 +1452,18 @@ bool addManager(string manager, string startMode, string options, string user, s
                       `Update scripts execution for ${subproject.Name} timed out after 5 minutes`,
                     );
                   } else {
-                    winccoa.logWarning(`Error executing update scripts for ${subproject.Name}:`, error);
+                    winccoa.logWarning(
+                      `Error executing update scripts for ${subproject.Name}:`,
+                      error,
+                    );
                   }
                   throw error;
                 }
               } else {
-                winccoa.logDebugF("addonHandler", `No update scripts to execute for subproject ${subproject.Name}`);
+                winccoa.logDebugF(
+                  "addonHandler",
+                  `No update scripts to execute for subproject ${subproject.Name}`,
+                );
               }
             }
           } catch (error) {
