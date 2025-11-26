@@ -13,7 +13,7 @@ import { AsciiManager } from "./AsciiManager";
 import { CommandExecutor } from "./CommandExecutor";
 import { PathResolver } from "./PathResolver";
 import { NodeInstaller } from "./NodeInstaller";
-import { AddonConfig, ManagerConfig } from "./AddonConfig";
+import { AddonConfig, SubprojectConfig } from "./AddonConfig";
 
 /**
  * Interface for manager configuration
@@ -685,7 +685,7 @@ void removeManager(int manIdx)
   async registerSubProject(
     repoPath: string,
     projectName: string,
-    config: AddonConfig,
+    subprojectConfig: SubprojectConfig,
     session: string,
   ): Promise<number> {
     const ret = (await this.ctrlScript.start(
@@ -696,18 +696,18 @@ void removeManager(int manIdx)
 
     await NodeInstaller.installAndBuild(path.join(repoPath, projectName));
 
-    // Import dplist files if available
+    // Import dplist files if available (from subproject config)
     if (
-      config.Dplists &&
-      Array.isArray(config.Dplists) &&
-      config.Dplists.length > 0
+      subprojectConfig.Dplists &&
+      Array.isArray(subprojectConfig.Dplists) &&
+      subprojectConfig.Dplists.length > 0
     ) {
       winccoa.logDebugF(
         "addonHandler",
-        `Importing ${config.Dplists.length} dplist file(s)...`,
+        `Importing ${subprojectConfig.Dplists.length} dplist file(s)...`,
       );
       await this.importAsciiFiles(
-        config.Dplists,
+        subprojectConfig.Dplists,
         path.join(repoPath, projectName, "dplist"),
       );
     } else {
@@ -720,7 +720,8 @@ void removeManager(int manIdx)
     const pmonUser = sessionCredentials?.user || "";
     const pmonPassword = sessionCredentials?.password || "";
 
-    for (const manager of config.Managers || []) {
+    // Add managers from subproject config
+    for (const manager of subprojectConfig.Managers || []) {
       winccoa.logDebugF(
         "addonHandler",
         `Adding manager ${manager.Name} with start mode ${manager.StartMode} and options ${manager.Options}`,
@@ -751,16 +752,16 @@ void removeManager(int manIdx)
     repoPath: string,
     projectName: string,
     deleteFiles: boolean,
-    config?: AddonConfig,
+    subprojectConfig?: SubprojectConfig,
   ): Promise<number> {
-    // Execute uninstall scripts if available
+    // Execute uninstall scripts if available (from subproject config)
     if (
-      config &&
-      config.UninstallScripts &&
-      config.UninstallScripts.length > 0
+      subprojectConfig &&
+      subprojectConfig.UninstallScripts &&
+      subprojectConfig.UninstallScripts.length > 0
     ) {
       console.log(
-        `Executing ${config.UninstallScripts.length} uninstall script(s)...`,
+        `Executing ${subprojectConfig.UninstallScripts.length} uninstall script(s)...`,
       );
 
       // Create a timeout promise that rejects after 5 minutes
@@ -782,7 +783,7 @@ void removeManager(int manIdx)
         await Promise.race([
           this.executeScripts(
             path.join(repoPath, projectName),
-            config.UninstallScripts,
+            subprojectConfig.UninstallScripts,
           ),
           timeoutPromise,
         ]);
@@ -1234,23 +1235,28 @@ void removeManager(int manIdx)
   mapPackageJsonToAddonConfig(packageJson: any): AddonConfig {
     return {
       RepoName: packageJson.RepoName,
-      Keywords: packageJson.Keywords,
-      Subproject: packageJson.Subproject,
+      Keywords: packageJson.Keywords || [],
       Version: packageJson.Version,
       Description: packageJson.Description,
       OaVersion: packageJson.OaVersion,
-      Managers: packageJson.Managers
-        ? packageJson.Managers.map((manager: any) => ({
-            Name: manager.Name || "",
-            StartMode: manager.StartMode || "Unknown",
-            Options: manager.Options || "",
-            RestartOnUpdate:
-              manager.RestartOnUpdate != null ? manager.RestartOnUpdate : true,
-          }))
-        : [],
-      Dplists: packageJson.Dplists || [],
-      UpdateScripts: packageJson.UpdateScripts || [],
-      UninstallScripts: packageJson.UninstallScripts || [],
+      Subprojects: (packageJson.Subprojects || []).map((sp: any) => ({
+        Name: sp.Name,
+        Description: sp.Description,
+        Managers: sp.Managers
+          ? sp.Managers.map((manager: any) => ({
+              Name: manager.Name || "",
+              StartMode: manager.StartMode || "Unknown",
+              Options: manager.Options || "",
+              RestartOnUpdate:
+                manager.RestartOnUpdate != null
+                  ? manager.RestartOnUpdate
+                  : true,
+            }))
+          : [],
+        Dplists: sp.Dplists || [],
+        UpdateScripts: sp.UpdateScripts || [],
+        UnInstallScripts: sp.UninstallScripts || [],
+      })),
     };
   }
 
@@ -1406,145 +1412,159 @@ void removeManager(int manIdx)
               `INFO: Version updated from ${updatedAddonConfigBeforePull.Version} to ${updatedAddonConfig.Version}`,
             );
 
-            if (updatedAddonConfig.Dplists) {
-              await this.importAsciiFiles(
-                updatedAddonConfig.Dplists,
-                path.join(
-                  repositoryPath,
-                  updatedAddonConfig.Subproject,
-                  "dplist",
-                ),
-              );
-            }
-
-            // Execute update scripts if any
-            if (updatedAddonConfig.UpdateScripts) {
-              winccoa.logDebugF(
-                "addonHandler",
-                `Executing ${updatedAddonConfig.UpdateScripts.length} update script(s)...`,
-              );
-
-              // Create a timeout promise that rejects after 5 minutes
-              const timeoutPromise = new Promise<void>((_, reject) => {
-                setTimeout(
-                  () => {
-                    reject(
-                      new Error(
-                        "Update scripts execution timed out after 5 minutes",
-                      ),
-                    );
-                  },
-                  5 * 60 * 1000,
-                ); // 5 minutes in milliseconds
-              });
-
-              // Race the execution against the timeout
-              try {
-                await Promise.race([
-                  this.executeScripts(
-                    repositoryPath,
-                    updatedAddonConfig.UpdateScripts,
-                  ),
-                  timeoutPromise,
-                ]);
-                console.log("Update scripts completed successfully");
-              } catch (error) {
-                if (
-                  error instanceof Error &&
-                  error.message.includes("timed out")
-                ) {
-                  winccoa.logWarning(
-                    "Update scripts execution timed out after 5 minutes",
-                  );
-                } else {
-                  winccoa.logWarning("Error executing update scripts:", error);
-                }
-                throw error;
+            // Process each subproject
+            for (const subproject of updatedAddonConfig.Subprojects) {
+              const subprojectBeforePull =
+                updatedAddonConfigBeforePull.Subprojects.find(
+                  (sp) => sp.Name === subproject.Name,
+                );
+              // Import dplist files if available
+              if (subproject.Dplists && subproject.Dplists.length > 0) {
+                await this.importAsciiFiles(
+                  subproject.Dplists,
+                  path.join(repositoryPath, subproject.Name, "dplist"),
+                );
               }
-            } else {
-              winccoa.logDebugF("addonHandler", "No update scripts to execute");
-            }
 
-            // update node managers
-            await NodeInstaller.installAndBuild(repositoryPath);
-
-            if (updatedAddonConfigBeforePull.Managers) {
-
-              // Remove managers that are no longer in the updated configuration
-              for (const oldManager of updatedAddonConfigBeforePull.Managers) {
-                const stillExists = updatedAddonConfig.Managers?.find(
-                  (newManager) =>
-                    newManager.Name === oldManager.Name &&
-                    newManager.Options === oldManager.Options,
+              // Execute update scripts if any
+              if (
+                subproject.UpdateScripts &&
+                subproject.UpdateScripts.length > 0
+              ) {
+                winccoa.logDebugF(
+                  "addonHandler",
+                  `Executing ${subproject.UpdateScripts.length} update script(s) for subproject ${subproject.Name}...`,
                 );
 
-                if (!stillExists) {
-                  winccoa.logDebugF(
-                    "addonHandler",
-                    `Manager ${oldManager.Name} with options "${oldManager.Options}" no longer exists in updated config - removing it`,
-                  );
+                // Create a timeout promise that rejects after 5 minutes
+                const timeoutPromise = new Promise<void>((_, reject) => {
+                  setTimeout(
+                    () => {
+                      reject(
+                        new Error(
+                          "Update scripts execution timed out after 5 minutes",
+                        ),
+                      );
+                    },
+                    5 * 60 * 1000,
+                  ); // 5 minutes in milliseconds
+                });
+
+                // Race the execution against the timeout
+                try {
                   // eslint-disable-next-line no-await-in-loop
-                  const managerIdx = await this.ctrlScript.start(
-                    "managerExists",
-                    [oldManager.Name, oldManager.Options],
-                    [WinccoaCtrlType.string, WinccoaCtrlType.string],
+                  await Promise.race([
+                    this.executeScripts(
+                      path.join(repositoryPath, subproject.Name),
+                      subproject.UpdateScripts,
+                    ),
+                    timeoutPromise,
+                  ]);
+                  console.log(
+                    `Update scripts for ${subproject.Name} completed successfully`,
+                  );
+                } catch (error) {
+                  if (
+                    error instanceof Error &&
+                    error.message.includes("timed out")
+                  ) {
+                    winccoa.logWarning(
+                      `Update scripts execution for ${subproject.Name} timed out after 5 minutes`,
+                    );
+                  } else {
+                    winccoa.logWarning(
+                      `Error executing update scripts for ${subproject.Name}:`,
+                      error,
+                    );
+                  }
+                  throw error;
+                }
+              } else {
+                winccoa.logDebugF(
+                  "addonHandler",
+                  `No update scripts to execute for subproject ${subproject.Name}`,
+                );
+              }
+
+              // update node managers
+              await NodeInstaller.installAndBuild(repositoryPath);
+
+              if (subprojectBeforePull?.Managers) {
+                // Remove managers that are no longer in the updated configuration
+                for (const oldManager of subprojectBeforePull.Managers) {
+                  const stillExists = subproject.Managers?.find(
+                    (newManager) =>
+                      newManager.Name === oldManager.Name &&
+                      newManager.Options === oldManager.Options,
                   );
 
-                  if (managerIdx !== -1) 
-                  {
-                    // eslint-disable-next-line no-await-in-loop
-                    await this.ctrlScript.start(
-                      "removeManager",
-                      [managerIdx],
-                      [WinccoaCtrlType.int],
+                  if (!stillExists) {
+                    winccoa.logDebugF(
+                      "addonHandler",
+                      `Manager ${oldManager.Name} with options "${oldManager.Options}" no longer exists in updated config - removing it`,
                     );
+                    // eslint-disable-next-line no-await-in-loop
+                    const managerIdx = await this.ctrlScript.start(
+                      "managerExists",
+                      [oldManager.Name, oldManager.Options],
+                      [WinccoaCtrlType.string, WinccoaCtrlType.string],
+                    );
+
+                    if (managerIdx !== -1) {
+                      // eslint-disable-next-line no-await-in-loop
+                      await this.ctrlScript.start(
+                        "removeManager",
+                        [managerIdx],
+                        [WinccoaCtrlType.int],
+                      );
+                    }
                   }
                 }
               }
-            }
 
-            if (updatedAddonConfig.Managers) {
-              const sessionCredentials = this.pmonCredentials.find(
-                (cred) => cred.session === session,
-              );
-              const pmonUser = sessionCredentials?.user || "";
-              const pmonPassword = sessionCredentials?.password || "";
-
-              for (const manager of updatedAddonConfig.Managers) {
-                // eslint-disable-next-line no-await-in-loop
-                const managerIdx = await this.ctrlScript.start(
-                  "managerExists",
-                  [manager.Name, manager.Options],
-                  [WinccoaCtrlType.string, WinccoaCtrlType.string],
+              if (subproject.Managers) {
+                const sessionCredentials = this.pmonCredentials.find(
+                  (cred) => cred.session === session,
                 );
+                const pmonUser = sessionCredentials?.user || "";
+                const pmonPassword = sessionCredentials?.password || "";
 
-                if (managerIdx !== -1 && manager.RestartOnUpdate) {
+                for (const manager of subproject.Managers) {
                   // eslint-disable-next-line no-await-in-loop
-                  await this.ctrlScript.start(
-                    "restartManager",
-                    [managerIdx],
-                    [WinccoaCtrlType.int],
+                  const managerIdx = await this.ctrlScript.start(
+                    "managerExists",
+                    [manager.Name, manager.Options],
+                    [WinccoaCtrlType.string, WinccoaCtrlType.string],
                   );
-                } else {
-                  // add manager if it does not exist
-                  // eslint-disable-next-line no-await-in-loop
-                  await this.ctrlScript.start(
-                    "addManager",
-                    [
-                      manager.Name,
-                      manager.StartMode.toLowerCase(),
-                      manager.Options,
-                      pmonUser,
-                      pmonPassword,
-                    ],
-                    [
-                      WinccoaCtrlType.string,
-                      WinccoaCtrlType.string,
-                      WinccoaCtrlType.string,
-                      WinccoaCtrlType.string,
-                      WinccoaCtrlType.string,
-                    ],
-                  );
+
+                  if (managerIdx !== -1 && manager.RestartOnUpdate) {
+                    // eslint-disable-next-line no-await-in-loop
+                    await this.ctrlScript.start(
+                      "restartManager",
+                      [managerIdx],
+                      [WinccoaCtrlType.int],
+                    );
+                  } else {
+                    // add manager if it does not exist
+                    // eslint-disable-next-line no-await-in-loop
+                    await this.ctrlScript.start(
+                      "addManager",
+                      [
+                        manager.Name,
+                        manager.StartMode.toLowerCase(),
+                        manager.Options,
+                        pmonUser,
+                        pmonPassword,
+                      ],
+                      [
+                        WinccoaCtrlType.string,
+                        WinccoaCtrlType.string,
+                        WinccoaCtrlType.string,
+                        WinccoaCtrlType.string,
+                        WinccoaCtrlType.string,
+                      ],
+                    );
+                  }
                 }
               }
             }

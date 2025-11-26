@@ -567,10 +567,33 @@
                       </div>
                     </div>
 
-                    <!-- Repository Information (Right) -->
+                    <!-- Addon Information (Right) -->
                     <div class="stats-column">
-                      <div class="overview-card">
-                        <h4>Repository Information</h4>
+                      <div id="addon-info-card" class="overview-card">
+                        <h4>Addon Information</h4>
+                        <!-- Package Information (shown first if available) -->
+                        <div id="pkg-info-section" style="display: none">
+                          <div class="stat-item">
+                            <span class="stat-label">Version:</span>
+                            <span id="pkg-version">-</span>
+                          </div>
+                          <div class="stat-item">
+                            <span class="stat-label">WinCC OA Version:</span>
+                            <span id="pkg-oa-version">-</span>
+                          </div>
+                          <div class="stat-item">
+                            <span class="stat-label">Description:</span>
+                            <span id="pkg-description">-</span>
+                          </div>
+                          <hr
+                            style="
+                              border: none;
+                              border-top: 1px solid var(--theme-color-soft-bdr);
+                              margin: 12px 0;
+                            "
+                          />
+                        </div>
+                        <!-- Repository Information -->
                         <div class="stat-item">
                           <span class="stat-label">Size:</span>
                           <span id="repo-size">-</span>

@@ -117,7 +117,7 @@ class MarketplaceEndpoints
     {
       mapping requestMapping;
       string path = joinPath(client.repoPath(), repoName);
-      requestMapping.insert("repoPath", path);
+      requestMapping.insert("repositoryPath", path);
       requestMapping.insert("session", session);
       mapping result = client.pull(requestMapping);
       result.insert("message", "Successfully pulled repository " + repoName);

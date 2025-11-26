@@ -1,14 +1,19 @@
-interface AddonConfig {
-  RepoName: string;
-  Keywords: string[];
-  Subproject: string;
-  Version: string;
-  Description: string;
-  OaVersion: string;
+interface SubprojectConfig {
+  Name: string;
+  Description?: string;
   Managers?: ManagerConfig[];
   Dplists?: string[];
   UpdateScripts?: string[];
   UninstallScripts?: string[];
+}
+
+interface AddonConfig {
+  RepoName: string;
+  Keywords: string[];
+  Version: string;
+  Description: string;
+  OaVersion: string;
+  Subprojects: SubprojectConfig[];
 }
 
 interface ManagerConfig {
@@ -25,4 +30,4 @@ enum StartMode {
   Unknown = "",
 }
 
-export { AddonConfig, ManagerConfig, StartMode };
+export { AddonConfig, SubprojectConfig, ManagerConfig, StartMode };
