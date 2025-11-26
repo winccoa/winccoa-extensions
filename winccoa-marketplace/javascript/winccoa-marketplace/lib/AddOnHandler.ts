@@ -666,6 +666,14 @@ int managerExists(string manager, string options)
   }
   return -1;
 }
+
+void removeManager(int manIdx)
+{
+  ProjEnvProject proj  = new ProjEnvProject(PROJ);
+  string startOptions;
+  proj.stopManager(manIdx, 30);
+  proj.deleteManager(manIdx);
+}
   `,
   );
 
@@ -1454,6 +1462,41 @@ int managerExists(string manager, string options)
 
             // update node managers
             await NodeInstaller.installAndBuild(repositoryPath);
+
+            if (updatedAddonConfigBeforePull.Managers) {
+
+              // Remove managers that are no longer in the updated configuration
+              for (const oldManager of updatedAddonConfigBeforePull.Managers) {
+                const stillExists = updatedAddonConfig.Managers?.find(
+                  (newManager) =>
+                    newManager.Name === oldManager.Name &&
+                    newManager.Options === oldManager.Options,
+                );
+
+                if (!stillExists) {
+                  winccoa.logDebugF(
+                    "addonHandler",
+                    `Manager ${oldManager.Name} with options "${oldManager.Options}" no longer exists in updated config - removing it`,
+                  );
+                  // eslint-disable-next-line no-await-in-loop
+                  const managerIdx = await this.ctrlScript.start(
+                    "managerExists",
+                    [oldManager.Name, oldManager.Options],
+                    [WinccoaCtrlType.string, WinccoaCtrlType.string],
+                  );
+
+                  if (managerIdx !== -1) 
+                  {
+                    // eslint-disable-next-line no-await-in-loop
+                    await this.ctrlScript.start(
+                      "removeManager",
+                      [managerIdx],
+                      [WinccoaCtrlType.int],
+                    );
+                  }
+                }
+              }
+            }
 
             if (updatedAddonConfig.Managers) {
               const sessionCredentials = this.pmonCredentials.find(
