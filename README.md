@@ -25,16 +25,28 @@ References:
    - Install npm packages: run `npm install` and afterwards `npm run compile`.
    - Register in WinCC OA Project Administration.
 
-1. Add sub-project to your project
+2. Add sub-project to your project
    - Add to your project as sub-project via Project Administration or Console UI.
    - In the Console, add a JavaScript Manager with the script parameter pointing to your Node.js entry file `winccoa-marketplace/index.js`.
-   - In the Console, add a Web Server.
+   - In the Console, add a Web Server (if not already existing).
 
-2. Scaffold the Node.js module
+3. Configure HTTP Server endpoints
+   - Locate `scripts\libs\classes\HttpServer.ctl` (either from the WinCC OA installation directory or in your project directory).
+   - Add the following `#uses` statement at the top of the file after all other #uses statements:
+     ```
+     #uses "classes/marketplace/MarketplaceEndpoints"
+     ```
+   - Add the Marketplace endpoint connection after other endpoint connections (such as `RptHttpEndpoints::connectEndpoints(httpsPort);` or `OidcHttpEndpoints::connectEndpoints(allowAll);`):
+     ```
+     // connect endpoints for Marketplace
+     MarketplaceEndpoints::connectEndpoints(httpsPort);
+     ```
+
+4. Scaffold the Node.js module
    - In the WinCC OA `javascript` folder, create a module directory (e.g. `marketplace/`), initialize npm, and add `winccoa-manager` as a dependency.
    - Implement the service endpoints that the UI will call (vRPC handlers or REST hooks via HTTP Server).
 
-3. Open the Web UI
+5. Open the Web UI
    - Go to URL: https://localhost/data/marketplace/index.html
 
 ## Features
