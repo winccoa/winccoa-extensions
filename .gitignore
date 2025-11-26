@@ -1,4 +1,4 @@
 **/node_modules
 *-lock.json
 *.js
-winccoa-marketplace/javascript/winccoa-marketplace/.env
+.env

@@ -128,7 +128,7 @@ Authentication is configured in `config/marketplace.config.json`:
    - For permanent setup, add to system environment variables
 
    **Option 2: .env File (For Development)**
-   - Create a `.env` file in `winccoa-marketplace/javascript/winccoa-marketplace/` directory
+   - Create a `.env` file in the workspace root directory (where this README is located)
    - Add the following line:
      ```
      GITHUB_TOKEN="ghp_your_token_here"

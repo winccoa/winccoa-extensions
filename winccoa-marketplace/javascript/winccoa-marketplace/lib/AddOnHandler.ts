@@ -362,7 +362,7 @@ class AddOnHandler {
           );
           winccoa.logWarning(
             "addonHandler",
-            '   - Create .env file with GITHUB_TOKEN="your_token"',
+            '   - Create .env file in workspace root with GITHUB_TOKEN="your_token"',
           );
         }
       }
@@ -453,7 +453,7 @@ class AddOnHandler {
   /**
    * Read GitHub token from multiple sources in order of preference:
    * 1. Environment variable GITHUB_TOKEN
-   * 2. .env file in project root
+   * 2. .env file in workspace root
    * @returns The token string or null if not found
    */
   private readGitHubToken(): string | null {
@@ -467,9 +467,9 @@ class AddOnHandler {
       return envToken;
     }
 
-    // Try .env file in project root
+    // Try .env file in workspace root
     try {
-      const envPath = path.join(__dirname, "..", ".env");
+      const envPath = path.resolve(__dirname, "../../../../../.env");
       if (fs.existsSync(envPath)) {
         const envContent = fs.readFileSync(envPath, "utf8");
         const lines = envContent.split("\n");
