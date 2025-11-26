@@ -1316,20 +1316,20 @@ int managerExists(string manager, string options)
    * @param repositoryDirectory Absolute path to the repository directory
    * @returns Pull result with summary information
    */
-  async pullRepository(repositoryDirectory: string, session: string): Promise<any> {
+  async pullRepository(repositoryPath: string, session: string): Promise<any> {
     try {
       // Verify the directory exists
-      if (!fs.existsSync(repositoryDirectory)) {
+      if (!fs.existsSync(repositoryPath)) {
         throw new Error(
-          `Repository directory does not exist: ${repositoryDirectory}`,
+          `Repository directory does not exist: ${repositoryPath}`,
         );
       }
 
       // Verify it's a git repository (check for .git directory)
-      const gitDir = path.join(repositoryDirectory, ".git");
+      const gitDir = path.join(repositoryPath, ".git");
       if (!fs.existsSync(gitDir)) {
         throw new Error(
-          `Directory is not a git repository: ${repositoryDirectory}`,
+          `Directory is not a git repository: ${repositoryPath}`,
         );
       }
 
@@ -1338,7 +1338,7 @@ int managerExists(string manager, string options)
 
       try {
         const packageJsonContentBeforePull =
-          this.readWinCCOAPackageJson(repositoryDirectory);
+          this.readWinCCOAPackageJson(repositoryPath);
         if (!packageJsonContentBeforePull) {
           throw new Error("package.winccoa.json not found before pull");
         }
@@ -1352,11 +1352,11 @@ int managerExists(string manager, string options)
 
       winccoa.logDebugF(
         "addonHandler",
-        `Pulling latest changes from repository: ${repositoryDirectory}`,
+        `Pulling latest changes from repository: ${repositoryPath}`,
       );
 
       // Use simple-git for pull operation
-      const git = simpleGit(repositoryDirectory);
+      const git = simpleGit(repositoryPath);
       const pullResult = await git.pull();
 
       if (pullResult.summary.changes) {
@@ -1376,7 +1376,7 @@ int managerExists(string manager, string options)
 
       // Read and parse the updated package.winccoa.json as AddonConfig
       const packageJsonContent =
-        this.readWinCCOAPackageJson(repositoryDirectory);
+        this.readWinCCOAPackageJson(repositoryPath);
       if (packageJsonContent) {
         try {
           const parsedPackage = JSON.parse(packageJsonContent);
@@ -1399,7 +1399,7 @@ int managerExists(string manager, string options)
               await this.importAsciiFiles(
                 updatedAddonConfig.Dplists,
                 path.join(
-                  repositoryDirectory,
+                  repositoryPath,
                   updatedAddonConfig.Subproject,
                   "dplist",
                 ),
@@ -1431,7 +1431,7 @@ int managerExists(string manager, string options)
               try {
                 await Promise.race([
                   this.executeScripts(
-                    repositoryDirectory,
+                    repositoryPath,
                     updatedAddonConfig.UpdateScripts,
                   ),
                   timeoutPromise,
@@ -1455,7 +1455,7 @@ int managerExists(string manager, string options)
             }
 
             // update node managers
-            await NodeInstaller.installAndBuild(repositoryDirectory);
+            await NodeInstaller.installAndBuild(repositoryPath);
 
             if (updatedAddonConfig.Managers) {
               const sessionCredentials = this.pmonCredentials.find(
@@ -1505,7 +1505,7 @@ int managerExists(string manager, string options)
           }
         } catch (error) {
           winccoa.logWarning(
-            `Failed to update Addon:`,
+            `Failed to parse updated package.winccoa.json as AddonConfig:`,
             error,
           );
         }
@@ -1514,40 +1514,40 @@ int managerExists(string manager, string options)
       return {
         success: true,
         message: "Repository updated successfully",
-        directory: repositoryDirectory,
+        directory: repositoryPath,
         changes: pullResult.summary.changes || 0,
         insertions: pullResult.summary.insertions || 0,
         deletions: pullResult.summary.deletions || 0,
         files: pullResult.files || [],
         updatedAt: new Date().toISOString(),
-        fileContent: this.readWinCCOAPackageJson(repositoryDirectory),
+        fileContent: this.readWinCCOAPackageJson(repositoryPath),
         updatedAddonConfig: updatedAddonConfig,
       };
     } catch (error: any) {
       winccoa.logWarning(
-        `Failed to pull repository at ${repositoryDirectory}:`,
+        `Failed to pull repository at ${repositoryPath}:`,
         error.message,
       );
 
       // Provide more specific error messages
       if (error.message.includes("not a git repository")) {
         throw new Error(
-          `Directory is not a git repository: ${repositoryDirectory}`,
+          `Directory is not a git repository: ${repositoryPath}`,
         );
       } else if (error.message.includes("does not exist")) {
         throw new Error(
-          `Repository directory does not exist: ${repositoryDirectory}`,
+          `Repository directory does not exist: ${repositoryPath}`,
         );
       } else if (
         error.message.includes("Permission denied") ||
         error.message.includes("authentication")
       ) {
         throw new Error(
-          `Authentication failed for repository at: ${repositoryDirectory}`,
+          `Authentication failed for repository at: ${repositoryPath}`,
         );
       } else if (error.message.includes("merge conflict")) {
         throw new Error(
-          `Merge conflicts detected in repository at: ${repositoryDirectory}. Please resolve conflicts manually.`,
+          `Merge conflicts detected in repository at: ${repositoryPath}. Please resolve conflicts manually.`,
         );
       } else {
         throw new Error(`Failed to pull repository: ${error.message}`);
