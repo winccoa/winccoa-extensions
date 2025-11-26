@@ -161,18 +161,18 @@ function getWinCCOARegistryValue(
 }
 
 /**
- * Get the target clone directory from repositories.config.json storePath, Windows registry, or fall back to current directory
+ * Get the target clone directory from marketplace.config.json storePath, Windows registry, or fall back to current directory
  * Priority order:
- * 1. storePath from repositories.config.json (if exists and is a valid directory)
+ * 1. storePath from marketplace.config.json (if exists and is a valid directory)
  * 2. Windows registry PROJECTDIR key
  * 3. Current working directory
  */
 function getDefaultProjDir(): string {
-  // First, try to read storePath from repositories.config.json
+  // First, try to read storePath from marketplace.config.json
   try {
     const configPath = path.resolve(
       __dirname,
-      "../../../config/repositories.config.json",
+      "../../../config/marketplace.config.json",
     );
     if (fs.existsSync(configPath)) {
       const fileContent = fs.readFileSync(configPath, "utf8");
@@ -186,12 +186,12 @@ function getDefaultProjDir(): string {
         ) {
           winccoa.logDebugF(
             "addonHandler",
-            `Using storePath from repositories.config.json: ${config.storePath}`,
+            `Using storePath from marketplace.config.json: ${config.storePath}`,
           );
           return config.storePath;
         } else {
           winccoa.logWarning(
-            `storePath from repositories.config.json does not exist or is not a directory: ${config.storePath}`,
+            `storePath from marketplace.config.json does not exist or is not a directory: ${config.storePath}`,
           );
         }
       }
@@ -199,7 +199,7 @@ function getDefaultProjDir(): string {
   } catch (error) {
     winccoa.logDebugF(
       "addonHandler",
-      `Could not read storePath from repositories.config.json: ${(error as Error).message}`,
+      `Could not read storePath from marketplace.config.json: ${(error as Error).message}`,
     );
   }
 
@@ -362,7 +362,7 @@ class AddOnHandler {
           );
           winccoa.logWarning(
             "addonHandler",
-            '   - Create .env file with GITHUB_TOKEN="your_token"',
+            '   - Create .env file in workspace root with GITHUB_TOKEN="your_token"',
           );
         }
       }
@@ -453,7 +453,7 @@ class AddOnHandler {
   /**
    * Read GitHub token from multiple sources in order of preference:
    * 1. Environment variable GITHUB_TOKEN
-   * 2. .env file in project root
+   * 2. .env file in workspace root
    * @returns The token string or null if not found
    */
   private readGitHubToken(): string | null {
@@ -467,10 +467,13 @@ class AddOnHandler {
       return envToken;
     }
 
-    // Try .env file in project root
+    // Try .env file in workspace root
     try {
-      const envPath = path.join(__dirname, "..", ".env");
+      // From lib/AddOnHandler.js, go up to workspace root: lib -> winccoa-marketplace -> javascript -> winccoa-marketplace -> github_integration
+      const envPath = path.resolve(__dirname, "../../../../.env");
+      winccoa.logDebugF("addonHandler", `Looking for .env file at: ${envPath}`);
       if (fs.existsSync(envPath)) {
+        winccoa.logDebugF("addonHandler", `.env file found at: ${envPath}`);
         const envContent = fs.readFileSync(envPath, "utf8");
         const lines = envContent.split("\n");
         for (const line of lines) {
@@ -498,6 +501,8 @@ class AddOnHandler {
             }
           }
         }
+      } else {
+        winccoa.logDebugF("addonHandler", `.env file NOT found at: ${envPath}`);
       }
     } catch (error) {
       winccoa.logInfo("addonHandler", "Could not read .env file");
@@ -1244,7 +1249,7 @@ bool addManager(string manager, string startMode, string options, string user, s
         : [],
       Dplists: packageJson.Dplists || [],
       UpdateScripts: packageJson.UpdateScripts || [],
-      UninstallScripts: packageJson.UnInstallScripts || [],
+      UninstallScripts: packageJson.UninstallScripts || [],
     };
   }
 
@@ -1669,15 +1674,15 @@ bool addManager(string manager, string startMode, string options, string user, s
   }
 
   listCustomRepositories(): { repositories: object[]; authMethods: string[] } {
-    // Read repositories.config.json and return repository info and auth methods
+    // Read marketplace.config.json and return repository info and auth methods
     try {
       const configPath = path.resolve(
         __dirname,
-        "../../../config/repositories.config.json",
+        "../../../config/marketplace.config.json",
       );
       if (!fs.existsSync(configPath)) {
         winccoa.logWarning(
-          `[listCustomRepositories] repositories.config.json not found at ${configPath}`,
+          `[listCustomRepositories] marketplace.config.json not found at ${configPath}`,
         );
         return { repositories: [], authMethods: [] };
       }
@@ -1700,7 +1705,7 @@ bool addManager(string manager, string startMode, string options, string user, s
       };
     } catch (error) {
       winccoa.logWarning(
-        "[listCustomRepositories] Failed to read repositories.config.json:",
+        "[listCustomRepositories] Failed to read marketplace.config.json:",
         error,
       );
       return { repositories: [], authMethods: [] };
@@ -1708,18 +1713,18 @@ bool addManager(string manager, string startMode, string options, string user, s
   }
 
   /**
-   * Get supported authentication methods from repositories.config.json
+   * Get supported authentication methods from marketplace.config.json
    * @returns Array of supported authentication methods
    */
   getSupportedAuthMethods(): string[] {
     try {
       const configPath = path.resolve(
         __dirname,
-        "../../../config/repositories.config.json",
+        "../../../config/marketplace.config.json",
       );
       if (!fs.existsSync(configPath)) {
         console.warn(
-          `[getSupportedAuthMethods] repositories.config.json not found at ${configPath}`,
+          `[getSupportedAuthMethods] marketplace.config.json not found at ${configPath}`,
         );
         return [];
       }
@@ -1729,7 +1734,7 @@ bool addManager(string manager, string startMode, string options, string user, s
       return config.authMethods || [];
     } catch (error) {
       winccoa.logWarning(
-        "[getSupportedAuthMethods] Failed to read repositories.config.json:",
+        "[getSupportedAuthMethods] Failed to read marketplace.config.json:",
         error,
       );
       return [];
