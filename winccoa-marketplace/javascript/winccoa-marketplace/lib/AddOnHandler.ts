@@ -1231,7 +1231,8 @@ int managerExists(string manager, string options)
             Name: manager.Name || "",
             StartMode: manager.StartMode || "Unknown",
             Options: manager.Options || "",
-            RestartOnUpdate: manager.RestartOnUpdate != null ? manager.RestartOnUpdate : true,
+            RestartOnUpdate:
+              manager.RestartOnUpdate != null ? manager.RestartOnUpdate : true,
           }))
         : [],
       Dplists: packageJson.Dplists || [],
@@ -1328,9 +1329,7 @@ int managerExists(string manager, string options)
       // Verify it's a git repository (check for .git directory)
       const gitDir = path.join(repositoryPath, ".git");
       if (!fs.existsSync(gitDir)) {
-        throw new Error(
-          `Directory is not a git repository: ${repositoryPath}`,
-        );
+        throw new Error(`Directory is not a git repository: ${repositoryPath}`);
       }
 
       // Read version before pull
@@ -1375,8 +1374,7 @@ int managerExists(string manager, string options)
       let updatedAddonConfig: AddonConfig | null = null;
 
       // Read and parse the updated package.winccoa.json as AddonConfig
-      const packageJsonContent =
-        this.readWinCCOAPackageJson(repositoryPath);
+      const packageJsonContent = this.readWinCCOAPackageJson(repositoryPath);
       if (packageJsonContent) {
         try {
           const parsedPackage = JSON.parse(packageJsonContent);
@@ -1531,9 +1529,7 @@ int managerExists(string manager, string options)
 
       // Provide more specific error messages
       if (error.message.includes("not a git repository")) {
-        throw new Error(
-          `Directory is not a git repository: ${repositoryPath}`,
-        );
+        throw new Error(`Directory is not a git repository: ${repositoryPath}`);
       } else if (error.message.includes("does not exist")) {
         throw new Error(
           `Repository directory does not exist: ${repositoryPath}`,

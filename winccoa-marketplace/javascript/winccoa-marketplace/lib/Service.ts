@@ -266,11 +266,14 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     const repositoryPath = repositoryPathVariant.getString();
 
     const sessionVariant = requestMapping.get(
-        Vrpc.Variant.createString("session"),
-      );
+      Vrpc.Variant.createString("session"),
+    );
     const session = sessionVariant ? sessionVariant.getString() : "";
 
-    const result = await this._addOnHandler.pullRepository(repositoryPath, session);
+    const result = await this._addOnHandler.pullRepository(
+      repositoryPath,
+      session,
+    );
 
     const resultMapping = new Vrpc.Mapping();
 

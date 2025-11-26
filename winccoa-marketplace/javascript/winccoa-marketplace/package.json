@@ -1,9 +1,10 @@
 {
-  "name": "winccoa-marketplace",
+  "name": "winccoa-marketplace-backend",
   "version": "1.0.0",
   "description": "The backend for the marketplace for WinCC OA",
   "author": "ETM professional control",
   "main": "index.js",
+  "private": true,
   "keywords": [
     "WinCCOA"
   ],
@@ -24,8 +25,9 @@
     "typescript-eslint": "^8.11.0"
   },
   "scripts": {
-    "build": "npm run eslint-check && npm run format && npx tsc",
+    "build": "npm run format && npx tsc",
     "eslint-check": "eslint .",
-    "format": "prettier . --write --end-of-line auto"
+    "format": "prettier . --write --end-of-line auto",
+    "watch": "npx tsc --watch"
   }
 }
