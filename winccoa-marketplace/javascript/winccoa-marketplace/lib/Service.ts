@@ -255,15 +255,28 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     serverContext: Vrpc.ServerContext,
     request: Vrpc.Variant,
   ): Promise<Vrpc.Variant> {
-    const directory = request.getString();
+    const requestMapping = request.getMapping();
 
-    const result = await this._addOnHandler.pullRepository(directory);
+    const repositoryPathVariant = requestMapping.get(
+      Vrpc.Variant.createString("repositoryPath"),
+    );
+    if (!repositoryPathVariant) {
+      throw new Error('Missing required "repositoryPath" parameter in mapping');
+    }
+    const repositoryPath = repositoryPathVariant.getString();
+
+    const sessionVariant = requestMapping.get(
+        Vrpc.Variant.createString("session"),
+      );
+    const session = sessionVariant ? sessionVariant.getString() : "";
+
+    const result = await this._addOnHandler.pullRepository(repositoryPath, session);
 
     const resultMapping = new Vrpc.Mapping();
 
     resultMapping.set(
       Vrpc.Variant.createString("repositoryPath"),
-      Vrpc.Variant.createString(directory),
+      Vrpc.Variant.createString(repositoryPath),
     );
 
     resultMapping.set(

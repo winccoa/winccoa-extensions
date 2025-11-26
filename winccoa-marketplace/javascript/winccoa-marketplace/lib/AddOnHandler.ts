@@ -13,7 +13,7 @@ import { AsciiManager } from "./AsciiManager";
 import { CommandExecutor } from "./CommandExecutor";
 import { PathResolver } from "./PathResolver";
 import { NodeInstaller } from "./NodeInstaller";
-import { AddonConfig } from "./AddonConfig";
+import { AddonConfig, ManagerConfig } from "./AddonConfig";
 
 /**
  * Interface for manager configuration
@@ -649,6 +649,23 @@ bool addManager(string manager, string startMode, string options, string user, s
   pmonInsertManager(err, PROJ, dynlen(managers), makeDynString(manager, startMode, 2, 2, 30, options), user, pwd);
   return err;
 }
+
+
+int managerExists(string manager, string options)
+{
+  ProjEnvProject proj  = new ProjEnvProject(PROJ);
+  dyn_anytype managerOptions = proj.getListOfManagerOptions();
+
+  bool exists;
+
+  for (int i = 0; i < dynlen(managerOptions); i++)
+  {
+    ProjEnvManagerOptions managerOption = managerOptions[i + 1];
+    if (managerOption.component == manager && managerOption.startOptions == options)
+      return i;
+  }
+  return -1;
+}
   `,
   );
 
@@ -1086,32 +1103,6 @@ bool addManager(string manager, string startMode, string options, string user, s
   }
 
   /**
-   * Extract version from package.winccoa.json file
-   * @param repositoryPath The full path to the repository directory
-   * @returns The version string or null if not found
-   */
-  private extractVersionFromPackageJson(repositoryPath: string): string | null {
-    try {
-      const packageWinCCoAPath = path.join(
-        repositoryPath,
-        "package.winccoa.json",
-      );
-
-      if (fs.existsSync(packageWinCCoAPath)) {
-        const fileContent = fs.readFileSync(packageWinCCoAPath, "utf8");
-        const parseResult = JSON.parse(fileContent);
-        return parseResult.version || parseResult.Version || null;
-      }
-      return null;
-    } catch (error: any) {
-      winccoa.logWarning(
-        `Failed to extract version from package.winccoa.json: ${error.message}`,
-      );
-      return null;
-    }
-  }
-
-  /**
    * Check if the current WinCC OA version is compatible with the required version
    * @param requiredVersion Version requirement string (e.g., "^3.21.0", ">=3.20.0")
    * @returns True if the current version is compatible
@@ -1240,6 +1231,7 @@ bool addManager(string manager, string startMode, string options, string user, s
             Name: manager.Name || "",
             StartMode: manager.StartMode || "Unknown",
             Options: manager.Options || "",
+            RestartOnUpdate: manager.RestartOnUpdate != null ? manager.RestartOnUpdate : true,
           }))
         : [],
       Dplists: packageJson.Dplists || [],
@@ -1324,7 +1316,7 @@ bool addManager(string manager, string startMode, string options, string user, s
    * @param repositoryDirectory Absolute path to the repository directory
    * @returns Pull result with summary information
    */
-  async pullRepository(repositoryDirectory: string): Promise<any> {
+  async pullRepository(repositoryDirectory: string, session: string): Promise<any> {
     try {
       // Verify the directory exists
       if (!fs.existsSync(repositoryDirectory)) {
@@ -1342,8 +1334,21 @@ bool addManager(string manager, string startMode, string options, string user, s
       }
 
       // Read version before pull
-      const versionBeforePull =
-        this.extractVersionFromPackageJson(repositoryDirectory);
+      let updatedAddonConfigBeforePull;
+
+      try {
+        const packageJsonContentBeforePull =
+          this.readWinCCOAPackageJson(repositoryDirectory);
+        if (!packageJsonContentBeforePull) {
+          throw new Error("package.winccoa.json not found before pull");
+        }
+        const parsedPackage = JSON.parse(packageJsonContentBeforePull);
+        updatedAddonConfigBeforePull =
+          this.mapPackageJsonToAddonConfig(parsedPackage);
+      } catch (error) {
+        console.log("Could not read package.winccoa.json before pull:", error);
+        return;
+      }
 
       winccoa.logDebugF(
         "addonHandler",
@@ -1366,30 +1371,29 @@ bool addManager(string manager, string startMode, string options, string user, s
       winccoa.logDebugF("addonHandler", "Git pull completed successfully!");
 
       // Read version after pull and compare
-      const versionAfterPull =
-        this.extractVersionFromPackageJson(repositoryDirectory);
       // TEMP: hardcoded for testing
-      // const versionAfterPull = "2.0.1"
       let updatedAddonConfig: AddonConfig | null = null;
 
-      if (
-        versionBeforePull &&
-        versionAfterPull &&
-        this.isVersionHigher(versionAfterPull, versionBeforePull)
-      ) {
-        winccoa.logDebugF(
-          "addonHandler",
-          `INFO: Version updated from ${versionBeforePull} to ${versionAfterPull}`,
-        );
+      // Read and parse the updated package.winccoa.json as AddonConfig
+      const packageJsonContent =
+        this.readWinCCOAPackageJson(repositoryDirectory);
+      if (packageJsonContent) {
+        try {
+          const parsedPackage = JSON.parse(packageJsonContent);
+          updatedAddonConfig = this.mapPackageJsonToAddonConfig(parsedPackage);
 
-        // Read and parse the updated package.winccoa.json as AddonConfig
-        const packageJsonContent =
-          this.readWinCCOAPackageJson(repositoryDirectory);
-        if (packageJsonContent) {
-          try {
-            const parsedPackage = JSON.parse(packageJsonContent);
-            updatedAddonConfig =
-              this.mapPackageJsonToAddonConfig(parsedPackage);
+          if (
+            updatedAddonConfigBeforePull.Version &&
+            updatedAddonConfig.Version &&
+            this.isVersionHigher(
+              updatedAddonConfig.Version,
+              updatedAddonConfigBeforePull.Version,
+            )
+          ) {
+            winccoa.logDebugF(
+              "addonHandler",
+              `INFO: Version updated from ${updatedAddonConfigBeforePull.Version} to ${updatedAddonConfig.Version}`,
+            );
 
             if (updatedAddonConfig.Dplists) {
               await this.importAsciiFiles(
@@ -1449,12 +1453,61 @@ bool addManager(string manager, string startMode, string options, string user, s
             } else {
               winccoa.logDebugF("addonHandler", "No update scripts to execute");
             }
-          } catch (error) {
-            winccoa.logWarning(
-              `Failed to parse updated package.winccoa.json as AddonConfig:`,
-              error,
-            );
+
+            // update node managers
+            await NodeInstaller.installAndBuild(repositoryDirectory);
+
+            if (updatedAddonConfig.Managers) {
+              const sessionCredentials = this.pmonCredentials.find(
+                (cred) => cred.session === session,
+              );
+              const pmonUser = sessionCredentials?.user || "";
+              const pmonPassword = sessionCredentials?.password || "";
+
+              for (const manager of updatedAddonConfig.Managers) {
+                // eslint-disable-next-line no-await-in-loop
+                const managerIdx = await this.ctrlScript.start(
+                  "managerExists",
+                  [manager.Name, manager.Options],
+                  [WinccoaCtrlType.string, WinccoaCtrlType.string],
+                );
+
+                if (managerIdx !== -1 && manager.RestartOnUpdate) {
+                  // eslint-disable-next-line no-await-in-loop
+                  await this.ctrlScript.start(
+                    "restartManager",
+                    [managerIdx],
+                    [WinccoaCtrlType.int],
+                  );
+                } else {
+                  // add manager if it does not exist
+                  // eslint-disable-next-line no-await-in-loop
+                  await this.ctrlScript.start(
+                    "addManager",
+                    [
+                      manager.Name,
+                      manager.StartMode.toLowerCase(),
+                      manager.Options,
+                      pmonUser,
+                      pmonPassword,
+                    ],
+                    [
+                      WinccoaCtrlType.string,
+                      WinccoaCtrlType.string,
+                      WinccoaCtrlType.string,
+                      WinccoaCtrlType.string,
+                      WinccoaCtrlType.string,
+                    ],
+                  );
+                }
+              }
+            }
           }
+        } catch (error) {
+          winccoa.logWarning(
+            `Failed to update Addon:`,
+            error,
+          );
         }
       }
 

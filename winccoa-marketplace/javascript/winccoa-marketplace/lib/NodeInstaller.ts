@@ -54,7 +54,16 @@ export class NodeInstaller {
     for (const dir of dirs) {
       winccoa.logDebugF("addonHandler", `Installing and building in ${dir}`);
       await this.runCommand("npm", ["install"], dir);
-      await this.runCommand("npm", ["install", "--save-dev", winccoa.getPaths()[winccoa.getPaths().length - 1] + "javascript/@types/winccoa-manager"], dir);
+      await this.runCommand(
+        "npm",
+        [
+          "install",
+          "--save-dev",
+          winccoa.getPaths()[winccoa.getPaths().length - 1] +
+            "javascript/@types/winccoa-manager",
+        ],
+        dir,
+      );
       await this.runCommand("npx", ["tsc"], dir);
     }
   }
