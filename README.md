@@ -16,7 +16,7 @@ References:
   - Environment for JavaScript (Node.js manager support)
   - HTTP Server feature enabled for REST/WebSocket
 - Node.js environment meeting WinCC OA requirements
-- Optional: GitHub token if accessing private repositories through the GitHub REST API
+- Optional: GitHub Personal Access Token for accessing private repositories or higher API rate limits (5000 vs 60 requests/hour)
 
 ## Setup
 
@@ -25,17 +25,123 @@ References:
    - Install npm packages: run `npm install` and afterwards `npm run compile`.
    - Register in WinCC OA Project Administration.
 
-1. Add sub-project to your project
+2. Add sub-project to your project
    - Add to your project as sub-project via Project Administration or Console UI.
    - In the Console, add a JavaScript Manager with the script parameter pointing to your Node.js entry file `winccoa-marketplace/index.js`.
-   - In the Console, add a Web Server.
+   - In the Console, add a Web Server (if not already existing).
 
-2. Scaffold the Node.js module
+3. Configure HTTP Server endpoints
+   - Locate `scripts\libs\classes\HttpServer.ctl` (either from the WinCC OA installation directory or in your project directory).
+   - Add the following `#uses` statement at the top of the file after all other #uses statements:
+     ```
+     #uses "classes/marketplace/MarketplaceEndpoints"
+     ```
+   - Add the Marketplace endpoint connection after other endpoint connections (such as `RptHttpEndpoints::connectEndpoints(httpsPort);` or `OidcHttpEndpoints::connectEndpoints(allowAll);`):
+     ```
+     // connect endpoints for Marketplace
+     MarketplaceEndpoints::connectEndpoints(httpsPort);
+     ```
+
+4. Scaffold the Node.js module
    - In the WinCC OA `javascript` folder, create a module directory (e.g. `marketplace/`), initialize npm, and add `winccoa-manager` as a dependency.
    - Implement the service endpoints that the UI will call (vRPC handlers or REST hooks via HTTP Server).
 
-3. Open the Web UI
+5. Open the Web UI
    - Go to URL: https://localhost/data/marketplace/index.html
+
+## Configuration
+
+### marketplace.config.json
+
+The `config/marketplace.config.json` file configures authentication methods, storage location, and custom repository sources for the marketplace.
+
+**Complete Configuration Example:**
+```json
+{
+  "authMethods": ["Token"],
+  "storePath": "D:\\WinCC_OA_Proj\\3.21",
+  "customRepos": [
+    {
+      "name": "Example Repository 1",
+      "url": "https://github.com/user/example-repo-1.git"
+    },
+    {
+      "name": "Example Repository 2",
+      "url": "https://gitlab.com/user/example-repo-2.git"
+    }
+  ]
+}
+```
+
+**Configuration Properties:**
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `authMethods` | `string[]` | No | Array of authentication methods to enable. Currently supported: `["Token"]` for GitHub Personal Access Token authentication. If empty, missing, or file doesn't exist, falls back to public unauthenticated access. |
+| `storePath` | `string` | No | Absolute path to the directory where add-ons will be installed. Must be an existing directory. If not specified or invalid, falls back to Windows registry 'PROJECTDIR' key, then the current working directory". Example: `"D:\\WinCC_OA_Proj\\3.21"` |
+| `customRepos` | `object[]` | No | Array of custom repository sources to include in the marketplace. Each repository object requires `name` and `url` properties. |
+
+## GitHub Authentication
+
+The Marketplace AddOn supports GitHub authentication to access private repositories and benefit from higher API rate limits.
+
+### Authentication Methods
+
+Authentication is configured in `config/marketplace.config.json`:
+```json
+{
+  "authMethods": ["Token"],
+}
+```
+
+**Supported Values:**
+- `"Token"` - GitHub Personal Access Token authentication (currently the only implemented method)
+
+**Behavior when not configured:**
+- If `authMethods` is empty (`[]`) or missing the Marketplace AddOn automatically falls back to **public, unauthenticated access**
+- The marketplace will still function with limitations:
+  - Only public repositories are accessible
+  - Lower API rate limit: 60 requests/hour (vs 5000 with authentication)
+  - No access to private or organization repositories
+
+### Setting Up a GitHub Personal Access Token
+
+1. **Create a Personal Access Token:**
+   - Go to GitHub.com > Settings > Developer settings > Personal access tokens
+   - Click "Generate new token (classic)" (recommended)
+     - **Classic tokens** are simpler to configure and work across all repositories
+     - **Fine-grained tokens** also supported but require more detailed permission setup
+   - For classic tokens, select scopes:
+     - `repo` (for private repositories)
+     - `public_repo` (for public repositories only)
+   - For fine-grained tokens, grant:
+     - Repository access: Select specific repositories or all accessible repositories
+     - Repository permissions: `Contents: Read` (and `Metadata: Read` for private repos)
+   - Copy the token immediately (it's only shown once)
+
+2. **Configure the Token:**
+
+   **Option 1: Environment Variable (Recommended for Production)**
+   - Windows PowerShell: `$env:GITHUB_TOKEN="ghp_your_token_here"`
+   - Windows CMD: `set GITHUB_TOKEN=ghp_your_token_here`
+   - Linux/Mac: `export GITHUB_TOKEN="ghp_your_token_here"`
+   - For permanent setup, add to system environment variables
+
+   **Option 2: .env File (For Development)**
+   - Create a `.env` file in the workspace root directory (where this README is located)
+   - Add the following line:
+     ```
+     GITHUB_TOKEN="ghp_your_token_here"
+     ```
+   - Replace `ghp_your_token_here` with your actual token
+   - **Important:** Never commit the `.env` file to version control
+
+3. **Verify Authentication:**
+   - Restart the JavaScript Manager
+   - Check the logs for:
+     - `"Using GitHub token for authentication (Token method)"` - Success
+     - `"Token authentication configured but no GitHub token found"` - Token not found
+     - `"No authentication methods configured - using public access only"` - No auth configured
 
 ## Features
 

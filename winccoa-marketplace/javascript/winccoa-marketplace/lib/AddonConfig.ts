@@ -4,7 +4,7 @@ interface SubprojectConfig {
   Managers?: ManagerConfig[];
   Dplists?: string[];
   UpdateScripts?: string[];
-  UnInstallScripts?: string[];
+  UninstallScripts?: string[];
 }
 
 interface AddonConfig {
@@ -20,6 +20,7 @@ interface ManagerConfig {
   Name: string;
   StartMode: StartMode;
   Options: string;
+  RestartOnUpdate?: boolean;
 }
 
 enum StartMode {

@@ -13,7 +13,7 @@ import { AsciiManager } from "./AsciiManager";
 import { CommandExecutor } from "./CommandExecutor";
 import { PathResolver } from "./PathResolver";
 import { NodeInstaller } from "./NodeInstaller";
-import { AddonConfig, SubprojectConfig } from "./AddonConfig";
+import { AddonConfig, SubprojectConfig, ManagerConfig } from "./AddonConfig";
 
 /**
  * Interface for manager configuration
@@ -161,18 +161,18 @@ function getWinCCOARegistryValue(
 }
 
 /**
- * Get the target clone directory from repositories.config.json storePath, Windows registry, or fall back to current directory
+ * Get the target clone directory from marketplace.config.json storePath, Windows registry, or fall back to current directory
  * Priority order:
- * 1. storePath from repositories.config.json (if exists and is a valid directory)
+ * 1. storePath from marketplace.config.json (if exists and is a valid directory)
  * 2. Windows registry PROJECTDIR key
  * 3. Current working directory
  */
 function getDefaultProjDir(): string {
-  // First, try to read storePath from repositories.config.json
+  // First, try to read storePath from marketplace.config.json
   try {
     const configPath = path.resolve(
       __dirname,
-      "../../../config/repositories.config.json",
+      "../../../config/marketplace.config.json",
     );
     if (fs.existsSync(configPath)) {
       const fileContent = fs.readFileSync(configPath, "utf8");
@@ -186,12 +186,12 @@ function getDefaultProjDir(): string {
         ) {
           winccoa.logDebugF(
             "addonHandler",
-            `Using storePath from repositories.config.json: ${config.storePath}`,
+            `Using storePath from marketplace.config.json: ${config.storePath}`,
           );
           return config.storePath;
         } else {
           winccoa.logWarning(
-            `storePath from repositories.config.json does not exist or is not a directory: ${config.storePath}`,
+            `storePath from marketplace.config.json does not exist or is not a directory: ${config.storePath}`,
           );
         }
       }
@@ -199,7 +199,7 @@ function getDefaultProjDir(): string {
   } catch (error) {
     winccoa.logDebugF(
       "addonHandler",
-      `Could not read storePath from repositories.config.json: ${(error as Error).message}`,
+      `Could not read storePath from marketplace.config.json: ${(error as Error).message}`,
     );
   }
 
@@ -362,7 +362,7 @@ class AddOnHandler {
           );
           winccoa.logWarning(
             "addonHandler",
-            '   - Create .env file with GITHUB_TOKEN="your_token"',
+            '   - Create .env file in workspace root with GITHUB_TOKEN="your_token"',
           );
         }
       }
@@ -453,7 +453,7 @@ class AddOnHandler {
   /**
    * Read GitHub token from multiple sources in order of preference:
    * 1. Environment variable GITHUB_TOKEN
-   * 2. .env file in project root
+   * 2. .env file in workspace root
    * @returns The token string or null if not found
    */
   private readGitHubToken(): string | null {
@@ -467,10 +467,13 @@ class AddOnHandler {
       return envToken;
     }
 
-    // Try .env file in project root
+    // Try .env file in workspace root
     try {
-      const envPath = path.join(__dirname, "..", ".env");
+      // From lib/AddOnHandler.js, go up to workspace root: lib -> winccoa-marketplace -> javascript -> winccoa-marketplace -> github_integration
+      const envPath = path.resolve(__dirname, "../../../../.env");
+      winccoa.logDebugF("addonHandler", `Looking for .env file at: ${envPath}`);
       if (fs.existsSync(envPath)) {
+        winccoa.logDebugF("addonHandler", `.env file found at: ${envPath}`);
         const envContent = fs.readFileSync(envPath, "utf8");
         const lines = envContent.split("\n");
         for (const line of lines) {
@@ -498,6 +501,8 @@ class AddOnHandler {
             }
           }
         }
+      } else {
+        winccoa.logDebugF("addonHandler", `.env file NOT found at: ${envPath}`);
       }
     } catch (error) {
       winccoa.logInfo("addonHandler", "Could not read .env file");
@@ -649,6 +654,31 @@ bool addManager(string manager, string startMode, string options, string user, s
   pmonInsertManager(err, PROJ, dynlen(managers), makeDynString(manager, startMode, 2, 2, 30, options), user, pwd);
   return err;
 }
+
+
+int managerExists(string manager, string options)
+{
+  ProjEnvProject proj  = new ProjEnvProject(PROJ);
+  dyn_anytype managerOptions = proj.getListOfManagerOptions();
+
+  bool exists;
+
+  for (int i = 0; i < dynlen(managerOptions); i++)
+  {
+    ProjEnvManagerOptions managerOption = managerOptions[i + 1];
+    if (managerOption.component == manager && managerOption.startOptions == options)
+      return i;
+  }
+  return -1;
+}
+
+void removeManager(int manIdx)
+{
+  ProjEnvProject proj  = new ProjEnvProject(PROJ);
+  string startOptions;
+  proj.stopManager(manIdx, 30);
+  proj.deleteManager(manIdx);
+}
   `,
   );
 
@@ -728,11 +758,11 @@ bool addManager(string manager, string startMode, string options, string user, s
     // Execute uninstall scripts if available (from subproject config)
     if (
       subprojectConfig &&
-      subprojectConfig.UnInstallScripts &&
-      subprojectConfig.UnInstallScripts.length > 0
+      subprojectConfig.UninstallScripts &&
+      subprojectConfig.UninstallScripts.length > 0
     ) {
       console.log(
-        `Executing ${subprojectConfig.UnInstallScripts.length} uninstall script(s)...`,
+        `Executing ${subprojectConfig.UninstallScripts.length} uninstall script(s)...`,
       );
 
       // Create a timeout promise that rejects after 5 minutes
@@ -754,7 +784,7 @@ bool addManager(string manager, string startMode, string options, string user, s
         await Promise.race([
           this.executeScripts(
             path.join(repoPath, projectName),
-            subprojectConfig.UnInstallScripts,
+            subprojectConfig.UninstallScripts,
           ),
           timeoutPromise,
         ]);
@@ -1088,32 +1118,6 @@ bool addManager(string manager, string startMode, string options, string user, s
   }
 
   /**
-   * Extract version from package.winccoa.json file
-   * @param repositoryPath The full path to the repository directory
-   * @returns The version string or null if not found
-   */
-  private extractVersionFromPackageJson(repositoryPath: string): string | null {
-    try {
-      const packageWinCCoAPath = path.join(
-        repositoryPath,
-        "package.winccoa.json",
-      );
-
-      if (fs.existsSync(packageWinCCoAPath)) {
-        const fileContent = fs.readFileSync(packageWinCCoAPath, "utf8");
-        const parseResult = JSON.parse(fileContent);
-        return parseResult.version || parseResult.Version || null;
-      }
-      return null;
-    } catch (error: any) {
-      winccoa.logWarning(
-        `Failed to extract version from package.winccoa.json: ${error.message}`,
-      );
-      return null;
-    }
-  }
-
-  /**
    * Check if the current WinCC OA version is compatible with the required version
    * @param requiredVersion Version requirement string (e.g., "^3.21.0", ">=3.20.0")
    * @returns True if the current version is compatible
@@ -1244,11 +1248,15 @@ bool addManager(string manager, string startMode, string options, string user, s
               Name: manager.Name || "",
               StartMode: manager.StartMode || "Unknown",
               Options: manager.Options || "",
+              RestartOnUpdate:
+                manager.RestartOnUpdate != null
+                  ? manager.RestartOnUpdate
+                  : true,
             }))
           : [],
         Dplists: sp.Dplists || [],
         UpdateScripts: sp.UpdateScripts || [],
-        UnInstallScripts: sp.UnInstallScripts || [],
+        UnInstallScripts: sp.UninstallScripts || [],
       })),
     };
   }
@@ -1329,34 +1337,45 @@ bool addManager(string manager, string startMode, string options, string user, s
    * @param repositoryDirectory Absolute path to the repository directory
    * @returns Pull result with summary information
    */
-  async pullRepository(repositoryDirectory: string): Promise<any> {
+  async pullRepository(repositoryPath: string, session: string): Promise<any> {
     try {
       // Verify the directory exists
-      if (!fs.existsSync(repositoryDirectory)) {
+      if (!fs.existsSync(repositoryPath)) {
         throw new Error(
-          `Repository directory does not exist: ${repositoryDirectory}`,
+          `Repository directory does not exist: ${repositoryPath}`,
         );
       }
 
       // Verify it's a git repository (check for .git directory)
-      const gitDir = path.join(repositoryDirectory, ".git");
+      const gitDir = path.join(repositoryPath, ".git");
       if (!fs.existsSync(gitDir)) {
-        throw new Error(
-          `Directory is not a git repository: ${repositoryDirectory}`,
-        );
+        throw new Error(`Directory is not a git repository: ${repositoryPath}`);
       }
 
       // Read version before pull
-      const versionBeforePull =
-        this.extractVersionFromPackageJson(repositoryDirectory);
+      let updatedAddonConfigBeforePull;
+
+      try {
+        const packageJsonContentBeforePull =
+          this.readWinCCOAPackageJson(repositoryPath);
+        if (!packageJsonContentBeforePull) {
+          throw new Error("package.winccoa.json not found before pull");
+        }
+        const parsedPackage = JSON.parse(packageJsonContentBeforePull);
+        updatedAddonConfigBeforePull =
+          this.mapPackageJsonToAddonConfig(parsedPackage);
+      } catch (error) {
+        console.log("Could not read package.winccoa.json before pull:", error);
+        return;
+      }
 
       winccoa.logDebugF(
         "addonHandler",
-        `Pulling latest changes from repository: ${repositoryDirectory}`,
+        `Pulling latest changes from repository: ${repositoryPath}`,
       );
 
       // Use simple-git for pull operation
-      const git = simpleGit(repositoryDirectory);
+      const git = simpleGit(repositoryPath);
       const pullResult = await git.pull();
 
       if (pullResult.summary.changes) {
@@ -1371,38 +1390,40 @@ bool addManager(string manager, string startMode, string options, string user, s
       winccoa.logDebugF("addonHandler", "Git pull completed successfully!");
 
       // Read version after pull and compare
-      const versionAfterPull =
-        this.extractVersionFromPackageJson(repositoryDirectory);
       // TEMP: hardcoded for testing
-      // const versionAfterPull = "2.0.1"
       let updatedAddonConfig: AddonConfig | null = null;
 
-      if (
-        versionBeforePull &&
-        versionAfterPull &&
-        this.isVersionHigher(versionAfterPull, versionBeforePull)
-      ) {
-        winccoa.logDebugF(
-          "addonHandler",
-          `INFO: Version updated from ${versionBeforePull} to ${versionAfterPull}`,
-        );
+      // Read and parse the updated package.winccoa.json as AddonConfig
+      const packageJsonContent = this.readWinCCOAPackageJson(repositoryPath);
+      if (packageJsonContent) {
+        try {
+          const parsedPackage = JSON.parse(packageJsonContent);
+          updatedAddonConfig = this.mapPackageJsonToAddonConfig(parsedPackage);
 
-        // Read and parse the updated package.winccoa.json as AddonConfig
-        const packageJsonContent =
-          this.readWinCCOAPackageJson(repositoryDirectory);
-        if (packageJsonContent) {
-          try {
-            const parsedPackage = JSON.parse(packageJsonContent);
-            updatedAddonConfig =
-              this.mapPackageJsonToAddonConfig(parsedPackage);
+          if (
+            updatedAddonConfigBeforePull.Version &&
+            updatedAddonConfig.Version &&
+            this.isVersionHigher(
+              updatedAddonConfig.Version,
+              updatedAddonConfigBeforePull.Version,
+            )
+          ) {
+            winccoa.logDebugF(
+              "addonHandler",
+              `INFO: Version updated from ${updatedAddonConfigBeforePull.Version} to ${updatedAddonConfig.Version}`,
+            );
 
             // Process each subproject
             for (const subproject of updatedAddonConfig.Subprojects) {
+              const subprojectBeforePull =
+                updatedAddonConfigBeforePull.Subprojects.find(
+                  (sp) => sp.Name === subproject.Name,
+                );
               // Import dplist files if available
               if (subproject.Dplists && subproject.Dplists.length > 0) {
-                this.importAsciiFiles(
+                await this.importAsciiFiles(
                   subproject.Dplists,
-                  path.join(repositoryDirectory, subproject.Name, "dplist"),
+                  path.join(repositoryPath, subproject.Name, "dplist"),
                 );
               }
 
@@ -1435,7 +1456,7 @@ bool addManager(string manager, string startMode, string options, string user, s
                   // eslint-disable-next-line no-await-in-loop
                   await Promise.race([
                     this.executeScripts(
-                      path.join(repositoryDirectory, subproject.Name),
+                      path.join(repositoryPath, subproject.Name),
                       subproject.UpdateScripts,
                     ),
                     timeoutPromise,
@@ -1465,53 +1486,133 @@ bool addManager(string manager, string startMode, string options, string user, s
                   `No update scripts to execute for subproject ${subproject.Name}`,
                 );
               }
+
+              // update node managers
+              await NodeInstaller.installAndBuild(repositoryPath);
+
+              if (subprojectBeforePull?.Managers) {
+                // Remove managers that are no longer in the updated configuration
+                for (const oldManager of subprojectBeforePull.Managers) {
+                  const stillExists = subproject.Managers?.find(
+                    (newManager) =>
+                      newManager.Name === oldManager.Name &&
+                      newManager.Options === oldManager.Options,
+                  );
+
+                  if (!stillExists) {
+                    winccoa.logDebugF(
+                      "addonHandler",
+                      `Manager ${oldManager.Name} with options "${oldManager.Options}" no longer exists in updated config - removing it`,
+                    );
+                    // eslint-disable-next-line no-await-in-loop
+                    const managerIdx = await this.ctrlScript.start(
+                      "managerExists",
+                      [oldManager.Name, oldManager.Options],
+                      [WinccoaCtrlType.string, WinccoaCtrlType.string],
+                    );
+
+                    if (managerIdx !== -1) {
+                      // eslint-disable-next-line no-await-in-loop
+                      await this.ctrlScript.start(
+                        "removeManager",
+                        [managerIdx],
+                        [WinccoaCtrlType.int],
+                      );
+                    }
+                  }
+                }
+              }
+
+              if (subproject.Managers) {
+                const sessionCredentials = this.pmonCredentials.find(
+                  (cred) => cred.session === session,
+                );
+                const pmonUser = sessionCredentials?.user || "";
+                const pmonPassword = sessionCredentials?.password || "";
+
+                for (const manager of subproject.Managers) {
+                  // eslint-disable-next-line no-await-in-loop
+                  const managerIdx = await this.ctrlScript.start(
+                    "managerExists",
+                    [manager.Name, manager.Options],
+                    [WinccoaCtrlType.string, WinccoaCtrlType.string],
+                  );
+
+                  if (managerIdx !== -1 && manager.RestartOnUpdate) {
+                    // eslint-disable-next-line no-await-in-loop
+                    await this.ctrlScript.start(
+                      "restartManager",
+                      [managerIdx],
+                      [WinccoaCtrlType.int],
+                    );
+                  } else {
+                    // add manager if it does not exist
+                    // eslint-disable-next-line no-await-in-loop
+                    await this.ctrlScript.start(
+                      "addManager",
+                      [
+                        manager.Name,
+                        manager.StartMode.toLowerCase(),
+                        manager.Options,
+                        pmonUser,
+                        pmonPassword,
+                      ],
+                      [
+                        WinccoaCtrlType.string,
+                        WinccoaCtrlType.string,
+                        WinccoaCtrlType.string,
+                        WinccoaCtrlType.string,
+                        WinccoaCtrlType.string,
+                      ],
+                    );
+                  }
+                }
+              }
             }
-          } catch (error) {
-            winccoa.logWarning(
-              `Failed to parse updated package.winccoa.json as AddonConfig:`,
-              error,
-            );
           }
+        } catch (error) {
+          winccoa.logWarning(
+            `Failed to parse updated package.winccoa.json as AddonConfig:`,
+            error,
+          );
         }
       }
 
       return {
         success: true,
         message: "Repository updated successfully",
-        directory: repositoryDirectory,
+        directory: repositoryPath,
         changes: pullResult.summary.changes || 0,
         insertions: pullResult.summary.insertions || 0,
         deletions: pullResult.summary.deletions || 0,
         files: pullResult.files || [],
         updatedAt: new Date().toISOString(),
-        fileContent: this.readWinCCOAPackageJson(repositoryDirectory),
+        fileContent: this.readWinCCOAPackageJson(repositoryPath),
         updatedAddonConfig: updatedAddonConfig,
       };
     } catch (error: any) {
       winccoa.logWarning(
-        `Failed to pull repository at ${repositoryDirectory}:`,
+        `Failed to pull repository at ${repositoryPath}:`,
         error.message,
       );
 
       // Provide more specific error messages
       if (error.message.includes("not a git repository")) {
-        throw new Error(
-          `Directory is not a git repository: ${repositoryDirectory}`,
-        );
+        throw new Error(`Directory is not a git repository: ${repositoryPath}`);
       } else if (error.message.includes("does not exist")) {
         throw new Error(
-          `Repository directory does not exist: ${repositoryDirectory}`,
+          `Repository directory does not exist: ${repositoryPath}`,
         );
       } else if (
         error.message.includes("Permission denied") ||
         error.message.includes("authentication")
       ) {
         throw new Error(
-          `Authentication failed for repository at: ${repositoryDirectory}`,
+          `Authentication failed for repository at: ${repositoryPath}`,
         );
       } else if (error.message.includes("merge conflict")) {
         throw new Error(
-          `Merge conflicts detected in repository at: ${repositoryDirectory}. Please resolve conflicts manually.`,
+          `Merge conflicts detected in repository at: ${repositoryPath}. Please resolve conflicts manually.`,
         );
       } else {
         throw new Error(`Failed to pull repository: ${error.message}`);
@@ -1686,15 +1787,15 @@ bool addManager(string manager, string startMode, string options, string user, s
   }
 
   listCustomRepositories(): { repositories: object[]; authMethods: string[] } {
-    // Read repositories.config.json and return repository info and auth methods
+    // Read marketplace.config.json and return repository info and auth methods
     try {
       const configPath = path.resolve(
         __dirname,
-        "../../../config/repositories.config.json",
+        "../../../config/marketplace.config.json",
       );
       if (!fs.existsSync(configPath)) {
         winccoa.logWarning(
-          `[listCustomRepositories] repositories.config.json not found at ${configPath}`,
+          `[listCustomRepositories] marketplace.config.json not found at ${configPath}`,
         );
         return { repositories: [], authMethods: [] };
       }
@@ -1717,7 +1818,7 @@ bool addManager(string manager, string startMode, string options, string user, s
       };
     } catch (error) {
       winccoa.logWarning(
-        "[listCustomRepositories] Failed to read repositories.config.json:",
+        "[listCustomRepositories] Failed to read marketplace.config.json:",
         error,
       );
       return { repositories: [], authMethods: [] };
@@ -1725,18 +1826,18 @@ bool addManager(string manager, string startMode, string options, string user, s
   }
 
   /**
-   * Get supported authentication methods from repositories.config.json
+   * Get supported authentication methods from marketplace.config.json
    * @returns Array of supported authentication methods
    */
   getSupportedAuthMethods(): string[] {
     try {
       const configPath = path.resolve(
         __dirname,
-        "../../../config/repositories.config.json",
+        "../../../config/marketplace.config.json",
       );
       if (!fs.existsSync(configPath)) {
         console.warn(
-          `[getSupportedAuthMethods] repositories.config.json not found at ${configPath}`,
+          `[getSupportedAuthMethods] marketplace.config.json not found at ${configPath}`,
         );
         return [];
       }
@@ -1746,7 +1847,7 @@ bool addManager(string manager, string startMode, string options, string user, s
       return config.authMethods || [];
     } catch (error) {
       winccoa.logWarning(
-        "[getSupportedAuthMethods] Failed to read repositories.config.json:",
+        "[getSupportedAuthMethods] Failed to read marketplace.config.json:",
         error,
       );
       return [];

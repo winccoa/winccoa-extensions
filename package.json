@@ -1,0 +1,30 @@
+{
+  "name": "winccoa-marketplace-workspace",
+  "version": "1.0.0",
+  "description": "WinCC OA Marketplace - Monorepo workspace",
+  "author": "ETM professional control",
+  "license": "MIT",
+  "private": true,
+  "workspaces": [
+    "winccoa-marketplace/data/marketplace",
+    "winccoa-marketplace/javascript/winccoa-marketplace"
+  ],
+  "scripts": {
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:backend": "npm run build --workspace=winccoa-marketplace/javascript/winccoa-marketplace",
+    "build:frontend": "npm run build --workspace=winccoa-marketplace/data/marketplace",
+    "install:all": "npm install",
+    "lint": "npm run lint --workspace=winccoa-marketplace/javascript/winccoa-marketplace",
+    "format": "npm run format --workspace=winccoa-marketplace/javascript/winccoa-marketplace && npm run format --workspace=winccoa-marketplace/data/marketplace",
+    "format:backend": "npm run format --workspace=winccoa-marketplace/javascript/winccoa-marketplace",
+    "format:frontend": "npm run format --workspace=winccoa-marketplace/data/marketplace",
+    "dev": "npm run build -- --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  }
+}
