@@ -40,6 +40,20 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     this._addOnHandler = new AddOnHandler();
   }
 
+  /**
+   * Parse JSON fileContent and map to AddonConfig
+   * @param fileContent JSON string from package.winccoa.json
+   * @returns AddonConfig object
+   */
+  private parseAndMapAddonConfig(fileContent: string): AddonConfig {
+    try {
+      const parsedContent = JSON.parse(fileContent);
+      return this._addOnHandler.mapPackageJsonToAddonConfig(parsedContent);
+    } catch (error) {
+      throw new Error(`Invalid JSON in fileContent: ${error}`);
+    }
+  }
+
   private async registerSubProjects(
     serverContext: Vrpc.ServerContext,
     request: Vrpc.Variant,
@@ -78,22 +92,13 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       const fileContent = fileContentVariant.getString();
       winccoa.logDebugF("addonHandler", "-------- fileContent:", fileContent);
 
-      // Parse the JSON string to get addon configuration
-      let parsedContent: any;
-      try {
-        parsedContent = JSON.parse(fileContent);
-      } catch (error) {
-        throw new Error(`Invalid JSON in fileContent: ${error}`);
-      }
-
       const sessionVariant = requestMapping.get(
         Vrpc.Variant.createString("session"),
       );
       const session = sessionVariant ? sessionVariant.getString() : "";
 
-      // Map to AddonConfig interface (now contains Subprojects array)
-      const config: AddonConfig =
-        this._addOnHandler.mapPackageJsonToAddonConfig(parsedContent);
+      // Parse the JSON string and map to AddonConfig interface
+      const config = this.parseAndMapAddonConfig(fileContent);
 
       winccoa.logDebugF(
         "addonHandler",
@@ -101,13 +106,24 @@ export class MarketplaceService extends Vrpc.ServiceBase {
         config,
       );
 
+      // Process dependencies first
+      if (config.Dependencies && config.Dependencies.length > 0) {
+        winccoa.logDebugF(
+          "addonHandler",
+          `Installing ${config.Dependencies.length} dependencies before registering subprojects...`,
+        );
+        await this._addOnHandler.processDependencies(
+          config.Dependencies,
+          session,
+        );
+      }
+
       // Register each subproject
       const results: any[] = [];
       for (const subproject of config.Subprojects) {
         const result = await this._addOnHandler.registerSubProject(
           repositoryPath,
           subproject.Name,
-          config,
           subproject,
           session,
         );
@@ -170,17 +186,8 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     const fileContent = fileContentVariant.getString();
     winccoa.logDebugF("addonHandler", "-------- fileContent:", fileContent);
 
-    // Parse the JSON string to get addon configuration
-    let parsedContent: any;
-    try {
-      parsedContent = JSON.parse(fileContent);
-    } catch (error) {
-      throw new Error(`Invalid JSON in fileContent: ${error}`);
-    }
-
-    // Map to AddonConfig interface (now contains Subprojects array)
-    const config: AddonConfig =
-      this._addOnHandler.mapPackageJsonToAddonConfig(parsedContent);
+    // Parse the JSON string and map to AddonConfig interface
+    const config = this.parseAndMapAddonConfig(fileContent);
 
     // Unregister each subproject
     for (const subproject of config.Subprojects) {
@@ -316,11 +323,43 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     targetDir = targetDirVariant ? targetDirVariant.getString() : undefined;
     branch = branchVariant ? branchVariant.getString() : undefined;
 
+    const sessionVariant = requestMapping.get(
+      Vrpc.Variant.createString("session"),
+    );
+    const session = sessionVariant ? sessionVariant.getString() : "";
+
     const result = await this._addOnHandler.cloneRepository(
       repositoryURL,
       targetDir,
       branch,
     );
+
+    // Check for dependencies and process them
+    if (result.fileContent) {
+      try {
+        const config = this.parseAndMapAddonConfig(result.fileContent);
+
+        if (config.Dependencies && config.Dependencies.length > 0) {
+          winccoa.logDebugF(
+            "addonHandler",
+            `Cloned repository has ${config.Dependencies.length} dependencies, cloning them...`,
+          );
+          await this._addOnHandler.processDependencies(
+            config.Dependencies,
+            session,
+            undefined, // processedDeps - use default
+            undefined, // currentRepoUrl - use default
+            false,     // registerSubprojects - CLONE ONLY
+          );
+        }
+      } catch (error) {
+        winccoa.logWarning(
+          "Failed to parse package.winccoa.json or process dependencies:",
+          error,
+        );
+        // Continue anyway - the clone was successful
+      }
+    }
 
     const resultMapping = new Vrpc.Mapping();
 
