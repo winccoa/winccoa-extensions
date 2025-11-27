@@ -672,6 +672,13 @@ int managerExists(string manager, string options)
   return -1;
 }
 
+void restartManager(int manIdx)
+{
+  ProjEnvProject proj  = new ProjEnvProject(PROJ);
+  proj.stopManager(manIdx, 30);
+  proj.startManager(manIdx);
+}
+
 void removeManager(int manIdx)
 {
   ProjEnvProject proj  = new ProjEnvProject(PROJ);
