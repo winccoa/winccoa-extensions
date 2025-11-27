@@ -670,24 +670,6 @@ export class MarketplaceUI {
   }
 
   /**
-   * Set button enabled/disabled state
-   */
-  private setButtonState(
-    button: HTMLElement | null,
-    enabled: boolean,
-    title?: string,
-  ): void {
-    if (!button) return;
-
-    if (enabled) {
-      button.removeAttribute("disabled");
-    } else {
-      button.setAttribute("disabled", "");
-    }
-    if (title) button.setAttribute("title", title);
-  }
-
-  /**
    * Load repositories from all predefined organizations
    */
   private async loadAllOrganizations(): Promise<void> {
@@ -1790,7 +1772,7 @@ export class MarketplaceUI {
                     }
                 </div>
             `;
-      html += this.renderSubprojectCards(localSubproject, localPackageData);
+      html += this.renderSubprojectCards(localSubproject);
 
       // Show remote version only if versions differ
       if (!versionsMatch) {
@@ -1802,7 +1784,7 @@ export class MarketplaceUI {
                         </ix-pill>
                     </div>
                 `;
-        html += this.renderSubprojectCards(remoteSubproject, remotePackageData);
+        html += this.renderSubprojectCards(remoteSubproject);
       }
     }
     // Scenario 2: Only in remote (new subproject or not cloned yet)
@@ -1836,7 +1818,7 @@ export class MarketplaceUI {
                     }
                 </div>
             `;
-      html += this.renderSubprojectCards(remoteSubproject, remotePackageData);
+      html += this.renderSubprojectCards(remoteSubproject);
     }
     // Scenario 3: Only in local (will be removed with update)
     else if (localSubproject && !remoteSubproject) {
@@ -1858,7 +1840,7 @@ export class MarketplaceUI {
                     }
                 </div>
             `;
-      html += this.renderSubprojectCards(localSubproject, localPackageData);
+      html += this.renderSubprojectCards(localSubproject);
 
       // Show warning that this subproject will be removed
       if (repo.hasUpdate) {
@@ -1892,7 +1874,7 @@ export class MarketplaceUI {
   /**
    * Render cards for a specific subproject (subproject-specific info only)
    */
-  private renderSubprojectCards(subproject: any, _packageData: any): string {
+  private renderSubprojectCards(subproject: any): string {
     let html = '<div class="overview-grid">';
 
     // Subproject Information Card (subproject-specific info only)
@@ -2269,21 +2251,10 @@ export class MarketplaceUI {
     const repositoryBeingPulled = this.currentRepository;
 
     // Set loading state on the specific repository
-    const repoIndex = this.repositories.findIndex(
-      (repo) => repo.name === repositoryBeingPulled.name,
+    const repoIndex = this.setRepositoryLoading(
+      repositoryBeingPulled,
+      "update",
     );
-    if (repoIndex !== -1) {
-      this.repositories[repoIndex].loadingAction = "update";
-      // Also update currentRepository if it's the same one
-      if (this.currentRepository?.name === repositoryBeingPulled.name) {
-        this.currentRepository.loadingAction = "update";
-        // Update button states immediately to disable all buttons
-        this.updateLocalStatus(this.currentRepository);
-      }
-      this.renderRepositoryList(); // Re-render to show loading state
-    }
-
-    this.showActionLoading();
 
     try {
       const repoName = repositoryBeingPulled.name;
@@ -2353,12 +2324,7 @@ export class MarketplaceUI {
         this.showError("Failed to update repository: " + apiError.message);
       }
     } finally {
-      // Clear loading state
-      if (repoIndex !== -1) {
-        this.repositories[repoIndex].loadingAction = null;
-        this.renderRepositoryList();
-      }
-      this.hideActionLoading();
+      this.clearRepositoryLoading(repoIndex);
     }
   }
 
@@ -2478,21 +2444,10 @@ export class MarketplaceUI {
     }
 
     // Set loading state on the specific repository
-    const repoIndex = this.repositories.findIndex(
-      (repo) => repo.name === repositoryBeingRegistered.name,
+    const repoIndex = this.setRepositoryLoading(
+      repositoryBeingRegistered,
+      "install",
     );
-    if (repoIndex !== -1) {
-      this.repositories[repoIndex].loadingAction = "install";
-      // Also update currentRepository if it's the same one
-      if (this.currentRepository?.name === repositoryBeingRegistered.name) {
-        this.currentRepository.loadingAction = "install";
-        // Update button states immediately to disable all buttons
-        this.updateLocalStatus(this.currentRepository);
-      }
-      this.renderRepositoryList(); // Re-render to show loading state
-    }
-
-    this.showActionLoading();
 
     try {
       const params = new URLSearchParams({
@@ -2515,23 +2470,14 @@ export class MarketplaceUI {
         // Reload registered projects to include all installed subprojects (including dependencies)
         await this.loadRegisteredProjects();
 
-        // Clear loading state
+        // Clear loading state in array before syncing
         if (repoIndex !== -1) {
           this.repositories[repoIndex].loadingAction = null;
         }
 
         // If this is still the current repository, sync it from the array and update UI
         if (this.currentRepository?.name === repositoryBeingRegistered.name) {
-          // Sync currentRepository with the updated data from repositories array
-          const syncedRepo = this.repositories[repoIndex];
-          if (syncedRepo) {
-            this.currentRepository.fileContent = syncedRepo.fileContent;
-            this.currentRepository.subprojectName = syncedRepo.subprojectName;
-            this.currentRepository.currentVersion = syncedRepo.currentVersion;
-            this.currentRepository.hasUpdate = syncedRepo.hasUpdate;
-            this.currentRepository.localWinccoaPackage =
-              syncedRepo.localWinccoaPackage;
-          }
+          this.syncCurrentRepository(repoIndex);
           this.currentRepository.loadingAction = null;
           this.updateLocalStatus(this.currentRepository);
           // Re-render subproject content to show updated "Installed" status
@@ -2550,12 +2496,7 @@ export class MarketplaceUI {
         this.showError("Failed to install subproject: " + apiError.message);
       }
     } finally {
-      // Clear loading state
-      if (repoIndex !== -1) {
-        this.repositories[repoIndex].loadingAction = null;
-        this.renderRepositoryList();
-      }
-      this.hideActionLoading();
+      this.clearRepositoryLoading(repoIndex);
     }
   }
 
@@ -2629,23 +2570,11 @@ export class MarketplaceUI {
     skipUIUpdate: boolean = false,
   ): Promise<boolean> {
     // Set loading state on the specific repository
-    const repoIndex = this.repositories.findIndex(
-      (repo) => repo.name === repository.name,
+    const repoIndex = this.setRepositoryLoading(
+      repository,
+      "download",
+      skipUIUpdate,
     );
-    if (repoIndex !== -1) {
-      this.repositories[repoIndex].loadingAction = "download";
-      // Also update currentRepository if it's the same one
-      if (this.currentRepository?.name === repository.name) {
-        this.currentRepository.loadingAction = "download";
-        // Update button states immediately to disable all buttons (unless skipping UI update for chaining)
-        if (!skipUIUpdate) {
-          this.updateLocalStatus(this.currentRepository);
-        }
-      }
-      this.renderRepositoryList(); // Re-render to show loading state
-    }
-
-    this.showActionLoading();
 
     try {
       const params = new URLSearchParams({
@@ -2669,15 +2598,7 @@ export class MarketplaceUI {
           this.currentRepository?.name === repository.name &&
           repoIndex !== -1
         ) {
-          const syncedRepo = this.repositories[repoIndex];
-          if (syncedRepo) {
-            this.currentRepository.cloned = syncedRepo.cloned;
-            this.currentRepository.fileContent = syncedRepo.fileContent;
-            this.currentRepository.localWinccoaPackage =
-              syncedRepo.localWinccoaPackage;
-            this.currentRepository.currentVersion = syncedRepo.currentVersion;
-            this.currentRepository.localPath = syncedRepo.localPath;
-          }
+          this.syncCurrentRepository(repoIndex);
           if (!skipUIUpdate) {
             this.currentRepository.loadingAction = null;
             this.updateLocalStatus(this.currentRepository);
@@ -2709,11 +2630,7 @@ export class MarketplaceUI {
       // Clear loading state and hide spinner only if not skipping UI update
       // (when chaining operations like clone then register, the next operation will handle this)
       if (!skipUIUpdate) {
-        if (repoIndex !== -1) {
-          this.repositories[repoIndex].loadingAction = null;
-          this.renderRepositoryList();
-        }
-        this.hideActionLoading();
+        this.clearRepositoryLoading(repoIndex);
       }
     }
   }
@@ -2756,21 +2673,10 @@ export class MarketplaceUI {
     }
 
     // Set loading state on the specific repository
-    const repoIndex = this.repositories.findIndex(
-      (repo) => repo.name === repositoryBeingUnregistered.name,
+    const repoIndex = this.setRepositoryLoading(
+      repositoryBeingUnregistered,
+      "uninstall",
     );
-    if (repoIndex !== -1) {
-      this.repositories[repoIndex].loadingAction = "uninstall";
-      // Also update currentRepository if it's the same one
-      if (this.currentRepository?.name === repositoryBeingUnregistered.name) {
-        this.currentRepository.loadingAction = "uninstall";
-        // Update button states immediately to disable all buttons
-        this.updateLocalStatus(this.currentRepository);
-      }
-      this.renderRepositoryList(); // Re-render to show loading state
-    }
-
-    this.showActionLoading();
 
     try {
       // Pass the delete parameter and fileContent to the API
@@ -2814,13 +2720,7 @@ export class MarketplaceUI {
         if (repoIndex !== -1) {
           // If repository was deleted, reset the cloned state
           if (result.deleteRepository) {
-            this.repositories[repoIndex].cloned = false;
-            this.repositories[repoIndex].localPath = undefined;
-            this.repositories[repoIndex].fileContent = undefined;
-            this.repositories[repoIndex].currentVersion = undefined;
-            this.repositories[repoIndex].subprojectName = undefined;
-            this.repositories[repoIndex].hasUpdate = false;
-            this.repositories[repoIndex].localWinccoaPackage = undefined;
+            this.resetRepositoryLocalState(repoIndex);
           }
           this.repositories[repoIndex].loadingAction = null;
         }
@@ -2842,17 +2742,7 @@ export class MarketplaceUI {
             this.updateTabs(this.currentRepository, currentSubprojectName);
           } else {
             // Sync currentRepository with updated data from repositories array
-            const updatedRepo = this.repositories[repoIndex];
-            if (updatedRepo) {
-              this.currentRepository.fileContent = updatedRepo.fileContent;
-              this.currentRepository.subprojectName =
-                updatedRepo.subprojectName;
-              this.currentRepository.currentVersion =
-                updatedRepo.currentVersion;
-              this.currentRepository.hasUpdate = updatedRepo.hasUpdate;
-              this.currentRepository.localWinccoaPackage =
-                updatedRepo.localWinccoaPackage;
-            }
+            this.syncCurrentRepository(repoIndex);
             // Re-render subproject content to show updated "Cloned locally" status
             this.renderSubprojectContent(currentSubprojectName);
           }
@@ -2872,12 +2762,7 @@ export class MarketplaceUI {
         this.showError("Failed to uninstall subproject: " + apiError.message);
       }
     } finally {
-      // Clear loading state
-      if (repoIndex !== -1) {
-        this.repositories[repoIndex].loadingAction = null;
-        this.renderRepositoryList();
-      }
-      this.hideActionLoading();
+      this.clearRepositoryLoading(repoIndex);
     }
   }
 
@@ -2919,21 +2804,10 @@ export class MarketplaceUI {
     }
 
     // Set loading state on the specific repository
-    const repoIndex = this.repositories.findIndex(
-      (repo) => repo.name === repositoryBeingDeleted.name,
+    const repoIndex = this.setRepositoryLoading(
+      repositoryBeingDeleted,
+      "remove",
     );
-    if (repoIndex !== -1) {
-      this.repositories[repoIndex].loadingAction = "remove";
-      // Also update currentRepository if it's the same one
-      if (this.currentRepository?.name === repositoryBeingDeleted.name) {
-        this.currentRepository.loadingAction = "remove";
-        // Update button states immediately to disable all buttons
-        this.updateLocalStatus(this.currentRepository);
-      }
-      this.renderRepositoryList(); // Re-render to show loading state
-    }
-
-    this.showActionLoading();
 
     try {
       const params = new URLSearchParams({
@@ -2948,13 +2822,7 @@ export class MarketplaceUI {
 
         // Update the repository in the repositories array
         if (repoIndex !== -1) {
-          this.repositories[repoIndex].cloned = false;
-          this.repositories[repoIndex].localPath = undefined;
-          this.repositories[repoIndex].fileContent = undefined;
-          this.repositories[repoIndex].currentVersion = undefined;
-          this.repositories[repoIndex].subprojectName = undefined;
-          this.repositories[repoIndex].hasUpdate = false;
-          this.repositories[repoIndex].localWinccoaPackage = undefined;
+          this.resetRepositoryLocalState(repoIndex);
           this.repositories[repoIndex].loadingAction = null;
         }
 
@@ -2988,13 +2856,92 @@ export class MarketplaceUI {
         this.showError("Failed to remove repository: " + apiError.message);
       }
     } finally {
-      // Clear loading state
-      if (repoIndex !== -1) {
-        this.repositories[repoIndex].loadingAction = null;
-        this.renderRepositoryList();
-      }
-      this.hideActionLoading();
+      this.clearRepositoryLoading(repoIndex);
     }
+  }
+
+  // ============================================================================
+  // Helper methods for repository state management (reduces code duplication)
+  // ============================================================================
+
+  /**
+   * Set loading state on a repository
+   * @returns The repository index in the array, or -1 if not found
+   */
+  private setRepositoryLoading(
+    repository: Repository,
+    action: "download" | "update" | "install" | "uninstall" | "remove",
+    skipUIUpdate: boolean = false,
+  ): number {
+    const repoIndex = this.repositories.findIndex(
+      (repo) => repo.name === repository.name,
+    );
+    if (repoIndex !== -1) {
+      this.repositories[repoIndex].loadingAction = action;
+      if (this.currentRepository?.name === repository.name) {
+        this.currentRepository.loadingAction = action;
+        if (!skipUIUpdate) {
+          this.updateLocalStatus(this.currentRepository);
+        }
+      }
+      this.renderRepositoryList();
+    }
+    this.showActionLoading();
+    return repoIndex;
+  }
+
+  /**
+   * Reset a repository's local state (after delete/unregister with delete)
+   */
+  private resetRepositoryLocalState(repoIndex: number): void {
+    if (repoIndex === -1) return;
+    const repo = this.repositories[repoIndex];
+    if (repo) {
+      repo.cloned = false;
+      repo.localPath = undefined;
+      repo.fileContent = undefined;
+      repo.currentVersion = undefined;
+      repo.subprojectName = undefined;
+      repo.hasUpdate = false;
+      repo.localWinccoaPackage = undefined;
+    }
+  }
+
+  /**
+   * Sync currentRepository with the updated data from repositories array
+   */
+  private syncCurrentRepository(repoIndex: number): void {
+    if (repoIndex === -1) return;
+    const syncedRepo = this.repositories[repoIndex];
+    if (
+      this.currentRepository &&
+      syncedRepo &&
+      this.currentRepository.name === syncedRepo.name
+    ) {
+      this.currentRepository.cloned = syncedRepo.cloned;
+      this.currentRepository.fileContent = syncedRepo.fileContent;
+      this.currentRepository.subprojectName = syncedRepo.subprojectName;
+      this.currentRepository.currentVersion = syncedRepo.currentVersion;
+      this.currentRepository.hasUpdate = syncedRepo.hasUpdate;
+      this.currentRepository.localWinccoaPackage =
+        syncedRepo.localWinccoaPackage;
+      this.currentRepository.localPath = syncedRepo.localPath;
+      this.currentRepository.loadingAction = syncedRepo.loadingAction;
+    }
+  }
+
+  /**
+   * Clear loading state on a repository (typically used in finally blocks)
+   */
+  private clearRepositoryLoading(repoIndex: number): void {
+    if (repoIndex !== -1) {
+      this.repositories[repoIndex].loadingAction = null;
+    }
+    if (this.currentRepository) {
+      this.currentRepository.loadingAction = null;
+    }
+    this.renderRepositoryList();
+    this.hideActionLoading();
   }
 
   /**
