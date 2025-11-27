@@ -14,6 +14,7 @@ interface AddonConfig {
   Description: string;
   OaVersion: string;
   Subprojects: SubprojectConfig[];
+  Dependencies?: string[];
 }
 
 interface ManagerConfig {

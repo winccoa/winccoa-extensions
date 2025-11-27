@@ -682,6 +682,113 @@ void removeManager(int manIdx)
   `,
   );
 
+  /**
+   * Process and install dependencies recursively
+   * @param dependencies Array of git repository URLs
+   * @param session Session ID for credentials
+   * @param processedDeps Set of already processed dependencies to avoid circular dependencies
+   * @param currentRepoUrl Optional URL of the current repository to prevent self-dependency
+   */
+  async processDependencies(
+    dependencies: string[],
+    session: string,
+    processedDeps: Set<string> = new Set(),
+    currentRepoUrl?: string,
+  ): Promise<void> {
+    if (!dependencies || dependencies.length === 0) {
+      return;
+    }
+
+    winccoa.logDebugF(
+      "addonHandler",
+      `Processing ${dependencies.length} dependencies...`,
+    );
+
+    for (const depUrl of dependencies) {
+      // Normalize URLs for comparison (remove .git suffix, trailing slashes, etc.)
+      const normalizedDepUrl = depUrl.replace(/\.git$/, "").replace(/\/$/, "");
+      const normalizedCurrentUrl = currentRepoUrl
+        ? currentRepoUrl.replace(/\.git$/, "").replace(/\/$/, "")
+        : "";
+
+      // Skip if dependency is the same as current repository (self-dependency)
+      if (normalizedCurrentUrl && normalizedDepUrl === normalizedCurrentUrl) {
+        winccoa.logWarning(
+          `Skipping self-dependency: Repository ${depUrl} cannot depend on itself`,
+        );
+        continue;
+      }
+
+      // Skip if already processed (avoid circular dependencies)
+      if (processedDeps.has(depUrl)) {
+        winccoa.logDebugF(
+          "addonHandler",
+          `Dependency ${depUrl} already processed, skipping...`,
+        );
+        continue;
+      }
+
+      winccoa.logDebugF("addonHandler", `Installing dependency: ${depUrl}`);
+      processedDeps.add(depUrl);
+
+      try {
+        // Clone the dependency repository
+        const cloneResult = await this.cloneRepository(depUrl);
+
+        if (!cloneResult.fileContent) {
+          winccoa.logWarning(
+            `Dependency ${depUrl} does not have a package.winccoa.json file, skipping registration...`,
+          );
+          continue;
+        }
+
+        // Parse the dependency's package.winccoa.json
+        const depConfig = this.mapPackageJsonToAddonConfig(
+          JSON.parse(cloneResult.fileContent),
+        );
+
+        // Recursively process nested dependencies
+        if (depConfig.Dependencies && depConfig.Dependencies.length > 0) {
+          await this.processDependencies(
+            depConfig.Dependencies,
+            session,
+            processedDeps,
+            depUrl, // Pass current dependency URL to prevent self-dependency
+          );
+        }
+
+        // Register all subprojects of the dependency
+        for (const subproject of depConfig.Subprojects) {
+          winccoa.logDebugF(
+            "addonHandler",
+            `Registering dependency subproject: ${subproject.Name}`,
+          );
+          await this.registerSubProject(
+            cloneResult.path,
+            subproject.Name,
+            subproject,
+            session,
+          );
+        }
+
+        winccoa.logDebugF(
+          "addonHandler",
+          `Dependency ${depUrl} installed successfully`,
+        );
+      } catch (error) {
+        winccoa.logWarning(
+          `Failed to install dependency ${depUrl}:`,
+          error,
+        );
+        throw new Error(
+          `Dependency installation failed for ${depUrl}: ${error}`,
+        );
+      }
+    }
+
+    winccoa.logDebugF("addonHandler", "All dependencies processed successfully");
+  }
+
   async registerSubProject(
     repoPath: string,
     projectName: string,
@@ -1257,6 +1364,7 @@ void removeManager(int manIdx)
         UpdateScripts: sp.UpdateScripts || [],
         UnInstallScripts: sp.UninstallScripts || [],
       })),
+      Dependencies: packageJson.Dependencies || [],
     };
   }
 

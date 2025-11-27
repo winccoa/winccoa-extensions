@@ -101,13 +101,24 @@ export class MarketplaceService extends Vrpc.ServiceBase {
         config,
       );
 
+      // Process dependencies first
+      if (config.Dependencies && config.Dependencies.length > 0) {
+        winccoa.logDebugF(
+          "addonHandler",
+          `Installing ${config.Dependencies.length} dependencies before registering subprojects...`,
+        );
+        await this._addOnHandler.processDependencies(
+          config.Dependencies,
+          session,
+        );
+      }
+
       // Register each subproject
       const results: any[] = [];
       for (const subproject of config.Subprojects) {
         const result = await this._addOnHandler.registerSubProject(
           repositoryPath,
           subproject.Name,
-          config,
           subproject,
           session,
         );
@@ -316,11 +327,42 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     targetDir = targetDirVariant ? targetDirVariant.getString() : undefined;
     branch = branchVariant ? branchVariant.getString() : undefined;
 
+    const sessionVariant = requestMapping.get(
+      Vrpc.Variant.createString("session"),
+    );
+    const session = sessionVariant ? sessionVariant.getString() : "";
+
     const result = await this._addOnHandler.cloneRepository(
       repositoryURL,
       targetDir,
       branch,
     );
+
+    // Check for dependencies and process them
+    if (result.fileContent) {
+      try {
+        const parsedContent = JSON.parse(result.fileContent);
+        const config: AddonConfig =
+          this._addOnHandler.mapPackageJsonToAddonConfig(parsedContent);
+
+        if (config.Dependencies && config.Dependencies.length > 0) {
+          winccoa.logDebugF(
+            "addonHandler",
+            `Cloned repository has ${config.Dependencies.length} dependencies, processing them...`,
+          );
+          await this._addOnHandler.processDependencies(
+            config.Dependencies,
+            session,
+          );
+        }
+      } catch (error) {
+        winccoa.logWarning(
+          "Failed to parse package.winccoa.json or process dependencies:",
+          error,
+        );
+        // Continue anyway - the clone was successful
+      }
+    }
 
     const resultMapping = new Vrpc.Mapping();
 
