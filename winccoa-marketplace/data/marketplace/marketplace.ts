@@ -2512,18 +2512,8 @@ export class MarketplaceUI {
         // Reload local repositories to get updated version and subproject name
         await this.loadLocalRepositories();
 
-        // Add ALL subproject names to registered projects (for multiple subprojects)
-        const updatedRepo = this.repositories[repoIndex];
-        if (updatedRepo?.localWinccoaPackage) {
-          const subprojects = this.getSubprojects(
-            updatedRepo.localWinccoaPackage,
-          );
-          for (const sp of subprojects) {
-            if (sp.Name && !this.registeredProjects.includes(sp.Name)) {
-              this.registeredProjects.push(sp.Name);
-            }
-          }
-        }
+        // Reload registered projects to include all installed subprojects (including dependencies)
+        await this.loadRegisteredProjects();
 
         // Clear loading state
         if (repoIndex !== -1) {
@@ -2669,69 +2659,35 @@ export class MarketplaceUI {
       const response = await this.makeApiCall(`/marketplace/clone?${params}`);
 
       if (response.ok) {
-        // Parse the JSON response with repositoryPath and fileContent
-        const data = await response.json();
-
         this.showSuccess("Repository cloned successfully");
 
-        // Update the repository in the repositories array
-        if (repoIndex !== -1) {
-          this.repositories[repoIndex].cloned = true;
-          if (!skipUIUpdate) {
-            this.repositories[repoIndex].loadingAction = null;
-          }
-          if (data.fileContent) {
-            this.repositories[repoIndex].fileContent = data.fileContent;
-            // Also set localWinccoaPackage with parsed content
-            try {
-              const parsedContent =
-                typeof data.fileContent === "string"
-                  ? JSON.parse(data.fileContent)
-                  : data.fileContent;
-              this.repositories[repoIndex].localWinccoaPackage = parsedContent;
-              if (parsedContent.Version) {
-                this.repositories[repoIndex].currentVersion =
-                  parsedContent.Version;
-              }
-            } catch (e) {
-              console.warn("Could not parse fileContent after clone:", e);
-            }
-          }
-          if (data.repositoryPath) {
-            this.repositories[repoIndex].localPath = data.repositoryPath;
-          }
-        }
+        // Reload all local repositories to get updated state (including cloned dependencies)
+        await this.loadLocalRepositories();
 
-        // If this is still the current repository, update it and refresh UI
-        if (this.currentRepository?.name === repository.name) {
-          this.currentRepository.cloned = true;
+        // Re-sync currentRepository with the updated data from repositories array
+        if (
+          this.currentRepository?.name === repository.name &&
+          repoIndex !== -1
+        ) {
+          const syncedRepo = this.repositories[repoIndex];
+          if (syncedRepo) {
+            this.currentRepository.cloned = syncedRepo.cloned;
+            this.currentRepository.fileContent = syncedRepo.fileContent;
+            this.currentRepository.localWinccoaPackage =
+              syncedRepo.localWinccoaPackage;
+            this.currentRepository.currentVersion = syncedRepo.currentVersion;
+            this.currentRepository.localPath = syncedRepo.localPath;
+          }
           if (!skipUIUpdate) {
             this.currentRepository.loadingAction = null;
-          }
-          if (data.fileContent) {
-            this.currentRepository.fileContent = data.fileContent;
-            // Also set localWinccoaPackage with parsed content
-            try {
-              const parsedContent =
-                typeof data.fileContent === "string"
-                  ? JSON.parse(data.fileContent)
-                  : data.fileContent;
-              this.currentRepository.localWinccoaPackage = parsedContent;
-              if (parsedContent.Version) {
-                this.currentRepository.currentVersion = parsedContent.Version;
-              }
-            } catch (e) {
-              console.warn("Could not parse fileContent after clone:", e);
-            }
-          }
-          if (data.repositoryPath) {
-            this.currentRepository.localPath = data.repositoryPath;
-          }
-          // Only update UI if not skipping (when standalone clone, not part of registration)
-          if (!skipUIUpdate) {
             this.updateLocalStatus(this.currentRepository);
           }
           this.updateRepositoryDetails(this.currentRepository); // Refresh details
+        }
+
+        // Clear loading state on the specific repository
+        if (repoIndex !== -1 && !skipUIUpdate) {
+          this.repositories[repoIndex].loadingAction = null;
         }
 
         this.renderRepositoryList(); // Re-render to show updated status

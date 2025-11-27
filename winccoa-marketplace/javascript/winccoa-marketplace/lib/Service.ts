@@ -349,7 +349,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
             session,
             undefined, // processedDeps - use default
             undefined, // currentRepoUrl - use default
-            false,     // registerSubprojects - CLONE ONLY
+            false, // registerSubprojects - CLONE ONLY
           );
         }
       } catch (error) {
