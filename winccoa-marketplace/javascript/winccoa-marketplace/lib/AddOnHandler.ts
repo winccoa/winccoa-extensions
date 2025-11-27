@@ -688,12 +688,14 @@ void removeManager(int manIdx)
    * @param session Session ID for credentials
    * @param processedDeps Set of already processed dependencies to avoid circular dependencies
    * @param currentRepoUrl Optional URL of the current repository to prevent self-dependency
+   * @param registerSubprojects Whether to register subprojects (true) or just clone (false)
    */
   async processDependencies(
     dependencies: string[],
     session: string,
     processedDeps: Set<string> = new Set(),
     currentRepoUrl?: string,
+    registerSubprojects: boolean = true,
   ): Promise<void> {
     if (!dependencies || dependencies.length === 0) {
       return;
@@ -701,7 +703,7 @@ void removeManager(int manIdx)
 
     winccoa.logDebugF(
       "addonHandler",
-      `Processing ${dependencies.length} dependencies...`,
+      `Processing ${dependencies.length} dependencies (${registerSubprojects ? "clone and register" : "clone only"})...`,
     );
 
     for (const depUrl of dependencies) {
@@ -754,20 +756,28 @@ void removeManager(int manIdx)
             session,
             processedDeps,
             depUrl, // Pass current dependency URL to prevent self-dependency
+            registerSubprojects, // Pass the flag recursively
           );
         }
 
-        // Register all subprojects of the dependency
-        for (const subproject of depConfig.Subprojects) {
+        // Register all subprojects of the dependency (only if registerSubprojects is true)
+        if (registerSubprojects) {
+          for (const subproject of depConfig.Subprojects) {
+            winccoa.logDebugF(
+              "addonHandler",
+              `Registering dependency subproject: ${subproject.Name}`,
+            );
+            await this.registerSubProject(
+              cloneResult.path,
+              subproject.Name,
+              subproject,
+              session,
+            );
+          }
+        } else {
           winccoa.logDebugF(
             "addonHandler",
-            `Registering dependency subproject: ${subproject.Name}`,
-          );
-          await this.registerSubProject(
-            cloneResult.path,
-            subproject.Name,
-            subproject,
-            session,
+            `Skipping registration for dependency: ${depUrl} (clone only mode)`,
           );
         }
 
@@ -1519,6 +1529,48 @@ void removeManager(int manIdx)
               "addonHandler",
               `INFO: Version updated from ${updatedAddonConfigBeforePull.Version} to ${updatedAddonConfig.Version}`,
             );
+
+            // Check if dependencies changed and process them
+            const oldDeps = new Set(updatedAddonConfigBeforePull.Dependencies || []);
+            const newDeps = new Set(updatedAddonConfig.Dependencies || []);
+            
+            const depsChanged = 
+              oldDeps.size !== newDeps.size ||
+              ![...newDeps].every(dep => oldDeps.has(dep));
+
+            if (depsChanged || (updatedAddonConfig.Dependencies && updatedAddonConfig.Dependencies.length > 0)) {
+              winccoa.logDebugF(
+                "addonHandler",
+                `Processing ${updatedAddonConfig.Dependencies?.length || 0} dependencies...`,
+              );
+              
+              try {
+                await this.processDependencies(
+                  updatedAddonConfig.Dependencies || [],
+                  session,
+                  undefined,  // processedDeps - fresh start
+                  undefined,  // currentRepoUrl - not needed for pull
+                  true,       // registerSubprojects - full installation
+                );
+                winccoa.logDebugF(
+                  "addonHandler",
+                  "Dependencies processed successfully",
+                );
+              } catch (error) {
+                winccoa.logWarning(
+                  `Failed to process dependencies during pull: ${error}`,
+                );
+                winccoa.logWarning(
+                  "Continuing with repository update despite dependency errors",
+                );
+                // Continue with the rest of the update process
+              }
+            } else {
+              winccoa.logDebugF(
+                "addonHandler",
+                "No dependency changes detected",
+              );
+            }
 
             // Process each subproject
             for (const subproject of updatedAddonConfig.Subprojects) {
