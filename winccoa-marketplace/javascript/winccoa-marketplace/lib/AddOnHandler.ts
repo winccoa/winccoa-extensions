@@ -35,20 +35,14 @@ export { AddOnHandler };
 /**
  * WinCC OA AddOn Handler for managing GitHub repositories
  *
- * SECURE AUTHENTICATION METHODS:
+ * SECURE AUTHENTICATION:
  *
- * 1. Environment Variables (Best for Production & WinCC OA):
+ * Environment Variables (Best for Production & WinCC OA):
  *    - Set: GITHUB_TOKEN=ghp_your_token_here
  *    - const handler = new AddOnHandler(); // Auto-detects token
  *    - Keeps tokens out of source code
  *    - Secure for scripts and CI/CD
  *    - Perfect for WinCC OA integration
- *
- * 2. Token Auth Factory Method (WinCC OA Compatible):
- *    - const handler = await AddOnHandler.createWithTokenAuth();
- *    - Requires GITHUB_TOKEN environment variable to be set
- *    - No interactive input - perfect for WinCC OA context
- *    - Clean error messages if token not found
  *
  * How to Create Personal Access Token:
  *    1. GitHub.com > Settings > Developer settings > Personal access tokens
@@ -310,7 +304,7 @@ class AddOnHandler {
     try {
       const authMethods = this.getSupportedAuthMethods();
 
-      console.log("auth methods", authMethods);
+      winccoa.logInfo("auth methods", authMethods);
 
       if (authMethods.length === 0) {
         winccoa.logInfo(
@@ -373,20 +367,6 @@ class AddOnHandler {
   }
 
   /**
-   * Create an AddOnHandler instance with token-based authentication
-   * Uses GITHUB_TOKEN environment variable for secure authentication
-   * @returns Promise<AddOnHandler> with authenticated instance
-   */
-  static async createWithTokenAuth(): Promise<AddOnHandler> {
-    const handler = new AddOnHandler();
-    const success = await handler.authenticateWithToken();
-    if (!success) {
-      throw new Error("Token authentication failed");
-    }
-    return handler;
-  }
-
-  /**
    * Get authentication status
    * @returns boolean indicating if handler is authenticated
    */
@@ -428,26 +408,6 @@ class AddOnHandler {
     );
 
     return result.exitCode == 0;
-  }
-
-  /**
-   * Check if the current authentication is valid
-   */
-  async validateAuthentication(): Promise<boolean> {
-    if (!this.isAuthenticated) {
-      return false;
-    }
-
-    try {
-      await this.octokit.rest.users.getAuthenticated();
-      return true;
-    } catch (error) {
-      winccoa.logWarning(
-        "Authentication validation failed:",
-        (error as any).message,
-      );
-      return false;
-    }
   }
 
   /**
@@ -884,7 +844,7 @@ void removeManager(int manIdx)
       subprojectConfig.UninstallScripts &&
       subprojectConfig.UninstallScripts.length > 0
     ) {
-      console.log(
+      winccoa.logInfo(
         `Executing ${subprojectConfig.UninstallScripts.length} uninstall script(s)...`,
       );
 
@@ -911,7 +871,7 @@ void removeManager(int manIdx)
           ),
           timeoutPromise,
         ]);
-        console.log("Uninstall scripts completed successfully");
+        winccoa.logInfo("Uninstall scripts completed successfully");
       } catch (error) {
         if (error instanceof Error && error.message.includes("timed out")) {
           winccoa.logWarning(
@@ -921,12 +881,12 @@ void removeManager(int manIdx)
           winccoa.logWarning("Error executing uninstall scripts:", error);
         }
         // Continue with unregistration even if scripts fail
-        console.log(
+        winccoa.logInfo(
           "Continuing with project unregistration despite script errors",
         );
       }
     } else {
-      console.log("No uninstall scripts to execute");
+      winccoa.logInfo("No uninstall scripts to execute");
     }
 
     const ret = (await this.ctrlScript.start(
@@ -991,52 +951,6 @@ void removeManager(int manIdx)
       }
     }
     return localAddOns;
-  }
-
-  /**
-   * Get current authenticated user information
-   */
-  async getAuthenticatedUser(): Promise<any> {
-    if (!this.isAuthenticated) {
-      throw new Error("Not authenticated. Please provide a valid token.");
-    }
-
-    try {
-      const response = await this.octokit.rest.users.getAuthenticated();
-      return {
-        login: response.data.login,
-        name: response.data.name,
-        email: response.data.email,
-        publicRepos: response.data.public_repos,
-        privateRepos: response.data.total_private_repos,
-      };
-    } catch (error: any) {
-      throw new Error(`Failed to get user info: ${error.message}`);
-    }
-  }
-
-  /**
-   * Get repository information including clone URL and default branch
-   */
-  async getRepositoryInfo(owner: string, repo: string): Promise<any> {
-    try {
-      const response = await this.octokit.rest.repos.get({
-        owner,
-        repo,
-      });
-
-      return {
-        name: response.data.name,
-        fullName: response.data.full_name,
-        description: response.data.description,
-        cloneUrl: response.data.clone_url,
-        sshUrl: response.data.ssh_url,
-        defaultBranch: response.data.default_branch,
-        private: response.data.private,
-      };
-    } catch (error: any) {
-      throw new Error(`Failed to get repository info: ${error.message}`);
-    }
   }
 
   /**
@@ -1489,7 +1403,10 @@ void removeManager(int manIdx)
         updatedAddonConfigBeforePull =
           this.mapPackageJsonToAddonConfig(parsedPackage);
       } catch (error) {
-        console.log("Could not read package.winccoa.json before pull:", error);
+        winccoa.logWarning(
+          "Could not read package.winccoa.json before pull:",
+          error,
+        );
         return;
       }
 
@@ -1633,7 +1550,7 @@ void removeManager(int manIdx)
                     ),
                     timeoutPromise,
                   ]);
-                  console.log(
+                  winccoa.logInfo(
                     `Update scripts for ${subproject.Name} completed successfully`,
                   );
                 } catch (error) {
