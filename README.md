@@ -22,7 +22,8 @@ References:
 
 1. Install Marketplace Add-on
    - Download or clone from GitHub: https://github.com/winccoa/winccoa-marketplace
-   - Install npm packages: run `npm install` and afterwards `npm run compile`.
+   - Install npm packages: From the repository root, run `npm install` and `npm run build` (this builds both backend and frontend using npm workspaces)
+     - To build separately: `npm run build:backend` or `npm run build:frontend`
    - Register in WinCC OA Project Administration.
 
 2. Add sub-project to your project
