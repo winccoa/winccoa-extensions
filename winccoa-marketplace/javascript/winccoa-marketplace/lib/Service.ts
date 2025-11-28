@@ -1,6 +1,5 @@
 import { Vrpc, WinccoaManager } from "winccoa-manager";
-import { AddOnHandler, Manager } from "./AddOnHandler";
-import * as pathModule from "path";
+import { AddOnHandler } from "./AddOnHandler";
 import { AddonConfig } from "./AddonConfig";
 
 const winccoa = new WinccoaManager();
