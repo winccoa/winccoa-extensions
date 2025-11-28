@@ -793,17 +793,17 @@ void removeManager(int manIdx)
           `Dependency ${depUrl} installed successfully`,
         );
       } catch (error) {
-        winccoa.logWarning(
-          `Failed to install dependency ${depUrl}:`,
-          error,
-        );
+        winccoa.logWarning(`Failed to install dependency ${depUrl}:`, error);
         throw new Error(
           `Dependency installation failed for ${depUrl}: ${error}`,
         );
       }
     }
 
-    winccoa.logDebugF("addonHandler", "All dependencies processed successfully");
+    winccoa.logDebugF(
+      "addonHandler",
+      "All dependencies processed successfully",
+    );
   }
 
   async registerSubProject(
@@ -1538,26 +1538,32 @@ void removeManager(int manIdx)
             );
 
             // Check if dependencies changed and process them
-            const oldDeps = new Set(updatedAddonConfigBeforePull.Dependencies || []);
+            const oldDeps = new Set(
+              updatedAddonConfigBeforePull.Dependencies || [],
+            );
             const newDeps = new Set(updatedAddonConfig.Dependencies || []);
-            
-            const depsChanged = 
-              oldDeps.size !== newDeps.size ||
-              ![...newDeps].every(dep => oldDeps.has(dep));
 
-            if (depsChanged || (updatedAddonConfig.Dependencies && updatedAddonConfig.Dependencies.length > 0)) {
+            const depsChanged =
+              oldDeps.size !== newDeps.size ||
+              ![...newDeps].every((dep) => oldDeps.has(dep));
+
+            if (
+              depsChanged ||
+              (updatedAddonConfig.Dependencies &&
+                updatedAddonConfig.Dependencies.length > 0)
+            ) {
               winccoa.logDebugF(
                 "addonHandler",
                 `Processing ${updatedAddonConfig.Dependencies?.length || 0} dependencies...`,
               );
-              
+
               try {
                 await this.processDependencies(
                   updatedAddonConfig.Dependencies || [],
                   session,
-                  undefined,  // processedDeps - fresh start
-                  undefined,  // currentRepoUrl - not needed for pull
-                  true,       // registerSubprojects - full installation
+                  undefined, // processedDeps - fresh start
+                  undefined, // currentRepoUrl - not needed for pull
+                  true, // registerSubprojects - full installation
                 );
                 winccoa.logDebugF(
                   "addonHandler",
