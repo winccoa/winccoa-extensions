@@ -274,9 +274,11 @@ class MarketplaceEndpoints
     try
     {
       string path = joinPath(client.repoPath(), repoName);
-      mapping result = client.remove(path);
-      result.insert("message", "Successfully deleted repository " + repoName);
-      return makeDynString(jsonEncode(result), "Status: 200 OK");
+      bool result = client.remove(path);
+      if (result)
+        return makeDynString(jsonEncode("Successfully deleted repository " + repoName), "Status: 200 OK");
+      else
+        return makeDynString(jsonEncode(makeMapping("error", "Failed to delete repository " + repoName)), "Status: 500 Internal Server Error");
     }
     catch
     {
