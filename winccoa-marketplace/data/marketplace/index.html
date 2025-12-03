@@ -178,13 +178,13 @@
 
           // Create modal header
           const header = document.createElement("ix-modal-header");
-          header.textContent = "Confirm Unregister";
+          header.textContent = "Confirm Uninstall";
 
           // Create modal content
           const content = document.createElement("ix-modal-content");
 
           const paragraph = document.createElement("p");
-          paragraph.textContent = `Are you sure you want to unregister "${repositoryName}"?`;
+          paragraph.textContent = `Are you sure you want to uninstall "${repositoryName}"?`;
           paragraph.style.marginBottom = "16px";
           content.appendChild(paragraph);
 
@@ -207,7 +207,7 @@
           const checkboxLabel = document.createElement("label");
           checkboxLabel.htmlFor = "delete-checkbox";
           checkboxLabel.textContent =
-            "Also delete the cloned repository from disk";
+            "Also remove the downloaded repository from disk";
           checkboxLabel.style.cursor = "pointer";
           checkboxLabel.style.color = "var(--theme-color-std-text)";
 
@@ -227,7 +227,7 @@
           const confirmBtn = document.createElement("ix-button");
           confirmBtn.id = "ix-unregister-confirm";
           confirmBtn.variant = "primary";
-          confirmBtn.textContent = "Unregister";
+          confirmBtn.textContent = "Uninstall";
 
           footer.appendChild(cancelBtn);
           footer.appendChild(confirmBtn);
@@ -301,19 +301,19 @@
 
           // Create modal header
           const header = document.createElement("ix-modal-header");
-          header.textContent = "Confirm Delete";
+          header.textContent = "Confirm Remove";
 
           // Create modal content
           const content = document.createElement("ix-modal-content");
 
           const paragraph = document.createElement("p");
-          paragraph.textContent = `Are you sure you want to delete "${repositoryName}"?`;
+          paragraph.textContent = `Are you sure you want to remove "${repositoryName}"?`;
           paragraph.style.marginBottom = "8px";
           content.appendChild(paragraph);
 
           const warningParagraph = document.createElement("p");
           warningParagraph.innerHTML =
-            "<strong>Warning:</strong> This will permanently delete the cloned repository from your local disk. This action cannot be undone.";
+            "<strong>Warning:</strong> This will permanently remove the downloaded repository from your local disk. This action cannot be undone.";
           warningParagraph.style.color = "var(--theme-color-warning)";
           warningParagraph.style.marginBottom = "0";
           content.appendChild(warningParagraph);
@@ -330,7 +330,7 @@
           const confirmBtn = document.createElement("ix-button");
           confirmBtn.id = "ix-delete-confirm";
           confirmBtn.variant = "primary";
-          confirmBtn.textContent = "Delete";
+          confirmBtn.textContent = "Remove";
 
           footer.appendChild(cancelBtn);
           footer.appendChild(confirmBtn);

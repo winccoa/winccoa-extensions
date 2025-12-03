@@ -2588,7 +2588,7 @@ export class MarketplaceUI {
       const response = await this.makeApiCall(`/marketplace/clone?${params}`);
 
       if (response.ok) {
-        this.showSuccess("Repository cloned successfully");
+        this.showSuccess("Repository downloaded successfully");
 
         // Reload all local repositories to get updated state (including cloned dependencies)
         await this.loadLocalRepositories();
@@ -2693,7 +2693,7 @@ export class MarketplaceUI {
 
       if (response.ok) {
         const successMsg = result.deleteRepository
-          ? "Subproject uninstalled and repository deleted successfully"
+          ? "Subproject uninstalled and repository removed successfully"
           : "Subproject uninstalled successfully";
         this.showSuccess(successMsg);
 
