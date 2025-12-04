@@ -32,15 +32,15 @@ References:
    - In the Console, add a Web Server (if not already existing).
 
 3. Configure HTTP Server endpoints
-   - Locate `scripts\libs\classes\HttpServer.ctl` (either from the WinCC OA installation directory or in your project directory).
-   - Add the following `#uses` statement at the top of the file after all other #uses statements:
+   - Locate `scripts\webclient_http.ctl` (either from the WinCC OA installation directory or in your project directory).
+   - Add the following `#uses` statement at the top of the file after all other `#uses` statements:
      ```
      #uses "classes/marketplace/MarketplaceEndpoints"
      ```
-   - Add the Marketplace endpoint connection after other endpoint connections (such as `RptHttpEndpoints::connectEndpoints(httpsPort);` or `OidcHttpEndpoints::connectEndpoints(allowAll);`):
+   - Add the Marketplace endpoint connection after `http.start();` in the `main()` function:
      ```
      // connect endpoints for Marketplace
-     MarketplaceEndpoints::connectEndpoints(httpsPort);
+     MarketplaceEndpoints::connectEndpoints(http.getHttpsPort());
      ```
 
 4. Scaffold the Node.js module
