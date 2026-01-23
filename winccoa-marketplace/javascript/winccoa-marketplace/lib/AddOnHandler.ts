@@ -1984,7 +1984,7 @@ void removeManager(int manIdx)
         "lib",
         "bootstrap.js",
       );
-      const command = `node.exe -- "${bootstrapPath}" -num 99 -currentProj ${scriptFile}`;
+      const command = `node.exe -- "${bootstrapPath}" -num 99 -currentproj ${scriptFile}`;
       winccoa.logDebugF(
         "addonHandler",
         `Executing JavaScript command: ${command}`,
