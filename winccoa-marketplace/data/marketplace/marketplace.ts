@@ -471,15 +471,15 @@ export class MarketplaceUI {
     // Restore all repositories for future use
     this.repositories = allRepositories;
 
-    // Show appropriate message if no registered projects
+    // Show appropriate message if no installed extensions
     if (registeredRepos.length === 0) {
       const container = document.getElementById("repository-list");
       if (container) {
         container.innerHTML = `
                     <div class="empty-state" style="padding: 48px 16px; text-align: center;">
-                        <ix-icon name="shopping-cart" size="32" style="color: var(--theme-color-weak-text);"></ix-icon>
-                        <p style="margin: 16px 0 0 0; color: var(--theme-color-weak-text);">No registered projects yet</p>
-                        <p style="margin: 8px 0 0 0; color: var(--theme-color-weak-text); font-size: 14px;">Switch to Marketplace to find and register repositories</p>
+                        <ix-icon name="extension" size="32" style="color: var(--theme-color-weak-text);"></ix-icon>
+                        <p style="margin: 16px 0 0 0; color: var(--theme-color-weak-text);">No installed extensions yet</p>
+                        <p style="margin: 8px 0 0 0; color: var(--theme-color-weak-text); font-size: 14px;">Switch to Extensions to find and install add-ons</p>
                     </div>
                 `;
       }
