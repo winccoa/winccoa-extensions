@@ -386,10 +386,10 @@
     <ix-application>
       <ix-menu>
         <ix-menu-item id="marketplace-menu-item" icon="home">
-          Marketplace
+          Extensions
         </ix-menu-item>
-        <ix-menu-item id="registered-projects-menu-item" icon="applications">
-          Registered Projects
+        <ix-menu-item id="registered-projects-menu-item" icon="extension">
+          Installed Extensions
         </ix-menu-item>
       </ix-menu>
 
@@ -398,7 +398,10 @@
           <!-- Left sidebar - Repository list -->
           <div class="repository-sidebar">
             <div class="sidebar-header">
-              <h3 id="repositories-title">Marketplace</h3>
+              <div class="sidebar-title-group">
+                <h1 id="repositories-title">Extensions</h1>
+                <span id="project-subtitle" class="project-subtitle"></span>
+              </div>
               <ix-button
                 id="refresh-btn"
                 variant="ghost"
