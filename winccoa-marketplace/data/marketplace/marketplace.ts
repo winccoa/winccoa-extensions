@@ -427,21 +427,26 @@ export class MarketplaceUI {
       console.warn("Could not fetch current project name:", error);
     }
 
+    const subtitle = document.getElementById("project-subtitle");
+
     if (title) {
       if (this.currentMode === "marketplace") {
-        title.textContent = projectName
-          ? `Marketplace for ${projectName}`
-          : "WinCC OA";
+        title.textContent = "Extensions";
         // Show organization input in marketplace mode
         if (orgContainer) {
           (orgContainer as HTMLElement).style.display = "";
         }
       } else {
-        title.textContent = "Registered Projects";
-        // Hide organization input in registered projects mode
+        title.textContent = "Installed Extensions";
+        // Hide organization input in installed extensions mode
         if (orgContainer) {
           (orgContainer as HTMLElement).style.display = "none";
         }
+      }
+
+      // Show project name as subtitle
+      if (subtitle) {
+        subtitle.textContent = projectName || "";
       }
     }
   }
@@ -466,15 +471,15 @@ export class MarketplaceUI {
     // Restore all repositories for future use
     this.repositories = allRepositories;
 
-    // Show appropriate message if no registered projects
+    // Show appropriate message if no installed extensions
     if (registeredRepos.length === 0) {
       const container = document.getElementById("repository-list");
       if (container) {
         container.innerHTML = `
                     <div class="empty-state" style="padding: 48px 16px; text-align: center;">
-                        <ix-icon name="shopping-cart" size="32" style="color: var(--theme-color-weak-text);"></ix-icon>
-                        <p style="margin: 16px 0 0 0; color: var(--theme-color-weak-text);">No registered projects yet</p>
-                        <p style="margin: 8px 0 0 0; color: var(--theme-color-weak-text); font-size: 14px;">Switch to Marketplace to find and register repositories</p>
+                        <ix-icon name="extension" size="32" style="color: var(--theme-color-weak-text);"></ix-icon>
+                        <p style="margin: 16px 0 0 0; color: var(--theme-color-weak-text);">No installed extensions yet</p>
+                        <p style="margin: 8px 0 0 0; color: var(--theme-color-weak-text); font-size: 14px;">Switch to Extensions to find and install add-ons</p>
                     </div>
                 `;
       }
@@ -1389,16 +1394,31 @@ export class MarketplaceUI {
     const unregisterBtn = document.getElementById("unregister-btn");
     const removeBtn = document.getElementById("remove-btn");
 
+    // Helper to set/remove outline attribute for secondary actions
+    const setButtonOutline = (btn: HTMLElement | null, outline: boolean) => {
+      if (!btn) return;
+      if (outline) {
+        btn.setAttribute("outline", "");
+      } else {
+        btn.removeAttribute("outline");
+      }
+    };
+
     // Update status pills
     this.updateStatusPills(repo);
 
-    // If repository is loading, disable all buttons
+    // If repository is loading, disable all buttons and remove outlines
     if (isLoading) {
       cloneBtn?.setAttribute("disabled", "");
       pullBtn?.setAttribute("disabled", "");
       registerBtn?.setAttribute("disabled", "");
       unregisterBtn?.setAttribute("disabled", "");
       removeBtn?.setAttribute("disabled", "");
+      setButtonOutline(cloneBtn, false);
+      setButtonOutline(pullBtn, false);
+      setButtonOutline(registerBtn, false);
+      setButtonOutline(unregisterBtn, false);
+      setButtonOutline(removeBtn, false);
       return; // Don't update button states while loading
     }
 
@@ -1417,6 +1437,18 @@ export class MarketplaceUI {
         "title",
         "Cannot delete: Repository is installed. Uninstall it first.",
       );
+
+      // Outline styling: Update is primary action when available, otherwise Uninstall
+      setButtonOutline(cloneBtn, false);
+      setButtonOutline(registerBtn, false);
+      setButtonOutline(removeBtn, false);
+      if (hasUpdate) {
+        setButtonOutline(pullBtn, false); // Primary (main action)
+        setButtonOutline(unregisterBtn, true); // Outline (secondary)
+      } else {
+        setButtonOutline(pullBtn, false);
+        setButtonOutline(unregisterBtn, false); // Primary (main action)
+      }
     } else if (isCloned) {
       cloneBtn?.setAttribute("disabled", "");
       // Only show pull button if there's an update available
@@ -1444,6 +1476,19 @@ export class MarketplaceUI {
         "title",
         "Remove the downloaded repository from local storage",
       );
+
+      // Outline styling: Update is primary action when available, otherwise Install
+      setButtonOutline(cloneBtn, false);
+      setButtonOutline(unregisterBtn, false);
+      if (hasUpdate) {
+        setButtonOutline(pullBtn, false); // Primary (main action)
+        setButtonOutline(registerBtn, true); // Outline (secondary)
+        setButtonOutline(removeBtn, true); // Outline (secondary)
+      } else {
+        setButtonOutline(pullBtn, false);
+        setButtonOutline(registerBtn, false); // Primary (main action)
+        setButtonOutline(removeBtn, true); // Outline (secondary)
+      }
     } else {
       cloneBtn?.removeAttribute("disabled");
       pullBtn?.setAttribute("disabled", "");
@@ -1458,6 +1503,13 @@ export class MarketplaceUI {
         "title",
         "Cannot remove: Repository is not downloaded",
       );
+
+      // Outline styling: Install is primary action, Download is secondary
+      setButtonOutline(pullBtn, false);
+      setButtonOutline(unregisterBtn, false);
+      setButtonOutline(removeBtn, false);
+      setButtonOutline(registerBtn, false); // Primary (main action)
+      setButtonOutline(cloneBtn, true); // Outline (secondary)
     }
   }
 
