@@ -30,16 +30,16 @@ export interface PmonCredentials {
 }
 
 // Export the class for use in other modules
-export { AddOnHandler };
+export { AddonHandler };
 
 /**
- * WinCC OA AddOn Handler for managing GitHub repositories
+ * WinCC OA Addon Handler for managing GitHub repositories
  *
  * SECURE AUTHENTICATION:
  *
  * Environment Variables (Best for Production & WinCC OA):
  *    - Set: GITHUB_TOKEN=ghp_your_token_here
- *    - const handler = new AddOnHandler(); // Auto-detects token
+ *    - const handler = new AddonHandler(); // Auto-detects token
  *    - Keeps tokens out of source code
  *    - Secure for scripts and CI/CD
  *    - Perfect for WinCC OA integration
@@ -258,7 +258,7 @@ function getWinCCOAInstallDir(winccoa: WinccoaManager): string | null {
   }
 }
 
-class AddOnHandler {
+class AddonHandler {
   private octokit: Octokit;
   private isAuthenticated: boolean = false;
   private _defaultDirectory: string;
@@ -928,10 +928,10 @@ void removeManager(int manIdx)
     return (await this.ctrlScript.start("listSubProjs")) as string[];
   }
 
-  async listLocalAddOns(): Promise<{ addon: string; fileContent: string }[]> {
-    const localAddOns: { addon: string; fileContent: string }[] = [];
+  async listLocalAddons(): Promise<{ addon: string; fileContent: string }[]> {
+    const localAddons: { addon: string; fileContent: string }[] = [];
     if (!fs.existsSync(this._defaultDirectory)) {
-      return localAddOns;
+      return localAddons;
     }
     const entries = await fs.promises.readdir(this._defaultDirectory, {
       withFileTypes: true,
@@ -946,11 +946,11 @@ void removeManager(int manIdx)
         if (fs.existsSync(addonJsonPath)) {
           const fileContent = fs.readFileSync(addonJsonPath, "utf-8");
           const jsonContent = JSON.parse(fileContent);
-          localAddOns.push({ addon: entry.name, fileContent: jsonContent });
+          localAddons.push({ addon: entry.name, fileContent: jsonContent });
         }
       }
     }
-    return localAddOns;
+    return localAddons;
   }
 
   /**
@@ -1418,6 +1418,13 @@ void removeManager(int manIdx)
       // Use simple-git for pull operation
       const git = simpleGit(repositoryPath);
       const pullResult = await git.pull();
+
+      // Wait for 30 seconds after pull
+      winccoa.logDebugF("addonHandler", "Waiting 30 seconds after pull...");
+      await new Promise((resolve) => {
+        setTimeout(resolve, 30000);
+      });
+      winccoa.logDebugF("addonHandler", "Wait completed, continuing...");
 
       if (pullResult.summary.changes) {
         winccoa.logDebugF(
