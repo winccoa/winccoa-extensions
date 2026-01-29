@@ -1,5 +1,5 @@
 /**
- * WinCC OA Marketplace Web Interface TypeScript
+ * WinCC OA Extensions Web Interface TypeScript
  * Handles API integration and user interactions
  */
 
@@ -8,12 +8,12 @@ import type { Repository, ApiError, Theme, ToastType } from "./types";
 // Make this file a module by adding an export
 export {};
 
-export class MarketplaceUI {
+export class ExtensionsUI {
   private baseUrl: string;
   private currentRepository: Repository | null = null;
   private repositories: Repository[] = [];
   private registeredProjects: string[] = [];
-  private currentMode: "marketplace" | "registered" = "marketplace";
+  private currentMode: "extensions" | "registered" = "extensions";
   private predefinedOrganizations: string[] = ["winccoa"];
   private currentLoadController: AbortController | null = null; // Track ongoing load requests
   private selectedKeywords: string[] = []; // Track selected keywords for filtering (empty = all)
@@ -57,9 +57,7 @@ export class MarketplaceUI {
    * Initialize theme based on saved preference or system preference
    */
   private initializeTheme(): void {
-    const savedTheme = localStorage.getItem(
-      "marketplace-theme",
-    ) as Theme | null;
+    const savedTheme = localStorage.getItem("extensions-theme") as Theme | null;
     const prefersDark = window.matchMedia(
       "(prefers-color-scheme: dark)",
     ).matches;
@@ -77,7 +75,7 @@ export class MarketplaceUI {
     window
       .matchMedia("(prefers-color-scheme: dark)")
       .addEventListener("change", (e: MediaQueryListEvent) => {
-        if (!localStorage.getItem("marketplace-theme")) {
+        if (!localStorage.getItem("extensions-theme")) {
           this.setTheme(e.matches ? "dark" : "light");
         }
       });
@@ -114,7 +112,7 @@ export class MarketplaceUI {
     const newTheme: Theme = currentTheme === "dark" ? "light" : "dark";
 
     this.setTheme(newTheme);
-    localStorage.setItem("marketplace-theme", newTheme);
+    localStorage.setItem("extensions-theme", newTheme);
 
     this.showToast(`Switched to ${newTheme} theme`, "info");
   }
@@ -172,7 +170,7 @@ export class MarketplaceUI {
       ) {
         const connectionError = new Error(
           `Connection Error: Cannot reach server at ${this.baseUrl}. ` +
-            `Please check: 1) WinCC OA Marketplace server is running, ` +
+            `Please check: 1) WinCC OA Extensions server is running, ` +
             `2) Server is accessible at ${this.baseUrl}, ` +
             `3) No firewall blocking the connection.`,
         ) as ApiError;
@@ -204,7 +202,7 @@ export class MarketplaceUI {
           await this.loadAllData();
           this.showRegisteredRepositories();
         } else {
-          // In marketplace mode, load and show all repos
+          // In extensions mode, load and show all repos
           await this.loadAllData();
           this.renderRepositoryList();
           this.populateKeywordFilter();
@@ -300,9 +298,9 @@ export class MarketplaceUI {
 
     // Menu item listeners
     document
-      .getElementById("marketplace-menu-item")
+      .getElementById("extensions-menu-item")
       ?.addEventListener("click", () => {
-        this.switchToMarketplaceMode();
+        this.switchToExtensionsMode();
       });
 
     document
@@ -311,9 +309,9 @@ export class MarketplaceUI {
         this.switchToRegisteredProjectsMode();
       });
 
-    // Set marketplace as selected by default
+    // Set extensions as selected by default
     document
-      .getElementById("marketplace-menu-item")
+      .getElementById("extensions-menu-item")
       ?.setAttribute("selected", "");
 
     // Theme toggle button
@@ -333,16 +331,16 @@ export class MarketplaceUI {
   }
 
   /**
-   * Switch to marketplace mode (show all repositories from organization)
+   * Switch to Extensions mode (show all repositories from organization)
    */
-  private async switchToMarketplaceMode(): Promise<void> {
+  private async switchToExtensionsMode(): Promise<void> {
     // Cancel any ongoing load operations
     this.cancelCurrentLoad();
 
     // Create new abort controller for this load operation
     this.currentLoadController = new AbortController();
 
-    this.currentMode = "marketplace";
+    this.currentMode = "extensions";
     this.updateMenuSelection();
     await this.updateTitle(); // Update title immediately before loading
 
@@ -353,7 +351,7 @@ export class MarketplaceUI {
     } catch (error: unknown) {
       // Ignore abort errors (user cancelled by switching modes)
       if ((error as Error).name === "AbortError") {
-        console.log("Switch to marketplace cancelled");
+        console.log("Switch to Extensions cancelled");
         return;
       }
       throw error;
@@ -391,18 +389,18 @@ export class MarketplaceUI {
    * Update menu item selection visual state
    */
   private updateMenuSelection(): void {
-    const marketplaceItem = document.getElementById("marketplace-menu-item");
+    const extensionsItem = document.getElementById("extensions-menu-item");
     const registeredItem = document.getElementById(
       "registered-projects-menu-item",
     );
 
     // Remove selected state from both
-    marketplaceItem?.removeAttribute("selected");
+    extensionsItem?.removeAttribute("selected");
     registeredItem?.removeAttribute("selected");
 
     // Add selected state to current mode
-    if (this.currentMode === "marketplace") {
-      marketplaceItem?.setAttribute("selected", "");
+    if (this.currentMode === "extensions") {
+      extensionsItem?.setAttribute("selected", "");
     } else {
       registeredItem?.setAttribute("selected", "");
     }
@@ -418,7 +416,7 @@ export class MarketplaceUI {
     // Fetch current project name
     let projectName = "";
     try {
-      const response = await this.makeApiCall("/marketplace/currentProject");
+      const response = await this.makeApiCall("/extensions/currentProject");
       if (response.ok) {
         const data = await response.json();
         projectName = data.project || "";
@@ -430,9 +428,9 @@ export class MarketplaceUI {
     const subtitle = document.getElementById("project-subtitle");
 
     if (title) {
-      if (this.currentMode === "marketplace") {
+      if (this.currentMode === "extensions") {
         title.textContent = "Extensions";
-        // Show organization input in marketplace mode
+        // Show organization input in extensions mode
         if (orgContainer) {
           (orgContainer as HTMLElement).style.display = "";
         }
@@ -683,7 +681,7 @@ export class MarketplaceUI {
 
       // Load repositories from all predefined organizations in parallel
       const promises = this.predefinedOrganizations.map((org) =>
-        this.makeApiCall(`/marketplace/listRepos?organization=${org}`, {
+        this.makeApiCall(`/extensions/listRepos?organization=${org}`, {
           signal: this.currentLoadController?.signal,
         })
           .then((response) => response.json())
@@ -737,7 +735,7 @@ export class MarketplaceUI {
       }
 
       const response = await this.makeApiCall(
-        `/marketplace/listRepos?organization=${organization}`,
+        `/extensions/listRepos?organization=${organization}`,
         {
           signal: this.currentLoadController?.signal,
         },
@@ -770,7 +768,7 @@ export class MarketplaceUI {
 
       // Don't show error if request was aborted
       if (apiError.name !== "AbortError") {
-        let errorMessage = "Failed to connect to marketplace service";
+        let errorMessage = "Failed to connect to extensions service";
 
         if (apiError.isSSLError) {
           errorMessage = "SSL Certificate Issue: " + apiError.message;
@@ -793,7 +791,7 @@ export class MarketplaceUI {
    */
   private async loadRegisteredProjects(): Promise<void> {
     try {
-      const response = await this.makeApiCall("/marketplace/listProjects", {
+      const response = await this.makeApiCall("/extensions/listProjects", {
         signal: this.currentLoadController?.signal,
       });
       if (response.ok) {
@@ -830,7 +828,7 @@ export class MarketplaceUI {
    */
   private async loadLocalRepositories(): Promise<void> {
     try {
-      const response = await this.makeApiCall("/marketplace/listLocalRepos", {
+      const response = await this.makeApiCall("/extensions/listLocalRepos", {
         signal: this.currentLoadController?.signal,
       });
       if (response.ok) {
@@ -2092,7 +2090,7 @@ export class MarketplaceUI {
     try {
       // Fetch the default addon path from the backend
       const response = await this.makeApiCall(
-        "/marketplace/getDefaultAddonPath",
+        "/extensions/getDefaultAddonPath",
       );
 
       if (!response.ok) {
@@ -2227,7 +2225,7 @@ export class MarketplaceUI {
 
         try {
           const response = await this.makeApiCall(
-            "/marketplace/setPmonCredentials",
+            "/extensions/setPmonCredentials",
             {
               method: "POST",
               headers: {
@@ -2312,7 +2310,7 @@ export class MarketplaceUI {
       const repoName = repositoryBeingPulled.name;
 
       const response = await this.makeApiCall(
-        `/marketplace/pull?repoName=${encodeURIComponent(repoName)}`,
+        `/extensions/pull?repoName=${encodeURIComponent(repoName)}`,
       );
 
       if (response.ok) {
@@ -2386,7 +2384,7 @@ export class MarketplaceUI {
   private async updatePmonIconStatus(): Promise<void> {
     try {
       const response = await this.makeApiCall(
-        "/marketplace/pmonCredentialsAreSet",
+        "/extensions/pmonCredentialsAreSet",
       );
       const pmonBtn = document.getElementById("pmon-credentials-btn");
 
@@ -2420,7 +2418,7 @@ export class MarketplaceUI {
   private async checkPmonCredentials(): Promise<boolean> {
     try {
       const response = await this.makeApiCall(
-        "/marketplace/pmonCredentialsAreSet",
+        "/extensions/pmonCredentialsAreSet",
       );
 
       if (response.ok) {
@@ -2432,7 +2430,7 @@ export class MarketplaceUI {
 
         // Check again if credentials are now set
         const recheckResponse = await this.makeApiCall(
-          "/marketplace/pmonCredentialsAreSet",
+          "/extensions/pmonCredentialsAreSet",
         );
         const isSet = recheckResponse.ok;
 
@@ -2508,7 +2506,7 @@ export class MarketplaceUI {
       });
 
       const response = await this.makeApiCall(
-        `/marketplace/registerSubProjects?${params}`,
+        `/extensions/registerSubProjects?${params}`,
       );
 
       const result = await response.text();
@@ -2560,7 +2558,7 @@ export class MarketplaceUI {
     try {
       // Fetch the default addon path from the backend
       const response = await this.makeApiCall(
-        "/marketplace/getDefaultAddonPath",
+        "/extensions/getDefaultAddonPath",
       );
 
       if (!response.ok) {
@@ -2637,7 +2635,7 @@ export class MarketplaceUI {
         params.append("path", path);
       }
 
-      const response = await this.makeApiCall(`/marketplace/clone?${params}`);
+      const response = await this.makeApiCall(`/extensions/clone?${params}`);
 
       if (response.ok) {
         this.showSuccess("Repository downloaded successfully");
@@ -2739,7 +2737,7 @@ export class MarketplaceUI {
       });
 
       const response = await this.makeApiCall(
-        `/marketplace/unregisterSubProjects?${params}`,
+        `/extensions/unregisterSubProjects?${params}`,
       );
       const resultText = await response.text();
 
@@ -2866,7 +2864,7 @@ export class MarketplaceUI {
         repoName: repositoryBeingDeleted.name,
       });
 
-      const response = await this.makeApiCall(`/marketplace/remove?${params}`);
+      const response = await this.makeApiCall(`/extensions/remove?${params}`);
       const resultText = await response.text();
 
       if (response.ok) {

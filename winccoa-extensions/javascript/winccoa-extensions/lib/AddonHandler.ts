@@ -30,16 +30,16 @@ export interface PmonCredentials {
 }
 
 // Export the class for use in other modules
-export { AddOnHandler };
+export { AddonHandler };
 
 /**
- * WinCC OA AddOn Handler for managing GitHub repositories
+ * WinCC OA Addon Handler for managing GitHub repositories
  *
  * SECURE AUTHENTICATION:
  *
  * Environment Variables (Best for Production & WinCC OA):
  *    - Set: GITHUB_TOKEN=ghp_your_token_here
- *    - const handler = new AddOnHandler(); // Auto-detects token
+ *    - const handler = new AddonHandler(); // Auto-detects token
  *    - Keeps tokens out of source code
  *    - Secure for scripts and CI/CD
  *    - Perfect for WinCC OA integration
@@ -155,18 +155,18 @@ function getWinCCOARegistryValue(
 }
 
 /**
- * Get the target clone directory from marketplace.config.json storePath, Windows registry, or fall back to current directory
+ * Get the target clone directory from extensions.config.json storePath, Windows registry, or fall back to current directory
  * Priority order:
- * 1. storePath from marketplace.config.json (if exists and is a valid directory)
+ * 1. storePath from extensions.config.json (if exists and is a valid directory)
  * 2. Windows registry PROJECTDIR key
  * 3. Current working directory
  */
 function getDefaultProjDir(): string {
-  // First, try to read storePath from marketplace.config.json
+  // First, try to read storePath from extensions.config.json
   try {
     const configPath = path.resolve(
       __dirname,
-      "../../../config/marketplace.config.json",
+      "../../../config/extensions.config.json",
     );
     if (fs.existsSync(configPath)) {
       const fileContent = fs.readFileSync(configPath, "utf8");
@@ -180,12 +180,12 @@ function getDefaultProjDir(): string {
         ) {
           winccoa.logDebugF(
             "addonHandler",
-            `Using storePath from marketplace.config.json: ${config.storePath}`,
+            `Using storePath from extensions.config.json: ${config.storePath}`,
           );
           return config.storePath;
         } else {
           winccoa.logWarning(
-            `storePath from marketplace.config.json does not exist or is not a directory: ${config.storePath}`,
+            `storePath from extensions.config.json does not exist or is not a directory: ${config.storePath}`,
           );
         }
       }
@@ -193,7 +193,7 @@ function getDefaultProjDir(): string {
   } catch (error) {
     winccoa.logDebugF(
       "addonHandler",
-      `Could not read storePath from marketplace.config.json: ${(error as Error).message}`,
+      `Could not read storePath from extensions.config.json: ${(error as Error).message}`,
     );
   }
 
@@ -258,7 +258,7 @@ function getWinCCOAInstallDir(winccoa: WinccoaManager): string | null {
   }
 }
 
-class AddOnHandler {
+class AddonHandler {
   private octokit: Octokit;
   private isAuthenticated: boolean = false;
   private _defaultDirectory: string;
@@ -429,7 +429,7 @@ class AddOnHandler {
 
     // Try .env file in workspace root
     try {
-      // From lib/AddOnHandler.js, go up to workspace root: lib -> winccoa-marketplace -> javascript -> winccoa-marketplace -> github_integration
+      // From lib/AddOnHandler.js, go up to workspace root: lib -> winccoa-extensions -> javascript -> winccoa-extensions -> github_integration
       const envPath = path.resolve(__dirname, "../../../../.env");
       winccoa.logDebugF("addonHandler", `Looking for .env file at: ${envPath}`);
       if (fs.existsSync(envPath)) {
@@ -928,10 +928,10 @@ void removeManager(int manIdx)
     return (await this.ctrlScript.start("listSubProjs")) as string[];
   }
 
-  async listLocalAddOns(): Promise<{ addon: string; fileContent: string }[]> {
-    const localAddOns: { addon: string; fileContent: string }[] = [];
+  async listLocalAddons(): Promise<{ addon: string; fileContent: string }[]> {
+    const localAddons: { addon: string; fileContent: string }[] = [];
     if (!fs.existsSync(this._defaultDirectory)) {
-      return localAddOns;
+      return localAddons;
     }
     const entries = await fs.promises.readdir(this._defaultDirectory, {
       withFileTypes: true,
@@ -946,11 +946,11 @@ void removeManager(int manIdx)
         if (fs.existsSync(addonJsonPath)) {
           const fileContent = fs.readFileSync(addonJsonPath, "utf-8");
           const jsonContent = JSON.parse(fileContent);
-          localAddOns.push({ addon: entry.name, fileContent: jsonContent });
+          localAddons.push({ addon: entry.name, fileContent: jsonContent });
         }
       }
     }
-    return localAddOns;
+    return localAddons;
   }
 
   /**
@@ -1419,6 +1419,13 @@ void removeManager(int manIdx)
       const git = simpleGit(repositoryPath);
       const pullResult = await git.pull();
 
+      // Wait for 30 seconds after pull
+      winccoa.logDebugF("addonHandler", "Waiting 30 seconds after pull...");
+      await new Promise((resolve) => {
+        setTimeout(resolve, 30000);
+      });
+      winccoa.logDebugF("addonHandler", "Wait completed, continuing...");
+
       if (pullResult.summary.changes) {
         winccoa.logDebugF(
           "addonHandler",
@@ -1876,15 +1883,15 @@ void removeManager(int manIdx)
   }
 
   listCustomRepositories(): { repositories: object[]; authMethods: string[] } {
-    // Read marketplace.config.json and return repository info and auth methods
+    // Read extensions.config.json and return repository info and auth methods
     try {
       const configPath = path.resolve(
         __dirname,
-        "../../../config/marketplace.config.json",
+        "../../../config/extensions.config.json",
       );
       if (!fs.existsSync(configPath)) {
         winccoa.logWarning(
-          `[listCustomRepositories] marketplace.config.json not found at ${configPath}`,
+          `[listCustomRepositories] extensions.config.json not found at ${configPath}`,
         );
         return { repositories: [], authMethods: [] };
       }
@@ -1907,7 +1914,7 @@ void removeManager(int manIdx)
       };
     } catch (error) {
       winccoa.logWarning(
-        "[listCustomRepositories] Failed to read marketplace.config.json:",
+        "[listCustomRepositories] Failed to read extensions.config.json:",
         error,
       );
       return { repositories: [], authMethods: [] };
@@ -1915,18 +1922,18 @@ void removeManager(int manIdx)
   }
 
   /**
-   * Get supported authentication methods from marketplace.config.json
+   * Get supported authentication methods from extensions.config.json
    * @returns Array of supported authentication methods
    */
   getSupportedAuthMethods(): string[] {
     try {
       const configPath = path.resolve(
         __dirname,
-        "../../../config/marketplace.config.json",
+        "../../../config/extensions.config.json",
       );
       if (!fs.existsSync(configPath)) {
         console.warn(
-          `[getSupportedAuthMethods] marketplace.config.json not found at ${configPath}`,
+          `[getSupportedAuthMethods] extensions.config.json not found at ${configPath}`,
         );
         return [];
       }
@@ -1936,7 +1943,7 @@ void removeManager(int manIdx)
       return config.authMethods || [];
     } catch (error) {
       winccoa.logWarning(
-        "[getSupportedAuthMethods] Failed to read marketplace.config.json:",
+        "[getSupportedAuthMethods] Failed to read extensions.config.json:",
         error,
       );
       return [];

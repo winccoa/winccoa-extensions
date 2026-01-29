@@ -1,7 +1,7 @@
 {
-  "name": "winccoa-marketplace-frontend",
+  "name": "winccoa-extensions-frontend",
   "version": "1.0.0",
-  "description": "Frontend for WinCC OA Marketplace",
+  "description": "Frontend for WinCC OA Extensions",
   "private": true,
   "scripts": {
     "build": "npm run format && npx tsc",

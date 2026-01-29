@@ -42,7 +42,7 @@ export class NodeInstaller {
     );
     const result = await CommandExecutor.execute([cmd, ...args].join(" "), cwd);
     if (result.exitCode !== 0) {
-      throw new Error(
+      winccoa.logWarning(
         `${cmd} ${args.join(" ")} failed with code ${result.exitCode}\n${result.stderr}`,
       );
     }

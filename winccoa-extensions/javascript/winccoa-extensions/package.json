@@ -1,7 +1,7 @@
 {
-  "name": "winccoa-marketplace-backend",
+  "name": "winccoa-extensions-backend",
   "version": "1.0.0",
-  "description": "The backend for the marketplace for WinCC OA",
+  "description": "The backend for the extensions for WinCC OA",
   "author": "ETM professional control",
   "main": "index.js",
   "private": true,

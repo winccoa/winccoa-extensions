@@ -1,16 +1,16 @@
 /**
- * Initialize the WinCC OA Marketplace application
+ * Initialize the WinCC OA Extensions application
  */
-import { MarketplaceUI } from "./marketplace.js";
+import { ExtensionsUI } from "./extensions.js";
 
 // Extend Window interface for global functions
 declare global {
   interface Window {
-    marketplaceUI?: MarketplaceUI;
+    ExtensionsUI?: ExtensionsUI;
   }
 }
 
 // Initialize the application when DOM is loaded
 document.addEventListener("DOMContentLoaded", () => {
-  window.marketplaceUI = new MarketplaceUI();
+  window.ExtensionsUI = new ExtensionsUI();
 });

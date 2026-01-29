@@ -1,4 +1,4 @@
-/* WinCC OA Marketplace Web Interface Styles */
+/* WinCC OA Extensions Web Interface Styles */
 
 /* Use only Siemens IX theme variables - no custom colors */
 
@@ -31,7 +31,7 @@ ix-menu ix-menu-item ix-icon {
   color: var(--theme-color-std-text);
 }
 
-.marketplace-container {
+.extensions-container {
   display: flex;
   height: calc(100vh - 64px); /* Adjust for menu height */
 }
@@ -515,7 +515,7 @@ ix-menu ix-menu-item ix-icon {
 
 /* Responsive design */
 @media (max-width: 768px) {
-  .marketplace-container {
+  .extensions-container {
     flex-direction: column;
   }
 

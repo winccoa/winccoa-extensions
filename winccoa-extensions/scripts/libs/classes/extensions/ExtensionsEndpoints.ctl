@@ -10,7 +10,7 @@
 // Libraries used (#uses)
 #uses "CtrlHTTP"
 #uses "vRPC"
-#uses "classes/MarketplaceClient"
+#uses "classes/ExtensionsClient"
 
 //--------------------------------------------------------------------------------
 // Variables and Constants
@@ -18,7 +18,7 @@
 //--------------------------------------------------------------------------------
 /**
 */
-class MarketplaceEndpoints
+class ExtensionsEndpoints
 {
 //--------------------------------------------------------------------------------
 //@public members
@@ -26,22 +26,22 @@ class MarketplaceEndpoints
 
   public static void connectEndpoints(int httpsPort)
   {
-    initMarketplaceClient();
+    initExtensionsClient();
 
-    const string MARKETPLACE_URL_PREFIX = "/marketplace";
+    const string EXTENSIONS_URL_PREFIX = "/extensions";
 
-    httpConnect(listRepos, MARKETPLACE_URL_PREFIX + "/listRepos", "application/json");
-    httpConnect(clone, MARKETPLACE_URL_PREFIX + "/clone", "application/json");
-    httpConnect(pull, MARKETPLACE_URL_PREFIX + "/pull", "application/json");
-    httpConnect(registerSubProjects, MARKETPLACE_URL_PREFIX + "/registerSubProjects", "application/json");
-    httpConnect(unregisterSubProjects, MARKETPLACE_URL_PREFIX + "/unregisterSubProjects", "application/json");
-    httpConnect(listSubProjects, MARKETPLACE_URL_PREFIX + "/listProjects", "application/json");
-    httpConnect(getDefaultAddonPath, MARKETPLACE_URL_PREFIX + "/getDefaultAddonPath", "application/json");
-    httpConnect(listLocalRepos, MARKETPLACE_URL_PREFIX + "/listLocalRepos", "application/json");
-    httpConnect(remove, MARKETPLACE_URL_PREFIX + "/remove", "application/json");
-    httpConnect(setPmonCredentials, MARKETPLACE_URL_PREFIX + "/setPmonCredentials", "application/json");
-    httpConnect(pmonCredentialsAreSet, MARKETPLACE_URL_PREFIX + "/pmonCredentialsAreSet", "application/json");
-    httpConnect(currentProject, MARKETPLACE_URL_PREFIX + "/currentProject", "application/json");
+    httpConnect(listRepos, EXTENSIONS_URL_PREFIX + "/listRepos", "application/json");
+    httpConnect(clone, EXTENSIONS_URL_PREFIX + "/clone", "application/json");
+    httpConnect(pull, EXTENSIONS_URL_PREFIX + "/pull", "application/json");
+    httpConnect(registerSubProjects, EXTENSIONS_URL_PREFIX + "/registerSubProjects", "application/json");
+    httpConnect(unregisterSubProjects, EXTENSIONS_URL_PREFIX + "/unregisterSubProjects", "application/json");
+    httpConnect(listSubProjects, EXTENSIONS_URL_PREFIX + "/listProjects", "application/json");
+    httpConnect(getDefaultAddonPath, EXTENSIONS_URL_PREFIX + "/getDefaultAddonPath", "application/json");
+    httpConnect(listLocalRepos, EXTENSIONS_URL_PREFIX + "/listLocalRepos", "application/json");
+    httpConnect(remove, EXTENSIONS_URL_PREFIX + "/remove", "application/json");
+    httpConnect(setPmonCredentials, EXTENSIONS_URL_PREFIX + "/setPmonCredentials", "application/json");
+    httpConnect(pmonCredentialsAreSet, EXTENSIONS_URL_PREFIX + "/pmonCredentialsAreSet", "application/json");
+    httpConnect(currentProject, EXTENSIONS_URL_PREFIX + "/currentProject", "application/json");
     httpOnConnectionClose(closeCB);
   }
 
@@ -345,11 +345,11 @@ class MarketplaceEndpoints
 //@private members
 //--------------------------------------------------------------------------------
 
-  private static MarketplaceClient client = nullptr;
+  private static ExtensionsClient client = nullptr;
 
-  private static void initMarketplaceClient()
+  private static void initExtensionsClient()
   {
-    client =  new MarketplaceClient();
+    client =  new ExtensionsClient();
   }
 
   private static string joinPath(string base, string name)

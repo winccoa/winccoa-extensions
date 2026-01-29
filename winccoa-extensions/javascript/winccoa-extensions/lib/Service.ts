@@ -1,14 +1,14 @@
 import { Vrpc, WinccoaManager } from "winccoa-manager";
-import { AddOnHandler } from "./AddOnHandler";
+import { AddonHandler } from "./AddonHandler";
 import { AddonConfig } from "./AddonConfig";
 
 const winccoa = new WinccoaManager();
 
-export class MarketplaceService extends Vrpc.ServiceBase {
-  private _addOnHandler: AddOnHandler;
+export class ExtensionsService extends Vrpc.ServiceBase {
+  private _addonHandler: AddonHandler;
 
   constructor() {
-    super("Marketplace");
+    super("Extensions");
 
     this.registerFunction("register", this.registerSubProjects.bind(this));
     this.registerFunction("unregister", this.unregisterSubProjects.bind(this));
@@ -22,7 +22,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     this.registerFunction("remove", this.removeRepository.bind(this));
     this.registerFunction("listRepos", this.listRemoteRepositories.bind(this));
     this.registerFunction("repoPath", this.getDefaultAddonPath.bind(this));
-    this.registerFunction("localRepos", this.listLocalAddOns.bind(this));
+    this.registerFunction("localRepos", this.listLocalAddons.bind(this));
     this.registerFunction(
       "setPmonCredentials",
       this.setPmonCredentials.bind(this),
@@ -36,7 +36,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       this.removePmonCredentials.bind(this),
     );
 
-    this._addOnHandler = new AddOnHandler();
+    this._addonHandler = new AddonHandler();
   }
 
   /**
@@ -47,7 +47,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
   private parseAndMapAddonConfig(fileContent: string): AddonConfig {
     try {
       const parsedContent = JSON.parse(fileContent);
-      return this._addOnHandler.mapPackageJsonToAddonConfig(parsedContent);
+      return this._addonHandler.mapPackageJsonToAddonConfig(parsedContent);
     } catch (error) {
       throw new Error(`Invalid JSON in fileContent: ${error}`);
     }
@@ -111,7 +111,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
           "addonHandler",
           `Installing ${config.Dependencies.length} dependencies before registering subprojects...`,
         );
-        await this._addOnHandler.processDependencies(
+        await this._addonHandler.processDependencies(
           config.Dependencies,
           session,
         );
@@ -120,7 +120,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       // Register each subproject
       const results: any[] = [];
       for (const subproject of config.Subprojects) {
-        const result = await this._addOnHandler.registerSubProject(
+        const result = await this._addonHandler.registerSubProject(
           repositoryPath,
           subproject.Name,
           subproject,
@@ -190,7 +190,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
 
     // Unregister each subproject
     for (const subproject of config.Subprojects) {
-      const result = await this._addOnHandler.unregisterSubProject(
+      const result = await this._addonHandler.unregisterSubProject(
         repositoryPath,
         subproject.Name,
         deleteFiles,
@@ -211,7 +211,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     request: Vrpc.Variant,
   ): Promise<Vrpc.Variant> {
     winccoa.logDebugF("addonHandler", "Listing registered sub-projects");
-    const result = await this._addOnHandler.listSubProjects();
+    const result = await this._addonHandler.listSubProjects();
     winccoa.logDebugF(
       "addonHandler",
       "Registered sub-projects listed with result code:",
@@ -232,7 +232,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       organizationName = "winccoa";
     }
 
-    const orgRepos = await this._addOnHandler.listOrganizationRepositories(
+    const orgRepos = await this._addonHandler.listOrganizationRepositories(
       organizationName,
       {
         type: "public",
@@ -241,7 +241,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       },
     );
 
-    const customReposData = this._addOnHandler.listCustomRepositories();
+    const customReposData = this._addonHandler.listCustomRepositories();
     const customRepos = customReposData.repositories;
 
     const repos = [...orgRepos, ...customRepos];
@@ -268,7 +268,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     );
     const session = sessionVariant ? sessionVariant.getString() : "";
 
-    const result = await this._addOnHandler.pullRepository(
+    const result = await this._addonHandler.pullRepository(
       repositoryPath,
       session,
     );
@@ -327,7 +327,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     );
     const session = sessionVariant ? sessionVariant.getString() : "";
 
-    const result = await this._addOnHandler.cloneRepository(
+    const result = await this._addonHandler.cloneRepository(
       repositoryURL,
       targetDir,
       branch,
@@ -343,7 +343,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
             "addonHandler",
             `Cloned repository has ${config.Dependencies.length} dependencies, cloning them...`,
           );
-          await this._addOnHandler.processDependencies(
+          await this._addonHandler.processDependencies(
             config.Dependencies,
             session,
             undefined, // processedDeps - use default
@@ -381,7 +381,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     request: Vrpc.Variant,
   ): Promise<Vrpc.Variant> {
     const directory = request.getString();
-    const result = await this._addOnHandler.removeRepository(directory);
+    const result = await this._addonHandler.removeRepository(directory);
     return Vrpc.Variant.createBool(result);
   }
 
@@ -389,15 +389,15 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     serverContext: Vrpc.ServerContext,
     request: Vrpc.Variant,
   ): Promise<Vrpc.Variant> {
-    const defaultPath = this._addOnHandler.getDefaultAddonPath();
+    const defaultPath = this._addonHandler.getDefaultAddonPath();
     return Vrpc.Variant.createString(defaultPath);
   }
 
-  private async listLocalAddOns(
+  private async listLocalAddons(
     serverContext: Vrpc.ServerContext,
     request: Vrpc.Variant,
   ): Promise<Vrpc.Variant> {
-    const result = await this._addOnHandler.listLocalAddOns();
+    const result = await this._addonHandler.listLocalAddons();
     return Vrpc.Variant.createString(JSON.stringify(result));
   }
 
@@ -421,14 +421,14 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       );
     }
 
-    this._addOnHandler.addPmonCredentials(
+    this._addonHandler.addPmonCredentials(
       sessionVariant.getString(),
       userVariant.getString(),
       passwordVariant.getString(),
     );
 
     return Vrpc.Variant.createBool(
-      await this._addOnHandler.verifyPmonCredentials(
+      await this._addonHandler.verifyPmonCredentials(
         sessionVariant.getString(),
       ),
     );
@@ -445,7 +445,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
       throw new Error('Missing required "session" parameter in mapping');
     }
 
-    this._addOnHandler.removePmonCredentials(session);
+    this._addonHandler.removePmonCredentials(session);
     return Vrpc.Variant.createBool(true);
   }
 
@@ -461,7 +461,7 @@ export class MarketplaceService extends Vrpc.ServiceBase {
     }
 
     return Vrpc.Variant.createBool(
-      await this._addOnHandler.verifyPmonCredentials(session),
+      await this._addonHandler.verifyPmonCredentials(session),
     );
   }
 }
