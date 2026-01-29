@@ -4,11 +4,11 @@ import { AddonConfig } from "./AddonConfig";
 
 const winccoa = new WinccoaManager();
 
-export class MarketplaceService extends Vrpc.ServiceBase {
+export class ExtensionsService extends Vrpc.ServiceBase {
   private _addOnHandler: AddOnHandler;
 
   constructor() {
-    super("Marketplace");
+    super("Extensions");
 
     this.registerFunction("register", this.registerSubProjects.bind(this));
     this.registerFunction("unregister", this.unregisterSubProjects.bind(this));

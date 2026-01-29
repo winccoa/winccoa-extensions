@@ -1,5 +1,5 @@
 /**
- * Type definitions for WinCC OA Marketplace
+ * Type definitions for WinCC OA Extensions
  */
 
 // Interface definitions for IX modals and components
@@ -37,7 +37,7 @@ export interface Repository {
   cloneUrl?: string;
   sshUrl?: string;
   cloned?: boolean;
-  fileContent?: string; // JSON content from .winccoa-marketplace.json file
+  fileContent?: string; // JSON content from .winccoa-extensions.json file
   localPath?: string; // Local filesystem path where repository is cloned
   owner?: string; // GitHub owner/organization name
   repo?: string; // GitHub repository name
@@ -74,7 +74,7 @@ declare global {
       repositoryName: string,
     ) => Promise<IxUnregisterConfirmResult | null>;
     ixShowDeleteConfirm?: (repositoryName: string) => Promise<boolean>;
-    marketplaceUI?: import("./marketplace").MarketplaceUI;
+    ExtensionsUI?: import("./extensions").ExtensionsUI;
     ixIcons?: any;
   }
 }

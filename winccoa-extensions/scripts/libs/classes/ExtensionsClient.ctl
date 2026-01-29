@@ -15,13 +15,13 @@
 //--------------------------------------------------------------------------------
 /**
 */
-class MarketplaceClient
+class ExtensionsClient
 {
   private VrpcStub stub = nullptr;
 
-  public MarketplaceClient()
+  public ExtensionsClient()
   {
-    stub = VrpcStub::createAndInitialize("marketplace", new VrpcStubOptions());
+    stub = VrpcStub::createAndInitialize("extensions", new VrpcStubOptions());
   }
 
   public anytype listRepos(string organization = "winccoa")

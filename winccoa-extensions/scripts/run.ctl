@@ -8,7 +8,7 @@
 
 //--------------------------------------------------------------------------------
 // Libraries used (#uses)
-#uses "classes/MarketplaceClient"
+#uses "classes/ExtensionsClient"
 //--------------------------------------------------------------------------------
 // Variables and Constants
 
@@ -17,7 +17,7 @@
 */
 void main()
 {
-  MarketplaceClient client =  new MarketplaceClient();
+  ExtensionsClient client =  new ExtensionsClient();
 
   // NOTE: change path of repo etc. for developer tests
 

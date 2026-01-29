@@ -1,23 +1,23 @@
 {
-  "name": "winccoa-marketplace-workspace",
+  "name": "winccoa-extensions-workspace",
   "version": "1.0.0",
-  "description": "WinCC OA Marketplace - Monorepo workspace",
+  "description": "WinCC OA Extensions - Monorepo workspace",
   "author": "ETM professional control",
   "license": "MIT",
   "private": true,
   "workspaces": [
-    "winccoa-marketplace/data/marketplace",
-    "winccoa-marketplace/javascript/winccoa-marketplace"
+    "winccoa-extensions/data/extensions",
+    "winccoa-extensions/javascript/winccoa-extensions"
   ],
   "scripts": {
     "build": "npm run build:backend && npm run build:frontend",
-    "build:backend": "npm run build --workspace=winccoa-marketplace/javascript/winccoa-marketplace",
-    "build:frontend": "npm run build --workspace=winccoa-marketplace/data/marketplace",
+    "build:backend": "npm run build --workspace=winccoa-extensions/javascript/winccoa-extensions",
+    "build:frontend": "npm run build --workspace=winccoa-extensions/data/extensions",
     "install:all": "npm install",
-    "lint": "npm run lint --workspace=winccoa-marketplace/javascript/winccoa-marketplace",
-    "format": "npm run format --workspace=winccoa-marketplace/javascript/winccoa-marketplace && npm run format --workspace=winccoa-marketplace/data/marketplace",
-    "format:backend": "npm run format --workspace=winccoa-marketplace/javascript/winccoa-marketplace",
-    "format:frontend": "npm run format --workspace=winccoa-marketplace/data/marketplace",
+    "lint": "npm run lint --workspace=winccoa-extensions/javascript/winccoa-extensions",
+    "format": "npm run format --workspace=winccoa-extensions/javascript/winccoa-extensions && npm run format --workspace=winccoa-extensions/data/extensions",
+    "format:backend": "npm run format --workspace=winccoa-extensions/javascript/winccoa-extensions",
+    "format:frontend": "npm run format --workspace=winccoa-extensions/data/extensions",
     "dev": "npm run build -- --watch"
   },
   "devDependencies": {
