@@ -1975,12 +1975,6 @@ void removeManager(int manIdx)
   private async startWinCCOAnodeManager(scriptFile: string): Promise<void> {
     winccoa.logDebugF("addonHandler", `Executing script: ${scriptFile}`);
 
-    // Get current project name from WinCC OA
-    const projectName = (await this.ctrlScript.start(
-      "getProjectName",
-    )) as string;
-    winccoa.logDebugF("addonHandler", `Current project name: ${projectName}`);
-
     const installDir = getWinCCOAInstallDir(winccoa);
     if (installDir) {
       const bootstrapPath = path.join(
@@ -1990,7 +1984,7 @@ void removeManager(int manIdx)
         "lib",
         "bootstrap.js",
       );
-      const command = `node.exe -- "${bootstrapPath}" -num 99 -pmonIndex 100 -proj ${projectName} ${scriptFile}`;
+      const command = `node.exe -- "${bootstrapPath}" -currentproj ${scriptFile}`;
       winccoa.logDebugF(
         "addonHandler",
         `Executing JavaScript command: ${command}`,
