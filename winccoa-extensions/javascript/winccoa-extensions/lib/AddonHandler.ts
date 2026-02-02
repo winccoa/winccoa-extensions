@@ -642,10 +642,13 @@ void restartManager(int manIdx)
 void removeManager(int manIdx)
 {
   ProjEnvProject proj  = new ProjEnvProject(PROJ);
-  string startOptions;
+  ProjEnvManagerOptions startOptions = proj.getManagerOptions(manIdx);
+  startOptions.startMode = ProjEnvManagerStartMode::Manual;
+  proj.changeManagerOptions(manIdx, startOptions);
   proj.stopManager(manIdx, 30);
   proj.deleteManager(manIdx);
 }
+
   `,
   );
 
@@ -838,6 +841,31 @@ void removeManager(int manIdx)
     deleteFiles: boolean,
     subprojectConfig?: SubprojectConfig,
   ): Promise<number> {
+    // Remove managers from subproject config
+    if (subprojectConfig?.Managers) {
+      for (const manager of subprojectConfig.Managers) {
+        winccoa.logDebugF(
+          "addonHandler",
+          `Manager ${manager.Name} with options "${manager.Options}" will be removed`,
+        );
+        // eslint-disable-next-line no-await-in-loop
+        const managerIdx = await this.ctrlScript.start(
+          "managerExists",
+          [manager.Name, manager.Options],
+          [WinccoaCtrlType.string, WinccoaCtrlType.string],
+        );
+
+        if (managerIdx !== -1) {
+          // eslint-disable-next-line no-await-in-loop
+          await this.ctrlScript.start(
+            "removeManager",
+            [managerIdx],
+            [WinccoaCtrlType.int],
+          );
+        }
+      }
+    }
+
     // Execute uninstall scripts if available (from subproject config)
     if (
       subprojectConfig &&
