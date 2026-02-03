@@ -53,9 +53,9 @@ References:
 
 ## Configuration
 
-### Extensions.config.json
+### extensions.config.json
 
-The `config/Extensions.config.json` file configures authentication methods, storage location, and custom repository sources for the Extensions.
+The `config/extensions.config.json` file configures authentication methods, storage location, and custom repository sources for the Extensions.
 
 **Complete Configuration Example:**
 ```json
@@ -89,7 +89,7 @@ The Extensions AddOn supports GitHub authentication to access private repositori
 
 ### Authentication Methods
 
-Authentication is configured in `config/Extensions.config.json`:
+Authentication is configured in `config/extensions.config.json`:
 ```json
 {
   "authMethods": ["Token"],
