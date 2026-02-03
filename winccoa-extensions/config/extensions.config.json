@@ -1,18 +1,3 @@
 {
-  "authMethods": ["Token"],
-  "storePath": "D:\\WinCC_OA_Proj\\3.21",
-  "customRepos": [
-    {
-      "name": "Example Repository 1",
-      "url": "https://github.com/user/example-repo-1.git"
-    },
-    {
-      "name": "WinCCOA",
-      "url": "https://tfs.etm.at:8443/tfs/ETM/ETM/_git/WinCCOA"
-    },
-    {
-      "name": "Example Repository 3",
-      "url": "https://gitlab.com/user/example-repo-3.git"
-    }
-  ]
+  "authMethods": ["Token"]
 }
