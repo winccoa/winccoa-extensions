@@ -21,14 +21,14 @@ References:
 ## Setup
 
 1. Install Extensions Add-on
-   - Download or clone from GitHub: https://github.com/winccoa/winccoa-Extensions
+   - Download or clone from GitHub: https://github.com/winccoa/winccoa-extensions
    - Install npm packages: From the repository root, run `npm install` and `npm run build` (this builds both backend and frontend using npm workspaces)
      - To build separately: `npm run build:backend` or `npm run build:frontend`
    - Register in WinCC OA Project Administration.
 
 2. Add sub-project to your project
    - Add to your project as sub-project via Project Administration or Console UI.
-   - In the Console, add a JavaScript Manager with the script parameter pointing to your Node.js entry file `winccoa-Extensions/index.js`.
+   - In the Console, add a JavaScript Manager with the script parameter pointing to your Node.js entry file `winccoa-extensions/index.js`.
    - In the Console, add a Web Server (if not already existing).
 
 3. Configure HTTP Server endpoints
