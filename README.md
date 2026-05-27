@@ -1,4 +1,4 @@
-# WinCC OA Add-on Extensions
+# WinCC OA Extensions
 
 A modular Extensions for SIMATIC WinCC OA to discover, install, update, and remove add-ons directly in your project.
 
