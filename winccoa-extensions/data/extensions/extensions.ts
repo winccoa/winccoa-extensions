@@ -700,6 +700,17 @@ export class ExtensionsUI {
       // Combine all repositories
       this.repositories = results.flat();
 
+      // Load and merge addons installed in the WinCC OA installation directory.
+      // Wrapped in its own try/catch so failure never wipes the org repos above.
+      try {
+        const installedAddons = await this.loadInstalledAddons();
+        this.repositories.push(...installedAddons);
+      } catch (error: unknown) {
+        if ((error as Error).name !== "AbortError") {
+          console.warn("Failed to load installed addons:", error);
+        }
+      }
+
       // Extract latest version from winccoaPackage field for all repos
       this.repositories.forEach((repo) => this.extractPackageData(repo));
 
@@ -745,6 +756,17 @@ export class ExtensionsUI {
       if (response.ok) {
         this.repositories = Array.isArray(data) ? data : [];
 
+        // Load and merge addons installed in the WinCC OA installation directory.
+        // Wrapped in its own try/catch so failure never wipes the org repos above.
+        try {
+          const installedAddons = await this.loadInstalledAddons();
+          this.repositories.push(...installedAddons);
+        } catch (error: unknown) {
+          if ((error as Error).name !== "AbortError") {
+            console.warn("Failed to load installed addons:", error);
+          }
+        }
+
         // Extract latest version from winccoaPackage field
         this.repositories.forEach((repo) => this.extractPackageData(repo));
 
@@ -784,6 +806,38 @@ export class ExtensionsUI {
       this.repositories = [];
       // Don't render here - will be rendered after all status info is loaded
     }
+  }
+
+  /**
+   * Load addons installed in the WinCC OA installation directory.
+   * These are addons found in the installation path (e.g., C:\Program Files\Siemens\WinCC_OA\3.21)
+   * that are not already present in the project directory.
+   *
+   * @returns Array of repository objects from the installation directory
+   */
+  private async loadInstalledAddons(): Promise<Repository[]> {
+    try {
+      const response = await this.makeApiCall(
+        "/extensions/listInstalledAddons",
+        {
+          signal: this.currentLoadController?.signal,
+        },
+      );
+      if (response.ok) {
+        const data: Repository[] = await response.json();
+        return Array.isArray(data) ? data : [];
+      }
+    } catch (error: unknown) {
+      const apiError = error as ApiError;
+      if (apiError.name === "AbortError") {
+        throw error;
+      }
+      console.warn(
+        "Could not load installed addons:",
+        apiError.message || "Unknown error",
+      );
+    }
+    return [];
   }
 
   /**

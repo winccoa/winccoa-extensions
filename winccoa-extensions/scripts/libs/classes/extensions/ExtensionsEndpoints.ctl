@@ -38,6 +38,7 @@ class ExtensionsEndpoints
     httpConnect(listSubProjects, EXTENSIONS_URL_PREFIX + "/listProjects", "application/json");
     httpConnect(getDefaultAddonPath, EXTENSIONS_URL_PREFIX + "/getDefaultAddonPath", "application/json");
     httpConnect(listLocalRepos, EXTENSIONS_URL_PREFIX + "/listLocalRepos", "application/json");
+    httpConnect(listInstalledAddons, EXTENSIONS_URL_PREFIX + "/listInstalledAddons", "application/json");
     httpConnect(remove, EXTENSIONS_URL_PREFIX + "/remove", "application/json");
     httpConnect(setPmonCredentials, EXTENSIONS_URL_PREFIX + "/setPmonCredentials", "application/json");
     httpConnect(pmonCredentialsAreSet, EXTENSIONS_URL_PREFIX + "/pmonCredentialsAreSet", "application/json");
@@ -258,6 +259,20 @@ class ExtensionsEndpoints
     else
     {
       return makeDynString(jsonEncode(makeMapping("error", "Could not find local repos")), "Status: 404 Not Found");
+    }
+  }
+
+  //--------------------------------------------------------------------------------
+  public static dyn_string listInstalledAddons()
+  {
+    string response = client.listInstalledAddons();
+    if (response != "")
+    {
+      return makeDynString(response, "Status: 200 OK");
+    }
+    else
+    {
+      return makeDynString(jsonEncode(makeMapping("error", "Could not list installed addons")), "Status: 404 Not Found");
     }
   }
 

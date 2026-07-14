@@ -78,6 +78,12 @@ class ExtensionsClient
     return response.getResponse();
   }
 
+  public string listInstalledAddons()
+  {
+    VrpcResponseData response = stub.callFunction("listInstalledAddons", nullptr);
+    return response.getResponse();
+  }
+
   public bool setPmonCredentials(string session, string user, string password)
   {
     mapping requestMap;

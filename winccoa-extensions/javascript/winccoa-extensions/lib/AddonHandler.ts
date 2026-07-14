@@ -849,10 +849,7 @@ void removeManager(int manIdx)
           `Manager ${manager.Name} with options "${manager.Options}" will be removed`,
         );
         // eslint-disable-next-line no-await-in-loop
-        await this.removeManagerByNameAndOptions(
-          manager.Name,
-          manager.Options,
-        );
+        await this.removeManagerByNameAndOptions(manager.Name, manager.Options);
       }
     }
 
@@ -969,6 +966,110 @@ void removeManager(int manIdx)
       }
     }
     return localAddons;
+  }
+
+  /**
+   * List addons installed in the WinCC OA installation directory.
+   * Scans immediate subdirectories of the installation path for package.winccoa.json files,
+   * excluding any that already exist in the project directory (to avoid duplicates with listLocalAddons).
+   *
+   * @returns Array of repository objects in the normalized shape expected by the frontend
+   */
+  async listInstalledAddons(): Promise<object[]> {
+    const installedAddons: object[] = [];
+
+    // Resolve the WinCC OA installation directory using the same fallback chain as getWinCCOAInstallDir
+    const installDir = getWinCCOAInstallDir(winccoa);
+    if (!installDir) {
+      winccoa.logWarning(
+        "addonHandler",
+        "[listInstalledAddons] Could not determine WinCC OA installation directory",
+      );
+      return installedAddons;
+    }
+
+    winccoa.logDebugF(
+      "addonHandler",
+      `[listInstalledAddons] Scanning installation directory: ${installDir}`,
+    );
+
+    let entries: fs.Dirent[]; // Dirent = directory entry
+    try {
+      entries = await fs.promises.readdir(installDir, { withFileTypes: true });
+    } catch (error) {
+      winccoa.logWarning(
+        `addonHandler`,
+        `[listInstalledAddons] Failed to read installation directory: ${(error as Error).message}`,
+      );
+      return installedAddons;
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+
+      const addonDir = path.join(installDir, entry.name);
+      const addonJsonPath = path.join(addonDir, "package.winccoa.json");
+
+      // Skip if no package.winccoa.json present
+      if (!fs.existsSync(addonJsonPath)) continue;
+
+      // Skip if this addon already exists in the project directory (handled by listLocalAddons)
+      const projectAddonPath = path.join(this._defaultDirectory, entry.name);
+      if (fs.existsSync(projectAddonPath)) {
+        winccoa.logDebugF(
+          "addonHandler",
+          `[listInstalledAddons] Skipping ${entry.name} - already present in project directory`,
+        );
+        continue;
+      }
+
+      try {
+        const fileContent = fs.readFileSync(addonJsonPath, "utf-8");
+        const packageJson = JSON.parse(fileContent);
+
+        // Check OA version compatibility if specified
+        if (packageJson.OaVersion && !this.isVersionCompatible(packageJson.OaVersion)) {
+          winccoa.logDebugF(
+            "addonHandler",
+            `[listInstalledAddons] Skipping ${entry.name}: requires OaVersion ${packageJson.OaVersion}, current is ${this._oaVersion}`,
+          );
+          continue;
+        }
+
+        // Get directory stats for timestamps
+        const stats = fs.statSync(addonDir);
+
+        installedAddons.push({
+          name: entry.name,
+          localPath: addonDir,
+          winccoaPackage: packageJson,
+          description: packageJson.Description || "",
+          private: false,
+          stars: 0,
+          forks: 0,
+          language: undefined,
+          size: 0,
+          createdAt: stats.birthtime.toISOString(),
+          updatedAt: stats.mtime.toISOString(),
+        });
+
+        winccoa.logDebugF(
+          "addonHandler",
+          `[listInstalledAddons] Found installed addon: ${entry.name}`,
+        );
+      } catch (error) {
+        winccoa.logWarning(
+          `addonHandler`,
+          `[listInstalledAddons] Failed to read package.winccoa.json for ${entry.name}: ${(error as Error).message}`,
+        );
+      }
+    }
+
+    winccoa.logDebugF(
+      "addonHandler",
+      `[listInstalledAddons] Found ${installedAddons.length} installed addons`,
+    );
+    return installedAddons;
   }
 
   /**

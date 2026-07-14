@@ -24,6 +24,10 @@ export class ExtensionsService extends Vrpc.ServiceBase {
     this.registerFunction("repoPath", this.getDefaultAddonPath.bind(this));
     this.registerFunction("localRepos", this.listLocalAddons.bind(this));
     this.registerFunction(
+      "listInstalledAddons",
+      this.listInstalledAddons.bind(this),
+    );
+    this.registerFunction(
       "setPmonCredentials",
       this.setPmonCredentials.bind(this),
     );
@@ -398,6 +402,14 @@ export class ExtensionsService extends Vrpc.ServiceBase {
     request: Vrpc.Variant,
   ): Promise<Vrpc.Variant> {
     const result = await this._addonHandler.listLocalAddons();
+    return Vrpc.Variant.createString(JSON.stringify(result));
+  }
+
+  private async listInstalledAddons(
+    serverContext: Vrpc.ServerContext,
+    request: Vrpc.Variant,
+  ): Promise<Vrpc.Variant> {
+    const result = await this._addonHandler.listInstalledAddons();
     return Vrpc.Variant.createString(JSON.stringify(result));
   }
 
