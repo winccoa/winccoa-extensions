@@ -165,7 +165,7 @@ Every installable extension repository must contain a `package.winccoa.json` fil
   "RepoName": "Example Extension",
   "Version": "1.2.0",
   "Description": "Adds example functionality",
-  "OaVersion": "2025 SP1",
+  "OaVersion": "^3.21.0",
   "Keywords": ["example", "scada"],
   "Dependencies": [
     "https://github.com/company/shared-library.git"
@@ -176,20 +176,20 @@ Every installable extension repository must contain a `package.winccoa.json` fil
       "Description": "Registers the example extension",
       "Managers": [
         {
-          "Name": "ExampleManager",
+          "Name": "WCCOActrl",
           "StartMode": "always",
-          "Options": "-debug",
+          "Options": "feature.ctl -dbg 10",
           "RestartOnUpdate": true
         }
       ],
       "Dplists": [
-        "config/example.ascii"
+        "dptypes.dpl"
       ],
       "UpdateScripts": [
-        "scripts/update.ctl"
+        "update.ctl"
       ],
       "UninstallScripts": [
-        "scripts/uninstall.ctl"
+        "uninstall.ctl"
       ]
     }
   ]
