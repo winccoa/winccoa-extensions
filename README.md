@@ -338,41 +338,33 @@ Every installable extension repository must contain a `package.winccoa.json` fil
 | `Subprojects[].Managers[].Options` | No | Command-line options passed to the manager. |
 | `Subprojects[].Managers[].RestartOnUpdate` | No | Whether the manager should automatically restart after an update. Defaults to `true`. |
 | `Subprojects[].Dplists` | No | ASCII data point list files imported using the AsciiManager. |
-| `Subprojects[].UpdateScripts` | No | Control scripts executed after the add-on has been updated. |
+| `Subprojects[].UpdateScripts` | No | Control scripts execute during a git pull (triggered by the `Update` button), but only when the package is updated to a higher version. |
 | `Subprojects[].UninstallScripts` | No | Control scripts executed when the add-on is removed. |
 
 ### Example
 
 ```json
 {
-  "RepoName": "Example Extension",
-  "Version": "1.2.0",
-  "Description": "Adds example functionality",
-  "OaVersion": "2025 SP1",
-  "Keywords": ["example", "scada"],
-  "Dependencies": [
-    "https://github.com/company/shared-library.git"
+  "RepoName": "NTCIP",
+  "Keywords": [
+    "NTCIP"
   ],
+  "Version": "1.0.0",
+  "Description": "NTCIP",
+  "OaVersions": "^3.20.0",
   "Subprojects": [
     {
-      "Name": "ExampleExtension",
-      "Description": "Registers the example extension",
+      "Name": "NTCIPGateway_3.21",
+      "Description": "NTCIP",
       "Managers": [
         {
-          "Name": "ExampleManager",
+          "Name": "WCCOAntcipgw",
           "StartMode": "always",
-          "Options": "-debug",
           "RestartOnUpdate": true
         }
       ],
       "Dplists": [
-        "config/example.ascii"
-      ],
-      "UpdateScripts": [
-        "scripts/update.ctl"
-      ],
-      "UninstallScripts": [
-        "scripts/uninstall.ctl"
+        "NTCIPGateway.dpl"
       ]
     }
   ]
