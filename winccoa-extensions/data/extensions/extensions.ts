@@ -963,7 +963,39 @@ export class ExtensionsUI {
       return;
     }
 
-    const repositoryItems = this.repositories
+    // Sort repositories by priority: registered first, then cloned and update available, then cloned/installed, then not installed
+    const sortedRepos = [...this.repositories].sort((a, b) => {
+      const aIsRegistered = this.registeredProjects.includes(
+        this.getRepositoryIdentifier(a),
+      );
+      const bIsRegistered = this.registeredProjects.includes(
+        this.getRepositoryIdentifier(b),
+      );
+      
+      // Both `cloned` and `installedAddon` are typed as boolean | undefined, so the below
+      // expression could return undefined if both are undefined, the !! coerces to a definite
+      // boolean (undefined -> false, true -> true, ...) 
+      const aIsClonedOrInstalled = !!(a.cloned || a.installedAddon);
+      const bIsClonedOrInstalled = !!(b.cloned || b.installedAddon);
+
+      const priority = (
+        repo: Repository,
+        isRegistered: boolean,
+        isClonedOrInstalled: boolean,
+      ): number => {
+        if (isRegistered) return 0;
+        if (repo.hasUpdate) return 1;
+        if (isClonedOrInstalled) return 2;
+        return 3;
+      };
+
+      return (
+        priority(a, aIsRegistered, aIsClonedOrInstalled) -
+        priority(b, bIsRegistered, bIsClonedOrInstalled)
+      );
+    });
+
+    const repositoryItems = sortedRepos
       .map((repo) => {
         // Check if registered by comparing subproject name (if available) or repository name
         const isRegistered = this.registeredProjects.includes(
