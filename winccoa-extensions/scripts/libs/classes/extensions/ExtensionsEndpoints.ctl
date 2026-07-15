@@ -39,6 +39,7 @@ class ExtensionsEndpoints
     httpConnect(getDefaultAddonPath, EXTENSIONS_URL_PREFIX + "/getDefaultAddonPath", "application/json");
     httpConnect(listLocalRepos, EXTENSIONS_URL_PREFIX + "/listLocalRepos", "application/json");
     httpConnect(listInstalledAddons, EXTENSIONS_URL_PREFIX + "/listInstalledAddons", "application/json");
+    httpConnect(readAddonFile, EXTENSIONS_URL_PREFIX + "/readAddonFile", "application/json");
     httpConnect(remove, EXTENSIONS_URL_PREFIX + "/remove", "application/json");
     httpConnect(setPmonCredentials, EXTENSIONS_URL_PREFIX + "/setPmonCredentials", "application/json");
     httpConnect(pmonCredentialsAreSet, EXTENSIONS_URL_PREFIX + "/pmonCredentialsAreSet", "application/json");
@@ -293,6 +294,28 @@ class ExtensionsEndpoints
     else
     {
       return makeDynString(jsonEncode(makeMapping("error", "Could not list installed addons")), "Status: 404 Not Found");
+    }
+  }
+
+  //--------------------------------------------------------------------------------
+  public static dyn_string readAddonFile(const dyn_string &names, const dyn_string &values)
+  {
+    int idx = names.indexOf("path"); // indexOf uses 0-based-indexing
+
+    if (idx < 0 || idx >= sizeof(values))
+    {
+      return makeDynString(jsonEncode(makeMapping("error", "Missing required parameter: path")), "Status: 400 Bad Request");
+    }
+    
+    string filePath = values[idx + 1]; // + 1 since dyn_string uses 1-based-indexing
+    string response = client.readFile(filePath);
+    if (response != "")
+    {
+      return makeDynString(jsonEncode(makeMapping("content", response)), "Status: 200 OK");
+    }
+    else
+    {
+      return makeDynString(jsonEncode(makeMapping("error", "File not found or could not be read")), "Status: 404 Not Found");
     }
   }
 

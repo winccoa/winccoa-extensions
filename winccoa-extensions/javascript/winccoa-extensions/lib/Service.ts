@@ -27,6 +27,7 @@ export class ExtensionsService extends Vrpc.ServiceBase {
       "listInstalledAddons",
       this.listInstalledAddons.bind(this),
     );
+    this.registerFunction("readFile", this.readFile.bind(this));
     this.registerFunction(
       "setPmonCredentials",
       this.setPmonCredentials.bind(this),
@@ -411,6 +412,30 @@ export class ExtensionsService extends Vrpc.ServiceBase {
   ): Promise<Vrpc.Variant> {
     const result = await this._addonHandler.listInstalledAddons();
     return Vrpc.Variant.createString(JSON.stringify(result));
+  }
+
+  // eslint-disable-next-line require-await
+  private async readFile(
+    serverContext: Vrpc.ServerContext,
+    request: Vrpc.Variant,
+  ): Promise<Vrpc.Variant> {
+    const requestMapping = request.getMapping();
+    const filePathVariant = requestMapping.get(
+      Vrpc.Variant.createString("filePath"),
+    );
+
+    if (!filePathVariant) {
+      return Vrpc.Variant.createBool(false);
+    }
+
+    const filePath = filePathVariant.getString();
+    const content = this._addonHandler.readFile(filePath);
+
+    if (content === null) {
+      return Vrpc.Variant.createBool(false);
+    }
+
+    return Vrpc.Variant.createString(content);
   }
 
   // eslint-disable-next-line require-await

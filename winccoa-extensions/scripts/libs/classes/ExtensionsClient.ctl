@@ -84,6 +84,14 @@ class ExtensionsClient
     return response.getResponse();
   }
 
+  public string readFile(string filePath)
+  {
+    mapping requestMap;
+    requestMap.insert("filePath", filePath);
+    VrpcResponseData response = stub.callFunction("readFile", requestMap);
+    return response.getResponse();
+  }
+
   public bool setPmonCredentials(string session, string user, string password)
   {
     mapping requestMap;

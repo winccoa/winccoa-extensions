@@ -1339,6 +1339,30 @@ export class ExtensionsUI {
 
     if (!readmeSection || !readmeContent) return;
 
+    // Handle installed addons - read README.md from filesystem via backend
+    if (repo.installedAddon && repo.localPath) {
+      try {
+        const readmePath = `${repo.localPath}${repo.name}/README.md`;
+        const response = await this.makeApiCall(
+          `/extensions/readAddonFile?path=${encodeURIComponent(readmePath)}`,
+        );
+        if (response.ok) {
+          const data = await response.json();
+          if (data.content) {
+            const htmlContent = this.renderMarkdown(data.content, "");
+            readmeContent.innerHTML = htmlContent;
+            readmeSection.style.display = "block";
+            return;
+          }
+        }
+        readmeSection.style.display = "none";
+      } catch (error) {
+        console.warn("Could not fetch installed addon README:", error);
+        readmeSection.style.display = "none";
+      }
+      return;
+    }
+
     // Check if this is a GitHub repository
     if (!repo.cloneUrl || !repo.cloneUrl.includes("github.com")) {
       readmeSection.style.display = "none";

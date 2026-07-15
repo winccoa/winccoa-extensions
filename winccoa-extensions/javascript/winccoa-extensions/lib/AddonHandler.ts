@@ -1473,6 +1473,23 @@ void removeManager(int manIdx)
   }
 
   /**
+   * Read a file from the filesystem and return its content as a string.
+   * @param filePath Absolute path to the file to read
+   * @returns File content as string, or null if file doesn't exist or can't be read
+   */
+  public readFile(filePath: string): string | null {
+    try {
+      if (!fs.existsSync(filePath)) {
+        return null;
+      }
+      return fs.readFileSync(filePath, "utf8");
+    } catch (error: any) {
+      winccoa.logWarning(`Failed to read file ${filePath}: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
    * Extract repository name from git URL
    * @param url Git clone URL (HTTPS or SSH)
    * @returns Repository name
