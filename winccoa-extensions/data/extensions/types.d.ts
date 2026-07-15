@@ -50,6 +50,7 @@ export interface Repository {
   hasUpdate?: boolean; // Whether an update is available
   keywords?: string[]; // Keywords/tags from winccoaPackage
   localWinccoaPackage?: any; // Local winccoaPackage data from listLocalRepos
+  installedAddon?: boolean; // True if addon exists in the WinCC OA installation directory (not cloned from git)
 }
 
 export interface ApiError extends Error {
@@ -67,6 +68,7 @@ declare global {
     ixShowMessage?: (config: IxModalConfig) => Promise<IxModalResult>;
     ixShowUnregisterConfirm?: (
       repositoryName: string,
+      isInstalledAddon?: boolean,
     ) => Promise<IxUnregisterConfirmResult | null>;
     ixShowDeleteConfirm?: (repositoryName: string) => Promise<boolean>;
     ExtensionsUI?: import("./extensions").ExtensionsUI;

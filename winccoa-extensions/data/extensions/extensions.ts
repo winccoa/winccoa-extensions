@@ -971,14 +971,18 @@ export class ExtensionsUI {
         );
         const statusClass = isRegistered
           ? "registered"
-          : repo.cloned
+          : repo.installedAddon
             ? "cloned"
-            : "";
+            : repo.cloned
+              ? "cloned"
+              : "";
         const statusTooltip = isRegistered
           ? "Installed"
-          : repo.cloned
-            ? "Downloaded"
-            : "Not downloaded";
+          : repo.installedAddon
+            ? "In installation directory"
+            : repo.cloned
+              ? "Downloaded"
+              : "Not downloaded";
         const isLoading = repo.loadingAction != null;
         const loadingText = repo.loadingAction
           ? `${repo.loadingAction.charAt(0).toUpperCase() + repo.loadingAction.slice(1)} in progress...`
@@ -1501,6 +1505,33 @@ export class ExtensionsUI {
         setButtonOutline(pullBtn, false);
         setButtonOutline(unregisterBtn, false); // Primary (main action)
       }
+    } else if (repo.installedAddon) {
+      // Installed addon (exists in the WinCC OA installation directory, not cloned from git)
+      // Can be registered directly, but cannot be downloaded, updated, or removed
+      cloneBtn?.setAttribute("disabled", "");
+      cloneBtn?.setAttribute(
+        "title",
+        "Cannot download: Addon is in the WinCC OA installation directory",
+      );
+      pullBtn?.setAttribute("disabled", "");
+      registerBtn?.removeAttribute("disabled");
+      registerBtn?.setAttribute(
+        "title",
+        "Install subproject from installation directory",
+      );
+      unregisterBtn?.setAttribute("disabled", "");
+      removeBtn?.setAttribute("disabled", "");
+      removeBtn?.setAttribute(
+        "title",
+        "Cannot remove: Addon is part of the WinCC OA installation",
+      );
+
+      // Outline styling: Install is primary action
+      setButtonOutline(cloneBtn, false);
+      setButtonOutline(pullBtn, false);
+      setButtonOutline(unregisterBtn, false);
+      setButtonOutline(removeBtn, false);
+      setButtonOutline(registerBtn, false); // Primary (main action)
     } else if (isCloned) {
       cloneBtn?.setAttribute("disabled", "");
       // Only show pull button if there's an update available
@@ -2523,8 +2554,8 @@ export class ExtensionsUI {
     // Capture the repository being registered to avoid issues if user switches repos during operation
     const repositoryBeingRegistered = this.currentRepository;
 
-    // If repository is not cloned yet, clone it first
-    if (!repositoryBeingRegistered.cloned) {
+    // If repository is not cloned and not an installed addon, clone it first
+    if (!repositoryBeingRegistered.cloned && !repositoryBeingRegistered.localPath) {
       // Show the clone modal with path confirmation
       const cloneSuccess = await this.cloneForRegistration(
         repositoryBeingRegistered,
@@ -2558,6 +2589,9 @@ export class ExtensionsUI {
         repoName: repositoryBeingRegistered.name,
         fileContent: repositoryBeingRegistered.fileContent,
       });
+      if (repositoryBeingRegistered.localPath) {
+        params.append("repositoryPath", repositoryBeingRegistered.localPath);
+      }
 
       const response = await this.makeApiCall(
         `/extensions/registerSubProjects?${params}`,
@@ -2760,8 +2794,8 @@ export class ExtensionsUI {
       return;
     }
 
-    // Check if repository is cloned
-    if (!repositoryBeingUnregistered.cloned) {
+    // Check if repository is cloned or is an installed addon
+    if (!repositoryBeingUnregistered.cloned && !repositoryBeingUnregistered.localPath) {
       this.showError("Cannot uninstall: Repository is not downloaded.");
       return;
     }
@@ -2769,6 +2803,7 @@ export class ExtensionsUI {
     // Show confirmation modal with delete option
     const result = await window.ixShowUnregisterConfirm?.(
       repositoryBeingUnregistered.name,
+      repositoryBeingUnregistered.installedAddon,
     );
 
     // If user cancelled, return
@@ -2783,12 +2818,20 @@ export class ExtensionsUI {
     );
 
     try {
+      // For installed addons, never delete files from the installation directory
+      const deleteFiles = repositoryBeingUnregistered.installedAddon
+        ? false
+        : result.deleteRepository;
+
       // Pass the delete parameter and fileContent to the API
       const params = new URLSearchParams({
         repoName: repositoryBeingUnregistered.name,
         fileContent: repositoryBeingUnregistered.fileContent,
-        deleteFiles: result.deleteRepository ? "true" : "false",
+        deleteFiles: deleteFiles ? "true" : "false",
       });
+      if (repositoryBeingUnregistered.localPath) {
+        params.append("repositoryPath", repositoryBeingUnregistered.localPath);
+      }
 
       const response = await this.makeApiCall(
         `/extensions/unregisterSubProjects?${params}`,
@@ -2796,7 +2839,7 @@ export class ExtensionsUI {
       const resultText = await response.text();
 
       if (response.ok) {
-        const successMsg = result.deleteRepository
+        const successMsg = deleteFiles
           ? "Subproject uninstalled and repository removed successfully"
           : "Subproject uninstalled successfully";
         this.showSuccess(successMsg);
@@ -2816,14 +2859,14 @@ export class ExtensionsUI {
         }
 
         // Reload local repositories if not deleted (to update version info)
-        if (!result.deleteRepository) {
+        if (!deleteFiles) {
           await this.loadLocalRepositories();
         }
 
         // Update the repository in the repositories array
         if (repoIndex !== -1) {
           // If repository was deleted, reset the cloned state
-          if (result.deleteRepository) {
+          if (deleteFiles) {
             this.resetRepositoryLocalState(repoIndex);
           }
           this.repositories[repoIndex].loadingAction = null;
@@ -2834,7 +2877,7 @@ export class ExtensionsUI {
           // Use tracked subproject tab name
           const currentSubprojectName = this.currentSubprojectTab || undefined;
 
-          if (result.deleteRepository) {
+          if (deleteFiles) {
             this.currentRepository.cloned = false;
             this.currentRepository.localPath = undefined;
             this.currentRepository.fileContent = undefined;
@@ -2878,6 +2921,14 @@ export class ExtensionsUI {
 
     // Capture the repository being deleted to avoid issues if user switches repos during operation
     const repositoryBeingDeleted = this.currentRepository;
+
+    // Installed addons cannot be deleted (they're part of the WinCC OA installation)
+    if (repositoryBeingDeleted.installedAddon) {
+      this.showError(
+        "Cannot delete: Addon is part of the WinCC OA installation.",
+      );
+      return;
+    }
 
     // Check if repository is cloned
     if (!repositoryBeingDeleted.cloned) {

@@ -156,7 +156,17 @@ class ExtensionsEndpoints
     }
 
     mapping requestMapping;
-    string path = joinPath(client.repoPath(), repoName);
+    // Accept optional repositoryPath override (for installed addons in the installation directory)
+    idx = names.indexOf("repositoryPath");
+    string path;
+    if (idx >= 0)
+    {
+      path = values.at(idx);
+    }
+    else
+    {
+      path = joinPath(client.repoPath(), repoName);
+    }
     requestMapping.insert("repositoryPath", path);
     requestMapping.insert("fileContent", fileContent);
     requestMapping.insert("session", session);
@@ -199,7 +209,17 @@ class ExtensionsEndpoints
     }
 
     mapping requestMapping;
-    string path = joinPath(client.repoPath(), repoName);
+    // Accept optional repositoryPath override (for installed addons in the installation directory)
+    idx = names.indexOf("repositoryPath");
+    string path;
+    if (idx >= 0)
+    {
+      path = values.at(idx);
+    }
+    else
+    {
+      path = joinPath(client.repoPath(), repoName);
+    }
     requestMapping.insert("repositoryPath", path);
     requestMapping.insert("fileContent", fileContent);
     requestMapping.insert("deleteFiles", deleteFiles);

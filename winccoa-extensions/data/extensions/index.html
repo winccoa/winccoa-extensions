@@ -163,7 +163,10 @@
       };
 
       // Create IX unregister confirmation modal with delete checkbox
-      window.ixShowUnregisterConfirm = async (repositoryName) => {
+      window.ixShowUnregisterConfirm = async (
+        repositoryName,
+        isInstalledAddon = false,
+      ) => {
         // Wait for IX components to be ready
         await waitForCustomElements();
 
@@ -213,6 +216,9 @@
 
           checkboxContainer.appendChild(checkbox);
           checkboxContainer.appendChild(checkboxLabel);
+          if (isInstalledAddon) {
+            checkboxContainer.style.display = "none";
+          }
           content.appendChild(checkboxContainer);
 
           // Create modal footer with buttons

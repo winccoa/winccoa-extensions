@@ -1041,8 +1041,10 @@ void removeManager(int manIdx)
 
         installedAddons.push({
           name: entry.name,
-          localPath: addonDir,
+          localPath: installDir,
+          fileContent: this.readWinCCOAPackageJson(addonDir),
           winccoaPackage: packageJson,
+          installedAddon: true,
           description: packageJson.Description || "",
           private: false,
           stars: 0,
