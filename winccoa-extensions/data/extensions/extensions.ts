@@ -2890,19 +2890,8 @@ export class ExtensionsUI {
           : "Subproject uninstalled successfully";
         this.showSuccess(successMsg);
 
-        // Remove ALL subproject names from registered projects (for multiple subprojects)
-        const packageData = repositoryBeingUnregistered.localWinccoaPackage;
-        if (packageData) {
-          const subprojects = this.getSubprojects(packageData);
-          for (const sp of subprojects) {
-            if (sp.Name) {
-              const index = this.registeredProjects.indexOf(sp.Name);
-              if (index > -1) {
-                this.registeredProjects.splice(index, 1);
-              }
-            }
-          }
-        }
+        // Re-sync registered projects list from backend
+        await this.loadRegisteredProjects();
 
         // Reload local repositories if not deleted (to update version info)
         if (!deleteFiles) {
