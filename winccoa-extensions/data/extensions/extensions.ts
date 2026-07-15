@@ -972,7 +972,7 @@ export class ExtensionsUI {
         const statusClass = isRegistered
           ? "registered"
           : repo.installedAddon
-            ? "cloned"
+            ? "installed"
             : repo.cloned
               ? "cloned"
               : "";
@@ -1012,6 +1012,9 @@ export class ExtensionsUI {
                         ${repo.description || "No description available"}
                     </div>
                     <div class="repository-item-meta">
+                        ${
+                          !repo.installedAddon
+                            ? `
                         <div class="repository-item-meta-item">
                             <ix-icon name="star-filled" size="12"></ix-icon>
                             <span>${repo.stars !== undefined && repo.stars !== null ? repo.stars : "N/A"}&nbsp;${repo.stars !== 1 ? "stars" : "star"}</span>
@@ -1020,6 +1023,9 @@ export class ExtensionsUI {
                             <ix-icon name="split" size="12"></ix-icon>
                             <span>${repo.forks !== undefined && repo.forks !== null ? repo.forks : "N/A"}&nbsp;${repo.forks !== 1 ? "forks" : "fork"}</span>
                         </div>
+                        `
+                            : ""
+                        }
                         <div class="repository-item-meta-item" title="Last updated: ${this.formatExactDate(repo.updatedAt)}">
                             <ix-icon name="clock" size="12"></ix-icon>
                             <span>${this.formatRelativeTime(repo.updatedAt)}</span>
@@ -1240,6 +1246,12 @@ export class ExtensionsUI {
         repo.forks !== undefined && repo.forks !== null ? repo.forks : "N/A";
       repoForksText.textContent = `${forksValue} ${repo.forks !== 1 ? "forks" : "fork"}`;
     }
+
+    // Hide stars/forks pills for installed addons
+    const repoStars = document.getElementById("repo-stars");
+    const repoForks = document.getElementById("repo-forks");
+    if (repoStars) repoStars.style.display = repo.installedAddon ? "none" : "";
+    if (repoForks) repoForks.style.display = repo.installedAddon ? "none" : "";
 
     // Update overview tab
     const repoSize = document.getElementById("repo-size");
@@ -1628,6 +1640,10 @@ export class ExtensionsUI {
       statusPill.setAttribute("variant", "success");
       statusPill.setAttribute("icon", "success");
       statusPill.innerHTML = `Registered as subproject`;
+    } else if (repo.installedAddon) {
+      statusPill.setAttribute("variant", "info");
+      statusPill.setAttribute("icon", "download");
+      statusPill.innerHTML = `In installation directory`;
     } else if (isCloned) {
       statusPill.setAttribute("variant", "info");
       statusPill.setAttribute("icon", "download");
@@ -2555,7 +2571,10 @@ export class ExtensionsUI {
     const repositoryBeingRegistered = this.currentRepository;
 
     // If repository is not cloned and not an installed addon, clone it first
-    if (!repositoryBeingRegistered.cloned && !repositoryBeingRegistered.localPath) {
+    if (
+      !repositoryBeingRegistered.cloned &&
+      !repositoryBeingRegistered.localPath
+    ) {
       // Show the clone modal with path confirmation
       const cloneSuccess = await this.cloneForRegistration(
         repositoryBeingRegistered,
@@ -2795,7 +2814,10 @@ export class ExtensionsUI {
     }
 
     // Check if repository is cloned or is an installed addon
-    if (!repositoryBeingUnregistered.cloned && !repositoryBeingUnregistered.localPath) {
+    if (
+      !repositoryBeingUnregistered.cloned &&
+      !repositoryBeingUnregistered.localPath
+    ) {
       this.showError("Cannot uninstall: Repository is not downloaded.");
       return;
     }

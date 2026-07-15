@@ -1028,7 +1028,10 @@ void removeManager(int manIdx)
         const packageJson = JSON.parse(fileContent);
 
         // Check OA version compatibility if specified
-        if (packageJson.OaVersion && !this.isVersionCompatible(packageJson.OaVersion)) {
+        if (
+          packageJson.OaVersion &&
+          !this.isVersionCompatible(packageJson.OaVersion)
+        ) {
           winccoa.logDebugF(
             "addonHandler",
             `[listInstalledAddons] Skipping ${entry.name}: requires OaVersion ${packageJson.OaVersion}, current is ${this._oaVersion}`,

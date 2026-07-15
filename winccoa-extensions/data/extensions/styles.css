@@ -208,6 +208,10 @@ ix-menu ix-menu-item ix-icon {
   background-color: var(--theme-color-success);
 }
 
+.repository-status.installed {
+  background-color: var(--theme-color-primary);
+}
+
 /* Repository Details */
 .repository-details {
   flex: 1;
