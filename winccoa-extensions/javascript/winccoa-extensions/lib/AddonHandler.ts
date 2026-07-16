@@ -1417,7 +1417,7 @@ void removeManager(int manIdx)
           : [],
         Dplists: sp.Dplists || [],
         UpdateScripts: sp.UpdateScripts || [],
-        UnInstallScripts: sp.UninstallScripts || [],
+        UninstallScripts: sp.UninstallScripts || [],
       })),
       Dependencies: packageJson.Dependencies || [],
     };

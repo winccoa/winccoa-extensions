@@ -657,7 +657,7 @@ export class ExtensionsUI {
           Managers: packageData.Managers,
           Dplists: packageData.Dplists,
           UpdateScripts: packageData.UpdateScripts,
-          UnInstallScripts: packageData.UnInstallScripts,
+          UninstallScripts: packageData.UninstallScripts,
         },
       ];
     }
@@ -971,10 +971,10 @@ export class ExtensionsUI {
       const bIsRegistered = this.registeredProjects.includes(
         this.getRepositoryIdentifier(b),
       );
-      
+
       // Both `cloned` and `installedAddon` are typed as boolean | undefined, so the below
       // expression could return undefined if both are undefined, the !! coerces to a definite
-      // boolean (undefined -> false, true -> true, ...) 
+      // boolean (undefined -> false, true -> true, ...)
       const aIsClonedOrInstalled = !!(a.cloned || a.installedAddon);
       const bIsClonedOrInstalled = !!(b.cloned || b.installedAddon);
 
@@ -2206,18 +2206,18 @@ export class ExtensionsUI {
                 </div>`;
     }
 
-    // UnInstall Scripts Card
+    // Uninstall Scripts Card
     if (
-      subproject.UnInstallScripts &&
-      Array.isArray(subproject.UnInstallScripts) &&
-      subproject.UnInstallScripts.length > 0
+      subproject.UninstallScripts &&
+      Array.isArray(subproject.UninstallScripts) &&
+      subproject.UninstallScripts.length > 0
     ) {
       html += `
                 <div class="overview-card">
-                    <h4>Uninstall Scripts (${subproject.UnInstallScripts.length})</h4>
+                    <h4>Uninstall Scripts (${subproject.UninstallScripts.length})</h4>
                     <div style="display: flex; flex-direction: column; gap: 8px;">
             `;
-      subproject.UnInstallScripts.forEach((script: string) => {
+      subproject.UninstallScripts.forEach((script: string) => {
         html += `
                         <div style="display: flex; align-items: center; gap: 8px; color: var(--theme-color-std-text);">
                             <ix-icon name="trashcan" size="16" style="color: var(--theme-color-alarm);"></ix-icon>
