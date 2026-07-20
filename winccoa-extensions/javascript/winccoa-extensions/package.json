@@ -11,18 +11,16 @@
   "license": "MIT",
   "dependencies": {
     "@octokit/rest": "22.0.1",
-    "octokit": "5.0.5",
     "simple-git": "3.36.0"
   },
   "devDependencies": {
-    "@types/eslint__js": "8.42.3",
-    "@types/node": "22.20.1",
+    "@types/node": "22.20.0",
     "@types/winccoa-manager": "C:/Program Files/Siemens/WinCC_OA/3.21/javascript/@types/winccoa-manager",
-    "@typescript-eslint/eslint-plugin": "8.11.0",
-    "@typescript-eslint/parser": "8.11.0",
-    "eslint": "9.39.5",
+    "@typescript-eslint/eslint-plugin": "8.13.0",
+    "@typescript-eslint/parser": "8.13.0",
+    "eslint": "9.39.4",
     "prettier": "3.3.3",
-    "typescript-eslint": "8.11.0"
+    "typescript-eslint": "8.13.0"
   },
   "scripts": {
     "build": "npm run format && npx tsc",
