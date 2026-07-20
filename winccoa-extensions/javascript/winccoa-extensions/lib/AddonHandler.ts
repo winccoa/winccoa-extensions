@@ -849,10 +849,7 @@ void removeManager(int manIdx)
           `Manager ${manager.Name} with options "${manager.Options}" will be removed`,
         );
         // eslint-disable-next-line no-await-in-loop
-        await this.removeManagerByNameAndOptions(
-          manager.Name,
-          manager.Options,
-        );
+        await this.removeManagerByNameAndOptions(manager.Name, manager.Options);
       }
     }
 
