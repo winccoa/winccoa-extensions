@@ -131,6 +131,10 @@ Every installable extension repository must contain a `package.winccoa.json` fil
 
       "UninstallScripts": [
         "uninstall.ctl"
+      ],
+
+      "DbUpdateScrips": [
+        "dbUpdate.ctl"
       ]
     }
   ]
@@ -157,6 +161,7 @@ Every installable extension repository must contain a `package.winccoa.json` fil
 | `Subprojects[].Dplists` | No | ASCII data point list files imported using the AsciiManager. |
 | `Subprojects[].UpdateScripts` | No | Control scripts executed after the add-on has been updated. |
 | `Subprojects[].UninstallScripts` | No | Control scripts executed when the add-on is removed. |
+| `Subprojects[].DbUpdateScripts` | No | Control scripts executed when the javascript manager, launching the index.js file, is started. |
 
 ### Example
 
@@ -190,6 +195,10 @@ Every installable extension repository must contain a `package.winccoa.json` fil
       ],
       "UninstallScripts": [
         "uninstall.ctl"
+      ],
+      "DbUpdateScripts": [
+        "dbUpdate_1.ctl",
+        "dbUpdate_2.ctl",
       ]
     }
   ]
@@ -266,118 +275,6 @@ Authentication is configured in `config/extensions.config.json`:
      - `"Token authentication configured but no GitHub token found"` - Token not found
      - `"No authentication methods configured - using public access only"` - No auth configured
 
-## Add-on Manifest (`package.winccoa.json`)
-
-Every installable extension repository must contain a `package.winccoa.json` file in its repository root. This manifest describes the add-on metadata, compatibility, dependencies, and any WinCC OA subprojects that should be registered during installation.
-
-### Schema
-
-```jsonc
-{
-  // ── Required fields ──────────────────────────────────────────
-  "RepoName": "my-extension",        // Display name of the add-on
-  "Version": "1.0.0",                // Semantic version
-  "Description": "Does something",  // Human-readable description
-  "OaVersion": "2025 SP1",           // Compatible WinCC OA version
-
-  // ── Optional fields ──────────────────────────────────────────
-  "Keywords": ["scada", "hmi"],
-
-  "Dependencies": [
-    "https://github.com/org/dep-repo.git"
-  ],
-
-  "Subprojects": [
-    {
-      // Required
-      "Name": "my-subproject",
-
-      // Optional
-      "Description": "Subproject description",
-
-      "Managers": [
-        {
-          "Name": "ManagerName",
-          "StartMode": "always",
-          "Options": "-option1 -option2",
-          "RestartOnUpdate": true
-        }
-      ],
-
-      "Dplists": [
-        "dplist.ascii"
-      ],
-
-      "UpdateScripts": [
-        "update.ctl"
-      ],
-
-      "UninstallScripts": [
-        "uninstall.ctl"
-      ]
-    }
-  ]
-}
-```
-
-### Field Reference
-
-| Field | Required | Description |
-|--------|----------|-------------|
-| `RepoName` | Yes | Display name shown in the Extensions UI. |
-| `Version` | Yes | Add-on version used for display and update detection. |
-| `Description` | Yes | Short human-readable description of the add-on. |
-| `OaVersion` | Yes | Target WinCC OA version. Add-ons targeting incompatible versions are filtered out. |
-| `Keywords` | No | Tags used for searching and filtering in the Extensions UI. Defaults to an empty array. |
-| `Dependencies` | No | List of Git repository URLs that are cloned and installed recursively. Each dependency repository must also contain its own `package.winccoa.json`. |
-| `Subprojects[].Name` | Yes | Name used when registering the WinCC OA subproject. |
-| `Subprojects[].Description` | No | Description of the subproject. |
-| `Subprojects[].Managers` | No | Manager processes that should be registered for the subproject. |
-| `Subprojects[].Managers[].Name` | Yes | Name of the manager process. |
-| `Subprojects[].Managers[].StartMode` | No | Manager start mode. Supported values are `"always"`, `"manual"`, `"once"`, or `""`. |
-| `Subprojects[].Managers[].Options` | No | Command-line options passed to the manager. |
-| `Subprojects[].Managers[].RestartOnUpdate` | No | Whether the manager should automatically restart after an update. Defaults to `true`. |
-| `Subprojects[].Dplists` | No | ASCII data point list files imported using the AsciiManager. |
-| `Subprojects[].UpdateScripts` | No | Control scripts execute during a git pull (triggered by the `Update` button), but only when the package is updated to a higher version. |
-| `Subprojects[].UninstallScripts` | No | Control scripts executed when the add-on is removed. |
-
-### Example
-
-```json
-{
-  "RepoName": "NTCIP",
-  "Keywords": [
-    "NTCIP"
-  ],
-  "Version": "1.0.0",
-  "Description": "NTCIP",
-  "OaVersions": "^3.20.0",
-  "Subprojects": [
-    {
-      "Name": "NTCIPGateway_3.21",
-      "Description": "NTCIP",
-      "Managers": [
-        {
-          "Name": "WCCOAntcipgw",
-          "StartMode": "always",
-          "RestartOnUpdate": true
-        }
-      ],
-      "Dplists": [
-        "NTCIPGateway.dpl"
-      ]
-    }
-  ]
-}
-```
-
-### Notes
-
-- `RepoName`, `Version`, `Description`, and `OaVersion` are mandatory for every add-on.
-- All dependency repositories must also provide a valid `package.winccoa.json`.
-- Dependencies are installed recursively before the parent add-on.
-- Repositories targeting an incompatible `OaVersion` are not shown in the Extensions UI.
-- Omitting optional arrays (`Keywords`, `Dependencies`, `Subprojects`, `Dplists`, etc.) is equivalent to providing empty arrays.
 ## Features
 
 - Browse add-ons (from npm/GitHub registry)
