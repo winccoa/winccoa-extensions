@@ -2196,6 +2196,7 @@ void removeManager(int manIdx)
         const fileExtension = path.extname(scriptFile).toLowerCase();
 
         switch (fileExtension) {
+          case ".ctc":
           case ".ctl":
             // For .ctl files, use WCCOActrl manager
             await this.startManagers(repositoryPath, [
