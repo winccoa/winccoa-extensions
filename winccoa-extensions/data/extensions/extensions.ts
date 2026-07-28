@@ -658,6 +658,7 @@ export class ExtensionsUI {
           Dplists: packageData.Dplists,
           UpdateScripts: packageData.UpdateScripts,
           UninstallScripts: packageData.UninstallScripts,
+          DbUpdateScripts: packageData.DbUpdateScripts,
         },
       ];
     }
@@ -2221,6 +2222,30 @@ export class ExtensionsUI {
         html += `
                         <div style="display: flex; align-items: center; gap: 8px; color: var(--theme-color-std-text);">
                             <ix-icon name="trashcan" size="16" style="color: var(--theme-color-alarm);"></ix-icon>
+                            <span>${script}</span>
+                        </div>
+                `;
+      });
+      html += `
+                    </div>
+                </div>`;
+    }
+
+    // DbUpdateScripts Card
+    if (
+      subproject.DbUpdateScripts &&
+      Array.isArray(subproject.DbUpdateScripts) &&
+      subproject.DbUpdateScripts.length > 0
+    ) {
+      html += `
+                <div class="overview-card">
+                    <h4>DB Update Scripts (${subproject.DbUpdateScripts.length})</h4>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+            `;
+      subproject.DbUpdateScripts.forEach((script: string) => {
+        html += `
+                        <div style="display: flex; align-items: center; gap: 8px; color: var(--theme-color-std-text);">
+                            <ix-icon name="database" size="16" style="color: var(--theme-color-primary);"></ix-icon>
                             <span>${script}</span>
                         </div>
                 `;

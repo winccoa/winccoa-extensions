@@ -45,6 +45,19 @@ export class ExtensionsService extends Vrpc.ServiceBase {
   }
 
   /**
+   * Run one-time startup tasks after the service is fully initialized.
+   * Currently executes DbUpdateScripts for all registered extensions.
+   */
+  public async runStartupTasks(): Promise<void> {
+    try {
+      await this._addonHandler.executeStartupDbUpdateScripts();
+    } catch (error) {
+      winccoa.logWarning("Startup tasks encountered an error:", error);
+      // Non-fatal: startup tasks should not prevent the service from running
+    }
+  }
+
+  /**
    * Parse JSON fileContent and map to AddonConfig
    * @param fileContent JSON string from package.winccoa.json
    * @returns AddonConfig object

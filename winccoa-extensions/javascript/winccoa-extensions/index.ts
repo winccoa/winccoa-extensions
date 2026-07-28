@@ -13,6 +13,9 @@ async function main() {
     await container.startAllServices();
 
     winccoa.logInfo("Extensions Service created and registered successfully");
+
+    // Run startup tasks (e.g., DbUpdateScripts for all registered extensions)
+    await extensionsService.runStartupTasks();
   } catch (error) {
     winccoa.logSevere("Failed to start Extensions Service:", error);
   }

@@ -5,6 +5,7 @@ interface SubprojectConfig {
   Dplists?: string[];
   UpdateScripts?: string[];
   UninstallScripts?: string[];
+  DbUpdateScripts?: string[];
 }
 
 interface AddonConfig {

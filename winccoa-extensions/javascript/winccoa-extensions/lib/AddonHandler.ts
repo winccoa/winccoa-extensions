@@ -33,6 +33,16 @@ export interface PmonCredentials {
 export { AddonHandler };
 
 /**
+ * Unified representation of a discovered addon (local or installed),
+ * used by startup tasks to iterate over all registered extensions.
+ */
+interface AddonDiscovery {
+  name: string;
+  addonDir: string;
+  config: AddonConfig;
+}
+
+/**
  * WinCC OA Addon Handler for managing GitHub repositories
  *
  * SECURE AUTHENTICATION:
@@ -1418,6 +1428,7 @@ void removeManager(int manIdx)
         Dplists: sp.Dplists || [],
         UpdateScripts: sp.UpdateScripts || [],
         UninstallScripts: sp.UninstallScripts || [],
+        DbUpdateScripts: sp.DbUpdateScripts || [],
       })),
       Dependencies: packageJson.Dependencies || [],
     };
@@ -2221,6 +2232,125 @@ void removeManager(int manIdx)
     }
 
     winccoa.logDebugF("addonHandler", "All update scripts have been processed");
+  }
+
+  /**
+   * Discover all addons from both the local project directory and the
+   * WinCC OA installation directory, returning a unified list.
+   * Local addons take precedence; installed addons that already exist
+   * in the project directory are skipped by listInstalledAddons().
+   */
+  private async _discoverAllAddons(): Promise<AddonDiscovery[]> {
+    const discovered: AddonDiscovery[] = [];
+
+    // 1. Local addons (cloned repos in the project directory)
+    const localAddons = await this.listLocalAddons();
+    for (const local of localAddons) {
+      const addonDir = path.join(this._defaultDirectory, local.addon);
+      try {
+        const config = this.mapPackageJsonToAddonConfig(local.fileContent);
+        discovered.push({ name: local.addon, addonDir, config });
+      } catch (error) {
+        winccoa.logWarning(
+          `Failed to parse config for local addon ${local.addon}:`,
+          error,
+        );
+      }
+    }
+
+    // 2. Installed addons (WinCC OA installation directory, duplicates excluded)
+    const installedAddons = await this.listInstalledAddons();
+    for (const installed of installedAddons) {
+      const inst = installed as any;
+      const addonDir = path.join(inst.localPath, inst.name);
+      try {
+        const config = this.mapPackageJsonToAddonConfig(inst.winccoaPackage);
+        discovered.push({ name: inst.name, addonDir, config });
+      } catch (error) {
+        winccoa.logWarning(
+          `Failed to parse config for installed addon ${inst.name}:`,
+          error,
+        );
+      }
+    }
+
+    return discovered;
+  }
+
+  /**
+   * Execute all DbUpdateScripts defined in package.winccoa.json for every
+   * registered extension (local and installed). This is intended to run once
+   * on manager startup so that database migrations or schema updates are
+   * applied before the system accepts normal operations.
+   *
+   * Execution reuses the existing executeScripts() dispatcher which handles
+   * .ctl, .ts, and .js files identically to UpdateScripts. A 5-minute
+   * timeout per subproject prevents runaway scripts from blocking startup.
+   * Errors are logged but do NOT prevent the service from starting.
+   */
+  async executeStartupDbUpdateScripts(): Promise<void> {
+    winccoa.logInfo(
+      "Executing startup DbUpdateScripts for all registered extensions...",
+    );
+
+    const addons = await this._discoverAllAddons();
+
+    for (const addon of addons) {
+      for (const subproject of addon.config.Subprojects) {
+        if (
+          !subproject.DbUpdateScripts ||
+          subproject.DbUpdateScripts.length === 0
+        ) {
+          continue;
+        }
+
+        winccoa.logInfo(
+          `Running ${subproject.DbUpdateScripts.length} DbUpdateScript(s) for ${addon.name}/${subproject.Name}...`,
+        );
+
+        // 5-minute timeout per subproject, consistent with UpdateScripts
+        const timeoutPromise = new Promise<void>((_, reject) => {
+          setTimeout(
+            () => {
+              reject(
+                new Error(
+                  "DbUpdateScripts execution timed out after 5 minutes",
+                ),
+              );
+            },
+            5 * 60 * 1000,
+          );
+        });
+
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          await Promise.race([
+            this.executeScripts(
+              path.join(addon.addonDir, subproject.Name),
+              subproject.DbUpdateScripts,
+            ),
+            timeoutPromise,
+          ]);
+          winccoa.logInfo(
+            `DbUpdateScripts for ${addon.name}/${subproject.Name} completed successfully`,
+          );
+        } catch (error) {
+          if (error instanceof Error && error.message.includes("timed out")) {
+            winccoa.logWarning(
+              `DbUpdateScripts execution for ${addon.name}/${subproject.Name} timed out after 5 minutes`,
+            );
+          } else {
+            winccoa.logWarning(
+              `Error executing DbUpdateScripts for ${addon.name}/${subproject.Name}:`,
+              error,
+            );
+          }
+          // Non-fatal: continue with remaining addons and subprojects
+        }
+      }
+    }
+
+    winccoa.logInfo("Startup DbUpdateScripts execution completed.");
   }
 
   public async startManagers(
