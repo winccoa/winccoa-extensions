@@ -2305,8 +2305,13 @@ void removeManager(int manIdx)
           continue;
         }
 
+        const displayName =
+          addon.name === subproject.Name
+            ? addon.name
+            : `${addon.name}/${subproject.Name}`;
+
         winccoa.logInfo(
-          `Running ${subproject.DbUpdateScripts.length} DbUpdateScript(s) for ${addon.name}/${subproject.Name}...`,
+          `Running ${subproject.DbUpdateScripts.length} DbUpdateScript(s) for ${displayName}...`,
         );
 
         // 5-minute timeout per subproject, consistent with UpdateScripts
@@ -2333,16 +2338,16 @@ void removeManager(int manIdx)
             timeoutPromise,
           ]);
           winccoa.logInfo(
-            `DbUpdateScripts for ${addon.name}/${subproject.Name} completed successfully`,
+            `DbUpdateScripts for ${displayName} completed successfully`,
           );
         } catch (error) {
           if (error instanceof Error && error.message.includes("timed out")) {
             winccoa.logWarning(
-              `DbUpdateScripts execution for ${addon.name}/${subproject.Name} timed out after 5 minutes`,
+              `DbUpdateScripts execution for ${displayName} timed out after 5 minutes`,
             );
           } else {
             winccoa.logWarning(
-              `Error executing DbUpdateScripts for ${addon.name}/${subproject.Name}:`,
+              `Error executing DbUpdateScripts for ${displayName}:`,
               error,
             );
           }
