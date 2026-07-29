@@ -2182,10 +2182,24 @@ void removeManager(int manIdx)
   }
 
   /**
+   * Resolve a script file to its quoted, full-path form.
+   * Checks whether the script exists under the given subdirectory of
+   * repositoryPath; if not, falls back to the bare filename (for scripts
+   * resolved by the manager from well-known directories).
+   */
+  private resolveScriptPath(
+    repositoryPath: string,
+    subDir: string,
+    scriptFile: string,
+  ): string {
+    const fullPath = path.join(repositoryPath, subDir, scriptFile);
+    return '"' + (fs.existsSync(fullPath) ? fullPath : scriptFile) + '"';
+  }
+
+  /**
    * Execute scripts based on their file extensions
    * @param repositoryPath The path to the repository
    * @param scripts Array of script filenames
-   * @param scriptType Type of scripts being executed (for logging)
    */
   private async executeScripts(
     repositoryPath: string,
@@ -2195,53 +2209,37 @@ void removeManager(int manIdx)
       try {
         const fileExtension = path.extname(scriptFile).toLowerCase();
 
-        // Resolve full path to avoid ambiguity when multiple subprojects
-        // share script filenames.  Fall back to the bare filename when the
-        // file does not exist at the full path (e.g. scripts resolved by
-        // the manager itself from well-known directories).
-        var fullPath;
-        var resolvedScript;
-
         switch (fileExtension) {
           case ".ctc":
           case ".ctl":
-            fullPath = path.join(repositoryPath, "scripts", scriptFile);
-            resolvedScript = fs.existsSync(fullPath) ? fullPath : scriptFile;
-            // For .ctl files, use WCCOActrl manager
             await this.startManagers(repositoryPath, [
               {
                 exeName: "WCCOActrl",
-                startParams: resolvedScript,
+                startParams: this.resolveScriptPath(
+                  repositoryPath,
+                  "scripts",
+                  scriptFile,
+                ),
               },
             ]);
             break;
 
-          case ".ts":
-            fullPath = path.join(repositoryPath, "javascript", scriptFile);
-            resolvedScript = fs.existsSync(fullPath) ? fullPath : scriptFile;
-            // For .ts files, build TypeScript project and execute the transpiled JS file
+          case ".ts": {
+            const resolvedScript = this.resolveScriptPath(
+              repositoryPath,
+              "javascript",
+              scriptFile,
+            );
             await NodeInstaller.installAndBuild(repositoryPath);
-
-            // Execute the transpiled JavaScript file
-            const jsScriptFile = resolvedScript.replace(/\.ts$/, ".js");
-            await this.startWinCCOAnodeManager(jsScriptFile);
+            await this.startWinCCOAnodeManager(
+              resolvedScript.replace(/\.ts$/, ".js"),
+            );
             break;
+          }
 
           case ".js":
-            fullPath = path.join(repositoryPath, "javascript", scriptFile);
-            resolvedScript = fs.existsSync(fullPath) ? fullPath : scriptFile;
-            // For .js files, execute with Node.js using WinCC OA bootstrap
-            winccoa.logInfo(
-              "--- In .js branch trying to execute " + resolvedScript,
-            );
-            await this.startWinCCOAnodeManager(resolvedScript);
-            winccoa.logInfo(
-              "--- JS executed " +
-                resolvedScript +
-                " - " +
-                repositoryPath +
-                " - " +
-                fullPath,
+            await this.startWinCCOAnodeManager(
+              this.resolveScriptPath(repositoryPath, "javascript", scriptFile),
             );
             break;
 
