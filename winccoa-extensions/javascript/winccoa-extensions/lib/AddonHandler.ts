@@ -2303,8 +2303,7 @@ void removeManager(int manIdx)
   /**
    * Execute all DbUpdateScripts defined in package.winccoa.json for every
    * registered extension (local and installed). This is intended to run once
-   * on manager startup so that database migrations or schema updates are
-   * applied before the system accepts normal operations.
+   * on manager startup.
    *
    * Execution reuses the existing executeScripts() dispatcher which handles
    * .ctl, .ts, and .js files identically to UpdateScripts. A 5-minute
@@ -2317,6 +2316,7 @@ void removeManager(int manIdx)
     );
 
     const addons = await this._discoverAllAddons();
+    const registeredSubProjects = new Set(await this.listSubProjects());
 
     for (const addon of addons) {
       for (const subproject of addon.config.Subprojects) {
@@ -2324,6 +2324,10 @@ void removeManager(int manIdx)
           !subproject.DbUpdateScripts ||
           subproject.DbUpdateScripts.length === 0
         ) {
+          continue;
+        }
+
+        if (!registeredSubProjects.has(subproject.Name)) {
           continue;
         }
 
