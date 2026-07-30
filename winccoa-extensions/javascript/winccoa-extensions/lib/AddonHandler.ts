@@ -564,8 +564,17 @@ string getProjectName()
 
 int registerSubProj(string path, string projName)
 {
-  int ret = paRegProj(projName, path, "", 0, true);
-  DebugTN("------- CTRL", path, projName, ret);
+  int ret;
+  if (paCheckProj(projName, 4 /* PA_IS_PROJ_REGISTERED */) == 0) 
+  {
+    ret = 0;
+    DebugTN("------- CTRL (Already registered)", path, projName, ret);
+  } 
+  else 
+  {
+    ret = paRegProj(projName, path, "", 0, true);
+    DebugTN("------- CTRL", path, projName, ret);
+  }
 
   if (ret < 0)
   {
@@ -747,12 +756,20 @@ void removeManager(int manIdx)
               "addonHandler",
               `Registering dependency subproject: ${subproject.Name}`,
             );
-            await this.registerSubProject(
+
+            let ret = await this.registerSubProject(
               cloneResult.path,
               subproject.Name,
               subproject,
               session,
             );
+
+            if (ret < 0) {
+              winccoa.logDebugF(
+                "addonHandler",
+                `Registering subproject: ${subproject.Name} has failed.`,
+              );
+            }
           }
         } else {
           winccoa.logDebugF(
@@ -790,6 +807,10 @@ void removeManager(int manIdx)
       [repoPath, projectName],
       [WinccoaCtrlType.string, WinccoaCtrlType.string],
     )) as number;
+
+    if (ret < 0) {
+      return ret;
+    }
 
     await NodeInstaller.installAndBuild(path.join(repoPath, projectName));
 
