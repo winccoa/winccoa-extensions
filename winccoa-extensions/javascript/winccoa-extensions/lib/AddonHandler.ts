@@ -593,10 +593,9 @@ int registerSubProj(string path, string projName)
   return ret;
 }
 
-int unregisterSubProj(string path, string projName, bool deleteFiles)
+int unregisterSubProj(string path, string projName, bool deleteFiles, bool remainRegistered)
 {
   dyn_string subProjects;
-
   DebugTN("------- CTRL", path, projName, deleteFiles);
 
   paGetSubProjs(PROJ, subProjects);
@@ -608,7 +607,13 @@ int unregisterSubProj(string path, string projName, bool deleteFiles)
     paSetSubProjs(PROJ, subProjects);
   }
 
-  return paDelProj(projName, deleteFiles);
+  if (!remainRegistered)
+  {
+    return paDelProj(projName, deleteFiles);
+  }
+    
+  // This project will remain a registered project
+  return 0;
 }
 
 dyn_string listSubProjs()
@@ -935,10 +940,19 @@ void removeManager(int manIdx)
       winccoa.logInfo("No uninstall scripts to execute");
     }
 
+    // Projects that come with the WINCCOA installtion should stay registered
+    let remainRegistered =
+      PathResolver.getInstallationPath(winccoa) === repoPath;
+
     const ret = (await this.ctrlScript.start(
       "unregisterSubProj",
-      [repoPath, projectName, deleteFiles],
-      [WinccoaCtrlType.string, WinccoaCtrlType.string, WinccoaCtrlType.bool],
+      [repoPath, projectName, deleteFiles, remainRegistered],
+      [
+        WinccoaCtrlType.string,
+        WinccoaCtrlType.string,
+        WinccoaCtrlType.bool,
+        WinccoaCtrlType.bool,
+      ],
     )) as number;
 
     // delete the whole cloned repository folder
