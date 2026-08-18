@@ -171,6 +171,9 @@ class ExtensionsEndpoints
     requestMapping.insert("repositoryPath", path);
     requestMapping.insert("fileContent", fileContent);
     requestMapping.insert("session", session);
+    // Used by the Extensions service to resolve the default subproject
+    // name of preinstalled addons (name of the addon's folder)
+    requestMapping.insert("repoName", repoName);
 
     bool success = client.registerSubProjects(requestMapping);
 
@@ -224,6 +227,9 @@ class ExtensionsEndpoints
     requestMapping.insert("repositoryPath", path);
     requestMapping.insert("fileContent", fileContent);
     requestMapping.insert("deleteFiles", deleteFiles);
+    // Used by the Extensions service to resolve the default subproject
+    // name of preinstalled addons (name of the addon's folder)
+    requestMapping.insert("repoName", repoName);
 
     bool success = client.unregisterSubProjects(requestMapping);
 

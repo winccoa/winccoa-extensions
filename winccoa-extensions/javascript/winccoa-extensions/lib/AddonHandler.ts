@@ -13,7 +13,11 @@ import { AsciiManager } from "./AsciiManager";
 import { CommandExecutor } from "./CommandExecutor";
 import { PathResolver } from "./PathResolver";
 import { NodeInstaller } from "./NodeInstaller";
-import { AddonConfig, SubprojectConfig } from "./AddonConfig";
+import {
+  AddonConfig,
+  SubprojectConfig,
+  NamedSubprojectConfig,
+} from "./AddonConfig";
 
 /**
  * Interface for manager configuration
@@ -743,6 +747,10 @@ void removeManager(int manIdx)
           JSON.parse(cloneResult.fileContent),
         );
 
+        // Dependencies always come from external sources, whose subprojects
+        // must define a name (a repository may contain multiple subprojects)
+        this.assertSubprojectNamesPresent(depConfig, depUrl);
+
         // Recursively process nested dependencies
         if (depConfig.Dependencies && depConfig.Dependencies.length > 0) {
           await this.processDependencies(
@@ -941,8 +949,7 @@ void removeManager(int manIdx)
     }
 
     // Projects that come with the WINCCOA installtion should stay registered
-    let remainRegistered =
-      PathResolver.getInstallationPath(winccoa) === repoPath;
+    let remainRegistered = this.isInstalledAddonPath(repoPath);
 
     const ret = (await this.ctrlScript.start(
       "unregisterSubProj",
@@ -1087,11 +1094,18 @@ void removeManager(int manIdx)
         // Get directory stats for timestamps
         const stats = fs.statSync(addonDir);
 
+        // Preinstalled addons are subprojects themselves: a subproject entry
+        // without a name defaults to the addon's folder name
+        const resolvedPackageJson = this.applyDefaultSubprojectName(
+          packageJson,
+          entry.name,
+        );
+
         installedAddons.push({
           name: entry.name,
           localPath: installDir,
-          fileContent: this.readWinCCOAPackageJson(addonDir),
-          winccoaPackage: packageJson,
+          fileContent: JSON.stringify(resolvedPackageJson, null, 2),
+          winccoaPackage: resolvedPackageJson,
           installedAddon: true,
           description: packageJson.Description || "",
           private: false,
@@ -1437,9 +1451,15 @@ void removeManager(int manIdx)
   /**
    * Map package.winccoa.json content to AddonConfig interface
    * @param packageJson Parsed package.winccoa.json content
+   * @param defaultSubprojectName Name used for subproject entries missing a
+   *   "Name" field (preinstalled addons in the WinCC OA installation
+   *   directory, where the name defaults to the addon's folder name)
    * @returns AddonConfig object
    */
-  mapPackageJsonToAddonConfig(packageJson: any): AddonConfig {
+  mapPackageJsonToAddonConfig(
+    packageJson: any,
+    defaultSubprojectName?: string,
+  ): AddonConfig {
     return {
       RepoName: packageJson.RepoName,
       Keywords: packageJson.Keywords || [],
@@ -1447,7 +1467,7 @@ void removeManager(int manIdx)
       Description: packageJson.Description,
       OaVersion: packageJson.OaVersion,
       Subprojects: (packageJson.Subprojects || []).map((sp: any) => ({
-        Name: sp.Name,
+        Name: sp.Name || defaultSubprojectName,
         Description: sp.Description,
         Managers: sp.Managers
           ? sp.Managers.map((manager: any) => ({
@@ -1467,6 +1487,70 @@ void removeManager(int manIdx)
       })),
       Dependencies: packageJson.Dependencies || [],
     };
+  }
+
+  /**
+   * Return a copy of the given package.winccoa.json content with the
+   * subproject name filled in from the given folder name for all subproject
+   * entries that have no "Name" set.
+   * Used for addons in the WinCC OA installation directory, where the addon's
+   * folder is the subproject itself and therefore always carries its name.
+   * @param packageJson Parsed package.winccoa.json content
+   * @param folderName Name of the folder containing the addon (the addon's name)
+   * @returns Copy of the package with missing subproject names filled in
+   */
+  public applyDefaultSubprojectName(packageJson: any, folderName: string): any {
+    if (!packageJson || !Array.isArray(packageJson.Subprojects)) {
+      return packageJson;
+    }
+    return {
+      ...packageJson,
+      Subprojects: packageJson.Subprojects.map((sp: any) =>
+        sp && !sp.Name ? { ...sp, Name: folderName } : sp,
+      ),
+    };
+  }
+
+  /**
+   * Check whether the given path points to the root of the WinCC OA
+   * installation. Preinstalled addons (located directly in the installation
+   * directory) are registered with the installation directory as their
+   * repository path.
+   * @param repositoryPath Path to compare against the installation directory
+   * @returns True if the path is the WinCC OA installation directory
+   */
+  public isInstalledAddonPath(repositoryPath: string): boolean {
+    if (!repositoryPath) {
+      return false;
+    }
+    const installDir = getWinCCOAInstallDir(winccoa);
+    if (!installDir) {
+      return false;
+    }
+    return path.resolve(repositoryPath) === path.resolve(installDir);
+  }
+
+  /**
+   * Ensure that every subproject in the given addon config has a name set.
+   * Subprojects of addons from external sources (git repositories) must define
+   * a "Name", since a single repository may contain multiple subprojects.
+   * @param config Addon config to validate
+   * @param addonName Identifier (repo name, URL or path) used in the error message
+   */
+  public assertSubprojectNamesPresent(
+    config: AddonConfig,
+    addonName: string,
+  ): asserts config is AddonConfig & {
+    Subprojects: NamedSubprojectConfig[];
+  } {
+    for (const subproject of config.Subprojects) {
+      if (!subproject.Name) {
+        throw new Error(
+          `Subproject without a name found in package.winccoa.json of "${addonName}". ` +
+            `Subprojects of addons from external sources must define a "Name" field.`,
+        );
+      }
+    }
   }
 
   /**
@@ -1589,6 +1673,12 @@ void removeManager(int manIdx)
         const parsedPackage = JSON.parse(packageJsonContentBeforePull);
         updatedAddonConfigBeforePull =
           this.mapPackageJsonToAddonConfig(parsedPackage);
+        // Repositories pulled via git always come from external sources,
+        // whose subprojects must define a name
+        this.assertSubprojectNamesPresent(
+          updatedAddonConfigBeforePull,
+          repositoryPath,
+        );
       } catch (error) {
         winccoa.logWarning(
           "Could not read package.winccoa.json before pull:",
@@ -1634,6 +1724,9 @@ void removeManager(int manIdx)
         try {
           const parsedPackage = JSON.parse(packageJsonContent);
           updatedAddonConfig = this.mapPackageJsonToAddonConfig(parsedPackage);
+          // Repositories pulled via git always come from external sources,
+          // whose subprojects must define a name
+          this.assertSubprojectNamesPresent(updatedAddonConfig, repositoryPath);
 
           if (
             updatedAddonConfigBeforePull.Version &&
@@ -2322,7 +2415,12 @@ void removeManager(int manIdx)
       const inst = installed as any;
       const addonDir = path.join(inst.localPath, inst.name);
       try {
-        const config = this.mapPackageJsonToAddonConfig(inst.winccoaPackage);
+        // Preinstalled addons are subprojects themselves, so a subproject
+        // entry without a name defaults to the addon's folder name
+        const config = this.mapPackageJsonToAddonConfig(
+          inst.winccoaPackage,
+          inst.name,
+        );
         discovered.push({ name: inst.name, addonDir, config });
       } catch (error) {
         winccoa.logWarning(
@@ -2359,6 +2457,16 @@ void removeManager(int manIdx)
           !subproject.DbUpdateScripts ||
           subproject.DbUpdateScripts.length === 0
         ) {
+          continue;
+        }
+
+        // Subprojects without a name cannot be resolved in addons from
+        // external sources (preinstalled addons default their name to the
+        // addon's folder name during discovery)
+        if (!subproject.Name) {
+          winccoa.logWarning(
+            `[executeStartupDbUpdateScripts] Skipping subproject without a name in addon ${addon.name}`,
+          );
           continue;
         }
 
