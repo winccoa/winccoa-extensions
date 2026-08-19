@@ -674,6 +674,37 @@ export class ExtensionsUI {
   }
 
   /**
+   * Get the display name for a repository: the "RepoName" from
+   * package.winccoa.json when available, falling back to the repository name.
+   */
+  private getDisplayName(repo: Repository): string {
+    const candidates = [repo.localWinccoaPackage, (repo as any).winccoaPackage];
+
+    for (const candidate of candidates) {
+      if (!candidate) continue;
+
+      let packageData: any = candidate;
+      if (typeof candidate === "string") {
+        try {
+          packageData = JSON.parse(candidate);
+        } catch (e) {
+          continue;
+        }
+      }
+
+      if (
+        packageData &&
+        typeof packageData.RepoName === "string" &&
+        packageData.RepoName
+      ) {
+        return packageData.RepoName;
+      }
+    }
+
+    return repo.name;
+  }
+
+  /**
    * Load repositories from all predefined organizations
    */
   private async loadAllOrganizations(): Promise<void> {
@@ -1035,7 +1066,7 @@ export class ExtensionsUI {
                         : ""
                     }
                     <div class="repository-item-header">
-                        <div class="repository-item-name">${repo.name}</div>
+                        <div class="repository-item-name">${this.getDisplayName(repo)}</div>
                         <ix-pill class="repository-item-visibility" variant="outline" size="small">
                             <ix-icon name="${repo.private ? "lock" : "unlock"}" slot="start"></ix-icon>
                             ${repo.private ? "Private" : "Public"}
@@ -1133,6 +1164,7 @@ export class ExtensionsUI {
         const matchesSearch =
           !searchTerm ||
           repo.name.toLowerCase().includes(searchTerm) ||
+          this.getDisplayName(repo).toLowerCase().includes(searchTerm) ||
           (repo.description &&
             repo.description.toLowerCase().includes(searchTerm));
 
@@ -1243,7 +1275,7 @@ export class ExtensionsUI {
     const repoName = document.getElementById("repo-name");
     const repoDescription = document.getElementById("repo-description");
 
-    if (repoName) repoName.textContent = repo.name;
+    if (repoName) repoName.textContent = this.getDisplayName(repo);
     if (repoDescription)
       repoDescription.textContent =
         repo.description || "No description available";
@@ -2293,7 +2325,7 @@ export class ExtensionsUI {
       // Show confirmation dialog with the path
       const result = await window.ixShowMessage!({
         title: "Download Repository",
-        message: `Repository "${this.currentRepository.name}" will be downloaded to\n\n${fullClonePath}`,
+        message: `Repository "${this.getDisplayName(this.currentRepository)}" will be downloaded to\n\n${fullClonePath}`,
         actions: [
           {
             text: "Cancel",
@@ -2767,7 +2799,7 @@ export class ExtensionsUI {
       // Show confirmation dialog with the path
       const result = await window.ixShowMessage!({
         title: "Download Repository",
-        message: `Repository "${repository.name}" will be downloaded to\n\n${fullClonePath}`,
+        message: `Repository "${this.getDisplayName(repository)}" will be downloaded to\n\n${fullClonePath}`,
         actions: [
           {
             text: "Cancel",
@@ -2905,7 +2937,7 @@ export class ExtensionsUI {
 
     // Show confirmation modal with delete option
     const result = await window.ixShowUnregisterConfirm?.(
-      repositoryBeingUnregistered.name,
+      this.getDisplayName(repositoryBeingUnregistered),
       repositoryBeingUnregistered.installedAddon,
     );
 
@@ -3042,7 +3074,7 @@ export class ExtensionsUI {
 
     // Show confirmation modal
     const confirmed = await window.ixShowDeleteConfirm?.(
-      repositoryBeingDeleted.name,
+      this.getDisplayName(repositoryBeingDeleted),
     );
 
     // If user cancelled, return
