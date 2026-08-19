@@ -135,6 +135,13 @@ Every installable extension repository must contain a `package.winccoa.json` fil
 
       "DbUpdateScrips": [
         "dbUpdate.ctl"
+      ],
+
+      "DependentManagers": [
+        {
+          "Name": "WCCOAnodejs",
+          "Options": "ocpp/server.js"
+        }
       ]
     }
   ]
@@ -162,6 +169,9 @@ Every installable extension repository must contain a `package.winccoa.json` fil
 | `Subprojects[].UpdateScripts` | No | Control scripts executed after the add-on has been updated. |
 | `Subprojects[].UninstallScripts` | No | Control scripts executed when the add-on is removed. |
 | `Subprojects[].DbUpdateScripts` | No | Control scripts executed when the javascript manager, launching the index.js file, is started. |
+| `Subprojects[].DependentManagers` | No | Managers that are stopped before update/DB update scripts run and restarted afterwards. Managed automatically around `UpdateScripts` and `DbUpdateScripts`. |
+| `Subprojects[].DependentManagers[].Name` | Yes | Manager type/executable (component) to match. Only managers whose name matches exactly are affected. |
+| `Subprojects[].DependentManagers[].Options` | No | Optional glob pattern matched against the manager's start options (e.g. `"ocpp/*.js"`). If omitted, all managers of the given `Name` are affected. |
 
 ### Example
 
@@ -199,11 +209,41 @@ Every installable extension repository must contain a `package.winccoa.json` fil
       "DbUpdateScripts": [
         "dbUpdate_1.ctl",
         "dbUpdate_2.ctl",
+      ],
+      "DependentManagers": [
+        {
+          "Name": "WCCOAnodejs",
+          "Options": "ocpp/server.js"
+        }
       ]
     }
   ]
 }
 ```
+
+### Dependent Managers
+
+`DependentManagers` is an optional per-subproject list that tells the Extensions add-on which
+managers must be stopped before update scripts run and restarted afterwards. This is needed when
+an update changes data point types, configurations, etc. and a running manager would otherwise
+hold stale state, locks, or references.
+
+The cycle is performed automatically:
+
+1. **Startup (`DbUpdateScripts`)** — for every registered subproject that defines
+   `DependentManagers` and `DbUpdateScripts`, the matching managers are resolved, their
+   current start mode is remembered, they are set to `manual` and stopped, the
+   `DbUpdateScripts` are executed, and the managers are restored.
+2. **Explicit update (`UpdateScripts`)** — the same logic, but scoped to the current
+   subproject's manifest and using `UpdateScripts` instead of `DbUpdateScripts`. It uses the
+   pmon credentials of the session that triggered the update.
+
+Restoration always happens, even if the scripts fail or time out, so dependent managers are never
+left stopped. If the restored start mode is `once` or `always`, the manager is started again
+(`always` managers are additionally auto-restarted by pmon once their mode is set back).
+
+Matching is done against the running managers' start options using `patternMatch`. An entry with only
+`Name` affects every manager of that type; adding `Options` restricts the match.
 
 ### Notes
 
@@ -281,3 +321,4 @@ Authentication is configured in `config/extensions.config.json`:
 - Install add-on into project (download, verify, place into subproject folder, trigger import if needed)
 - Update add-on (version compare, changelog, safe restart if required)
 - Remove add-on (cleanup)
+- Automatically stop/restart dependent managers around update and DB update scripts
