@@ -564,6 +564,8 @@ class AddonHandler {
 #uses "classes/projectEnvironment/ProjEnvProject"
 #uses "pmon"
 
+public int gTcpFileDescriptor2 = -1;
+
 string getPmonPath()
 {
   string sPvssPath;
@@ -729,6 +731,33 @@ string getManagerStartMode(int manIdx)
   return startModeToString(opt.startMode);
 }
 
+bool startTcpConnection()
+{
+  string sHost;
+  int   iPort;
+  int   iErr = paGetProjHostPort(PROJ, sHost, iPort);
+  if (iErr)
+  {
+    pmon_warningOutput("errHostOrPort", -1);
+    return true;
+  }
+
+  if (gTcpFileDescriptor2 < 0)
+  {
+    gTcpFileDescriptor2 = tcpOpen(sHost, iPort);
+    return false;
+  }
+  return true;
+}
+
+void stopTcpConnection()
+{
+  if (gTcpFileDescriptor2 >= 0)
+  {
+    tcpClose(gTcpFileDescriptor2);
+  }
+}
+
 bool setManagerStartMode(int manPos, string startMode, string sUser, string sPassword)
 {
   string sHost;
@@ -748,7 +777,7 @@ bool setManagerStartMode(int manPos, string startMode, string sUser, string sPas
     " " + opt.resetStartCounter +
     " " + opt.startOptions;
   str = sUser + "#" + sPassword + "#" + str;
-  return pmon_command(str, sHost, iPort, false, true);
+  return pmon_command(str, sHost, iPort, false, false);
 }
 
 void stopManager(int manIdx)
@@ -2666,6 +2695,15 @@ void startManager(int manIdx)
     pmonPassword: string,
     fatalOnError: boolean,
   ): Promise<void> {
+    const hasFailed = (await this.ctrlScript.start(
+      "startTcpConnection",
+    )) as boolean;
+
+    if (hasFailed) {
+      winccoa.logWarning("Failed to start TCP connection");
+      return;
+    }
+
     const stopped = (
       await this.stopDependentManagers(
         dependentManagers,
@@ -2711,6 +2749,7 @@ void startManager(int manIdx)
       }
     } finally {
       await this.restoreDependentManagers(stopped, pmonUser, pmonPassword);
+      await this.ctrlScript.start("stopTcpConnection");
     }
 
     if (errors.length) {
