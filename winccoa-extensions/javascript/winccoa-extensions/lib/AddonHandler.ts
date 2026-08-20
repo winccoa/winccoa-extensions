@@ -17,6 +17,7 @@ import {
   AddonConfig,
   SubprojectConfig,
   NamedSubprojectConfig,
+  DependentManagerConfig,
 } from "./AddonConfig";
 
 /**
@@ -31,6 +32,22 @@ export interface PmonCredentials {
   session: string;
   user: string;
   password: string;
+}
+
+/**
+ * Snapshot of a dependent manager's options, taken before it is stopped so the
+ * manager can be restored afterwards.
+ */
+interface DependentManagerSnapshot {
+  manIdx: number;
+  originalStartMode: string;
+}
+
+/** A set of scripts to execute while the dependent managers are stopped */
+interface ScriptJob {
+  scriptDir: string;
+  scripts: string[];
+  label: string;
 }
 
 // Export the class for use in other modules
@@ -675,6 +692,75 @@ void removeManager(int manIdx)
   proj.changeManagerOptions(manIdx, startOptions);
   proj.stopManager(manIdx, 30);
   proj.deleteManager(manIdx);
+}
+
+string startModeToString(ProjEnvManagerStartMode mode)
+{
+  switch (mode)
+  {
+    case ProjEnvManagerStartMode::Unknown : return "unknown";
+    case ProjEnvManagerStartMode::Manual  : return "manual";
+    case ProjEnvManagerStartMode::Once    : return "once";
+    case ProjEnvManagerStartMode::Always  : return "always";
+    default                              : return "invalid";
+  }
+}
+
+dyn_int findDependentManagers(string name, string optionPattern)
+{
+  ProjEnvProject proj = new ProjEnvProject(PROJ);
+  dyn_anytype managerOptions = proj.getListOfManagerOptions();
+  dyn_int result;
+
+  for (int i = 0; i < dynlen(managerOptions); i++)
+  {
+    ProjEnvManagerOptions opt = managerOptions[i + 1];
+    if (opt.component != name) continue;
+    if (optionPattern != "" && !patternMatch(optionPattern, opt.startOptions)) continue;
+    result.append(i);
+  }
+  return result;
+}
+
+string getManagerStartMode(int manIdx)
+{
+  ProjEnvProject proj = new ProjEnvProject(PROJ);
+  ProjEnvManagerOptions opt = proj.getManagerOptions(manIdx);
+  return startModeToString(opt.startMode);
+}
+
+bool setManagerStartMode(int manPos, string startMode, string sUser, string sPassword)
+{
+  string sHost;
+  int   iPort;
+  int   iErr = paGetProjHostPort(PROJ, sHost, iPort);
+  if (iErr)
+  {
+    pmon_warningOutput("errHostOrPort", -1);
+    return true;
+  }
+  ProjEnvProject proj = new ProjEnvProject(PROJ);
+  ProjEnvManagerOptions opt = proj.getManagerOptions(manPos);
+  string str = "SINGLE_MGR:PROP_PUT " + manPos +
+    " " + startMode +
+    " " + opt.secondToKill +
+    " " + opt.restart +
+    " " + opt.resetStartCounter +
+    " " + opt.startOptions;
+  str = sUser + "#" + sPassword + "#" + str;
+  return pmon_command(str, sHost, iPort, false, true);
+}
+
+void stopManager(int manIdx)
+{
+  ProjEnvProject proj = new ProjEnvProject(PROJ);
+  proj.stopManager(manIdx, 30);
+}
+
+void startManager(int manIdx)
+{
+  ProjEnvProject proj = new ProjEnvProject(PROJ);
+  proj.startManager(manIdx);
 }
 
   `,
@@ -1484,6 +1570,12 @@ void removeManager(int manIdx)
         UpdateScripts: sp.UpdateScripts || [],
         UninstallScripts: sp.UninstallScripts || [],
         DbUpdateScripts: sp.DbUpdateScripts || [],
+        DependentManagers: sp.DependentManagers
+          ? sp.DependentManagers.map((dependentManager: any) => ({
+              Name: dependentManager.Name || "",
+              Options: dependentManager.Options || "",
+            }))
+          : [],
       })),
       Dependencies: packageJson.Dependencies || [],
     };
@@ -1789,77 +1881,61 @@ void removeManager(int manIdx)
               );
             }
 
-            // Process each subproject
-            for (const subproject of updatedAddonConfig.Subprojects) {
-              const subprojectBeforePull =
-                updatedAddonConfigBeforePull.Subprojects.find(
-                  (sp) => sp.Name === subproject.Name,
-                );
-              // Import dplist files if available
-              if (subproject.Dplists && subproject.Dplists.length > 0) {
-                await this.importAsciiFiles(
-                  subproject.Dplists,
-                  path.join(repositoryPath, subproject.Name, "dplist"),
-                );
-              }
+            const sessionCredentials = this.pmonCredentials.find(
+              (cred) => cred.session === session,
+            );
+            const pmonUser = sessionCredentials?.user || "";
+            const pmonPassword = sessionCredentials?.password || "";
 
-              // Execute update scripts if any
+            // Phase 1: stop all dependent managers of the current package, run all
+            // UpdateScripts, then restore all dependent managers. Errors are fatal after
+            // the managers have been restored.
+            const updateJobs: ScriptJob[] = [];
+            const allUpdateDependentManagers: DependentManagerConfig[] = [];
+            for (const subproject of updatedAddonConfig.Subprojects) {
               if (
                 subproject.UpdateScripts &&
                 subproject.UpdateScripts.length > 0
               ) {
                 winccoa.logDebugF(
                   "addonHandler",
-                  `Executing ${subproject.UpdateScripts.length} update script(s) for subproject ${subproject.Name}...`,
+                  `Collecting ${subproject.UpdateScripts.length} update script(s) for subproject ${subproject.Name}...`,
+                );
+                updateJobs.push({
+                  scriptDir: path.join(repositoryPath, subproject.Name),
+                  scripts: subproject.UpdateScripts,
+                  label: subproject.Name,
+                });
+                for (const dependentManager of subproject.DependentManagers ||
+                  []) {
+                  allUpdateDependentManagers.push(dependentManager);
+                }
+              }
+            }
+
+            if (updateJobs.length > 0) {
+              await this.runAllScriptsGuardedByManagers(
+                updateJobs,
+                allUpdateDependentManagers,
+                pmonUser,
+                pmonPassword,
+                true,
+              );
+            }
+
+            // Phase 2: post-process each subproject (dplist import, node build,
+            // manager creation/restart) after the guarded update scripts have finished.
+            for (const subproject of updatedAddonConfig.Subprojects) {
+              const subprojectBeforePull =
+                updatedAddonConfigBeforePull.Subprojects.find(
+                  (sp) => sp.Name === subproject.Name,
                 );
 
-                // Create a timeout promise that rejects after 5 minutes
-                const timeoutPromise = new Promise<void>((_, reject) => {
-                  setTimeout(
-                    () => {
-                      reject(
-                        new Error(
-                          "Update scripts execution timed out after 5 minutes",
-                        ),
-                      );
-                    },
-                    5 * 60 * 1000,
-                  ); // 5 minutes in milliseconds
-                });
-
-                // Race the execution against the timeout
-                try {
-                  // eslint-disable-next-line no-await-in-loop
-                  await Promise.race([
-                    this.executeScripts(
-                      path.join(repositoryPath, subproject.Name),
-                      subproject.UpdateScripts,
-                    ),
-                    timeoutPromise,
-                  ]);
-                  winccoa.logInfo(
-                    `Update scripts for ${subproject.Name} completed successfully`,
-                  );
-                } catch (error) {
-                  if (
-                    error instanceof Error &&
-                    error.message.includes("timed out")
-                  ) {
-                    winccoa.logWarning(
-                      `Update scripts execution for ${subproject.Name} timed out after 5 minutes`,
-                    );
-                  } else {
-                    winccoa.logWarning(
-                      `Error executing update scripts for ${subproject.Name}:`,
-                      error,
-                    );
-                  }
-                  throw error;
-                }
-              } else {
-                winccoa.logDebugF(
-                  "addonHandler",
-                  `No update scripts to execute for subproject ${subproject.Name}`,
+              // Import dplist files if available
+              if (subproject.Dplists && subproject.Dplists.length > 0) {
+                await this.importAsciiFiles(
+                  subproject.Dplists,
+                  path.join(repositoryPath, subproject.Name, "dplist"),
                 );
               }
 
@@ -1890,12 +1966,6 @@ void removeManager(int manIdx)
               }
 
               if (subproject.Managers) {
-                const sessionCredentials = this.pmonCredentials.find(
-                  (cred) => cred.session === session,
-                );
-                const pmonUser = sessionCredentials?.user || "";
-                const pmonPassword = sessionCredentials?.password || "";
-
                 for (const manager of subproject.Managers) {
                   // eslint-disable-next-line no-await-in-loop
                   const managerIdx = await this.ctrlScript.start(
@@ -2434,6 +2504,221 @@ void removeManager(int manIdx)
   }
 
   /**
+   * Stop all managers that match the given DependentManagers entries
+   * (exact "Name" match on the component, optional glob "Options" pattern on
+   * the start options). The previous manager options are stored so they can be
+   * restored later. Matching managers are set to manual start mode and stopped.
+   * @param dependentManagers DependentManagers configuration entries
+   * @param pmonUser pmon user for PROP_PUT commands (may be empty on startup)
+   * @param pmonPassword pmon password for PROP_PUT commands (may be empty on startup)
+   * @returns Snapshots of the managers that were stopped successfully
+   */
+  private async stopDependentManagers(
+    dependentManagers: DependentManagerConfig[] | undefined,
+    pmonUser: string,
+    pmonPassword: string,
+  ): Promise<DependentManagerSnapshot[]> {
+    const stopped: DependentManagerSnapshot[] = [];
+    const seen = new Set<number>();
+
+    if (!dependentManagers || dependentManagers.length === 0) {
+      return stopped;
+    }
+
+    for (const dependentManager of dependentManagers) {
+      if (!dependentManager.Name) {
+        continue;
+      }
+
+      // eslint-disable-next-line no-await-in-loop
+      const indices = (await this.ctrlScript.start(
+        "findDependentManagers",
+        [dependentManager.Name, dependentManager.Options || ""],
+        [WinccoaCtrlType.string, WinccoaCtrlType.string],
+      )) as number[];
+
+      for (const manIdx of indices || []) {
+        if (!Number.isInteger(manIdx) || seen.has(manIdx)) {
+          continue;
+        }
+        seen.add(manIdx);
+
+        try {
+          // Store the previous start mode before changing it, so it can be
+          // restored after the scripts have run.
+          // eslint-disable-next-line no-await-in-loop
+          const originalStartMode = (await this.ctrlScript.start(
+            "getManagerStartMode",
+            [manIdx],
+            [WinccoaCtrlType.int],
+          )) as string;
+
+          // eslint-disable-next-line no-await-in-loop
+          await this.ctrlScript.start(
+            "setManagerStartMode",
+            [manIdx, "manual", pmonUser, pmonPassword],
+            [
+              WinccoaCtrlType.int,
+              WinccoaCtrlType.string,
+              WinccoaCtrlType.string,
+              WinccoaCtrlType.string,
+            ],
+          );
+
+          // eslint-disable-next-line no-await-in-loop
+          await this.ctrlScript.start(
+            "stopManager",
+            [manIdx],
+            [WinccoaCtrlType.int],
+          );
+
+          winccoa.logDebugF(
+            "addonHandler",
+            `Stopped dependent manager index ${manIdx} (was ${originalStartMode})`,
+          );
+
+          stopped.push({ manIdx, originalStartMode });
+        } catch (error) {
+          winccoa.logWarning(
+            `Failed to stop dependent manager index ${manIdx}:`,
+            error,
+          );
+          // Skip this manager so it is never left stopped without being restorable
+        }
+      }
+    }
+
+    return stopped;
+  }
+
+  /**
+   * Restore the previously stored manager options and, if the original start
+   * mode was "once" or "always", start the manager again. "always" managers
+   * are restarted by pmon automatically once their mode is set back, but an
+   * explicit start is harmless and idempotent, so it is used for both.
+   * Errors are logged and do not prevent the other managers from being restored.
+   */
+  private async restoreDependentManagers(
+    stopped: DependentManagerSnapshot[],
+    pmonUser: string,
+    pmonPassword: string,
+  ): Promise<void> {
+    for (const snapshot of stopped) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await this.ctrlScript.start(
+          "setManagerStartMode",
+          [snapshot.manIdx, snapshot.originalStartMode, pmonUser, pmonPassword],
+          [
+            WinccoaCtrlType.int,
+            WinccoaCtrlType.string,
+            WinccoaCtrlType.string,
+            WinccoaCtrlType.string,
+          ],
+        );
+
+        if (
+          snapshot.originalStartMode === "once" ||
+          snapshot.originalStartMode === "always"
+        ) {
+          // eslint-disable-next-line no-await-in-loop
+          await this.ctrlScript.start(
+            "startManager",
+            [snapshot.manIdx],
+            [WinccoaCtrlType.int],
+          );
+        }
+
+        winccoa.logDebugF(
+          "addonHandler",
+          `Restored dependent manager index ${snapshot.manIdx} to start mode ${snapshot.originalStartMode}`,
+        );
+        await this.delay(250);
+      } catch (error) {
+        winccoa.logWarning(
+          `Failed to restore dependent manager index ${snapshot.manIdx}:`,
+          error,
+        );
+      }
+    }
+  }
+
+  private delay(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Run all given script jobs while all matching dependent managers of the
+   * whole set are stopped. The managers are stopped once, all scripts are then
+   * executed (each with a 5-minute timeout), and the managers are restored
+   * afterwards. Restoration always happens, even when the scripts fail or time out,
+   * so the dependent managers are never left stopped.
+   * @param jobs One entry per script-relevant unit (e.g. subproject)
+   * @param dependentManagers Union of all DependentManagers entries to resolve
+   * @param pmonUser pmon user for PROP_PUT commands (may be empty on startup)
+   * @param pmonPassword pmon password for PROP_PUT commands (may be empty on startup)
+   * @param fatalOnError Whether to rethrow the first script error after restore
+   */
+  private async runAllScriptsGuardedByManagers(
+    jobs: ScriptJob[],
+    dependentManagers: DependentManagerConfig[],
+    pmonUser: string,
+    pmonPassword: string,
+    fatalOnError: boolean,
+  ): Promise<void> {
+    const stopped = (
+      await this.stopDependentManagers(
+        dependentManagers,
+        pmonUser,
+        pmonPassword,
+      )
+    ).sort((a, b) => a.manIdx - b.manIdx);
+
+    const errors: unknown[] = [];
+
+    try {
+      for (const job of jobs) {
+        const timeoutPromise = new Promise<void>((_, reject) => {
+          setTimeout(
+            () => {
+              reject(
+                new Error("Update scripts execution timed out after 5 minutes"),
+              );
+            },
+            5 * 60 * 1000,
+          );
+        });
+
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          await Promise.race([
+            this.executeScripts(job.scriptDir, job.scripts),
+            timeoutPromise,
+          ]);
+          winccoa.logInfo(`${job.label} scripts completed successfully`);
+        } catch (error) {
+          if (fatalOnError) {
+            errors.push(error);
+          }
+          if (error instanceof Error && error.message.includes("timed out")) {
+            winccoa.logWarning(
+              `${job.label} scripts execution timed out after 5 minutes`,
+            );
+          } else {
+            winccoa.logWarning(`${job.label} error executing scripts:`, error);
+          }
+        }
+      }
+    } finally {
+      await this.restoreDependentManagers(stopped, pmonUser, pmonPassword);
+    }
+
+    if (errors.length) {
+      throw errors[0];
+    }
+  }
+
+  /**
    * Execute all DbUpdateScripts defined in package.winccoa.json for every
    * registered extension (local and installed). This is intended to run once
    * on manager startup.
@@ -2441,7 +2726,9 @@ void removeManager(int manIdx)
    * Execution reuses the existing executeScripts() dispatcher which handles
    * .ctl, .ts, and .js files identically to UpdateScripts. A 5-minute
    * timeout per subproject prevents runaway scripts from blocking startup.
-   * Errors are logged but do NOT prevent the service from starting.
+   * All dependent managers are stopped, then all DbUpdateScripts are executed,
+   * then the managers are restored. Errors are logged but do NOT prevent the
+   * service from starting.
    */
   async executeStartupDbUpdateScripts(): Promise<void> {
     winccoa.logInfo(
@@ -2450,6 +2737,12 @@ void removeManager(int manIdx)
 
     const addons = await this._discoverAllAddons();
     const registeredSubProjects = new Set(await this.listSubProjects());
+
+    // Collect all subprojects that define DbUpdateScripts together with the union
+    // of their dependent managers, so that all dependent managers are stopped before
+    // any script runs and all are restored afterwards.
+    const jobs: ScriptJob[] = [];
+    const allDependentManagers: DependentManagerConfig[] = [];
 
     for (const addon of addons) {
       for (const subproject of addon.config.Subprojects) {
@@ -2479,51 +2772,25 @@ void removeManager(int manIdx)
             ? addon.name
             : `${addon.name}/${subproject.Name}`;
 
-        winccoa.logInfo(
-          `Running ${subproject.DbUpdateScripts.length} DbUpdateScript(s) for ${displayName}...`,
-        );
-
-        // 5-minute timeout per subproject, consistent with UpdateScripts
-        const timeoutPromise = new Promise<void>((_, reject) => {
-          setTimeout(
-            () => {
-              reject(
-                new Error(
-                  "DbUpdateScripts execution timed out after 5 minutes",
-                ),
-              );
-            },
-            5 * 60 * 1000,
-          );
+        jobs.push({
+          scriptDir: path.join(addon.addonDir, subproject.Name),
+          scripts: subproject.DbUpdateScripts,
+          label: displayName,
         });
-
-        try {
-          // eslint-disable-next-line no-await-in-loop
-          await Promise.race([
-            this.executeScripts(
-              path.join(addon.addonDir, subproject.Name),
-              subproject.DbUpdateScripts,
-            ),
-            timeoutPromise,
-          ]);
-          winccoa.logInfo(
-            `DbUpdateScripts for ${displayName} completed successfully`,
-          );
-        } catch (error) {
-          if (error instanceof Error && error.message.includes("timed out")) {
-            winccoa.logWarning(
-              `DbUpdateScripts execution for ${displayName} timed out after 5 minutes`,
-            );
-          } else {
-            winccoa.logWarning(
-              `Error executing DbUpdateScripts for ${displayName}:`,
-              error,
-            );
-          }
-          // Non-fatal: continue with remaining addons and subprojects
+        for (const dependentManager of subproject.DependentManagers || []) {
+          allDependentManagers.push(dependentManager);
         }
       }
     }
+
+    // Stop all dependent managers, run all DbUpdateScripts, restore (non-fatal)
+    await this.runAllScriptsGuardedByManagers(
+      jobs,
+      allDependentManagers,
+      "",
+      "",
+      false,
+    );
 
     winccoa.logInfo("Startup DbUpdateScripts execution completed.");
   }

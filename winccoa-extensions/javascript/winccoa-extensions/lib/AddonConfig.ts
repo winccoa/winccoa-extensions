@@ -10,6 +10,7 @@ interface SubprojectConfig {
   UpdateScripts?: string[];
   UninstallScripts?: string[];
   DbUpdateScripts?: string[];
+  DependentManagers?: DependentManagerConfig[];
 }
 
 /** A SubprojectConfig whose Name is guaranteed to be set */
@@ -34,6 +35,11 @@ interface ManagerConfig {
   RestartOnUpdate?: boolean;
 }
 
+interface DependentManagerConfig {
+  Name: string;
+  Options?: string;
+}
+
 enum StartMode {
   Always = "always",
   Manual = "manual",
@@ -46,5 +52,6 @@ export {
   SubprojectConfig,
   NamedSubprojectConfig,
   ManagerConfig,
+  DependentManagerConfig,
   StartMode,
 };
