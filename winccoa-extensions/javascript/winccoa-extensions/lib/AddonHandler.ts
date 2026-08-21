@@ -763,7 +763,6 @@ void stopTcpConnection()
   {
     tcpClose(gTcpFileDescriptor2);
   }
-  DebugTN("---", gTcpFileDescriptor2);
 }
 
 bool setManagerStartMode(int manPos, string startMode, string sUser, string sPassword)
