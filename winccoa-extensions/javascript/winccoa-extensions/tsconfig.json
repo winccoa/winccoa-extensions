@@ -1,17 +1,17 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "display": "Node 16",
-  "_version": "16.1.0",
+  "display": "Node 22",
+  "_version": "22.0.0",
   "include": ["**/*.ts"],
   "compilerOptions": {
+    "lib": ["es2023"],
     "module": "commonjs",
-    "target": "es2018",
+    "target": "es2023",
     "strict": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "moduleResolution": "node",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true
   }
