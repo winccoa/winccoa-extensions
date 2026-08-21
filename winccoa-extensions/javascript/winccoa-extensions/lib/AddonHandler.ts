@@ -564,7 +564,9 @@ class AddonHandler {
 #uses "classes/projectEnvironment/ProjEnvProject"
 #uses "pmon"
 
-public int gTcpFileDescriptor2 = -1;
+public int gTcpFileDescriptor2;
+public string host;
+public string port;
 
 string getPmonPath()
 {
@@ -646,12 +648,19 @@ dyn_string listSubProjs()
   return subProjects;
 }
 
-int gTcpFileDescriptor2;
-string host;
-string port;
 bool addManager(string manager, string startMode, string options, string user, string pwd)
 {
   DebugTN("Adding manager", manager, startMode, options, user, pwd);
+
+  int existingIdx = managerExists(manager, options);
+  if (existingIdx != -1)
+  {
+    startTcpConnection();
+    setManagerStartMode(existingIdx, startMode, user, pwd);
+    stopTcpConnection();
+    return false;
+  }
+
   paGetProjHostPort(PROJ, host, port);
   gTcpFileDescriptor2 = tcpOpen(host, port);
   ProjEnvProject proj  = new ProjEnvProject(PROJ);
@@ -733,18 +742,16 @@ string getManagerStartMode(int manIdx)
 
 bool startTcpConnection()
 {
-  string sHost;
-  int   iPort;
-  int   iErr = paGetProjHostPort(PROJ, sHost, iPort);
+  int iErr = paGetProjHostPort(PROJ, host, port);
   if (iErr)
   {
     pmon_warningOutput("errHostOrPort", -1);
     return true;
   }
 
-  if (gTcpFileDescriptor2 < 0)
+  if (gTcpFileDescriptor2 <= 0)
   {
-    gTcpFileDescriptor2 = tcpOpen(sHost, iPort);
+    gTcpFileDescriptor2 = tcpOpen(host, port);
     return false;
   }
   return true;
@@ -756,6 +763,7 @@ void stopTcpConnection()
   {
     tcpClose(gTcpFileDescriptor2);
   }
+  DebugTN("---", gTcpFileDescriptor2);
 }
 
 bool setManagerStartMode(int manPos, string startMode, string sUser, string sPassword)
