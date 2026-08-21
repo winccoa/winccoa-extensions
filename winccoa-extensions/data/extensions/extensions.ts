@@ -659,6 +659,7 @@ export class ExtensionsUI {
           UpdateScripts: packageData.UpdateScripts,
           UninstallScripts: packageData.UninstallScripts,
           DbUpdateScripts: packageData.DbUpdateScripts,
+          DependentManagers: packageData.DependentManagers,
         },
       ];
     }
@@ -2200,6 +2201,47 @@ export class ExtensionsUI {
           html += `
                                 <div style="color: var(--theme-color-weak-text); font-size: 13px;">
                                     <span style="font-weight: 500;">Options:</span> <span style="font-family: 'Courier New', monospace;">${manager.Options}</span>
+                                </div>
+                    `;
+        }
+
+        html += `
+                            </div>
+                        </div>
+                `;
+      });
+
+      html += `
+                    </div>
+                </div>`;
+    }
+
+    // Dependent Managers Card
+    if (
+      subproject.DependentManagers &&
+      Array.isArray(subproject.DependentManagers) &&
+      subproject.DependentManagers.length > 0
+    ) {
+      html += `
+                <div class="overview-card">
+                    <h4>Dependent Managers (${subproject.DependentManagers.length})</h4>
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+            `;
+
+      subproject.DependentManagers.forEach((dm: any) => {
+        html += `
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <div style="display: flex; align-items: center; gap: 8px; color: var(--theme-color-std-text); font-weight: 600;">
+                                <ix-icon name="link" size="16" style="color: var(--theme-color-primary);"></ix-icon>
+                                <span>${dm.Name || "Unknown Manager"}</span>
+                            </div>
+                            <div style="margin-left: 24px; display: flex; flex-direction: column; gap: 4px;">
+                `;
+
+        if (dm.Options) {
+          html += `
+                                <div style="color: var(--theme-color-weak-text); font-size: 13px;">
+                                    <span style="font-weight: 500;">Options:</span> <span style="font-family: 'Courier New', monospace;">${dm.Options}</span>
                                 </div>
                     `;
         }
