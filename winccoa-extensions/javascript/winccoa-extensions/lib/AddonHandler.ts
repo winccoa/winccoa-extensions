@@ -657,6 +657,12 @@ bool addManager(string manager, string startMode, string options, string user, s
   {
     startTcpConnection();
     setManagerStartMode(existingIdx, startMode, user, pwd);
+
+    if (startMode == "once" || startMode == "always")
+    {
+      startManager(existingIdx);
+    }
+        
     stopTcpConnection();
     return false;
   }
