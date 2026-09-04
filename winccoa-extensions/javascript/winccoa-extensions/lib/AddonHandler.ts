@@ -758,9 +758,8 @@ bool startTcpConnection()
   if (gTcpFileDescriptor2 <= 0)
   {
     gTcpFileDescriptor2 = tcpOpen(host, port);
-    return false;
   }
-  return true;
+  return false; // "already connected" is success, not failure
 }
 
 void stopTcpConnection()
@@ -768,6 +767,7 @@ void stopTcpConnection()
   if (gTcpFileDescriptor2 >= 0)
   {
     tcpClose(gTcpFileDescriptor2);
+    gTcpFileDescriptor2 = -1; // reset so the next call reopens correctly
   }
 }
 
@@ -1077,7 +1077,14 @@ void startManager(int manIdx)
     }
 
     // Projects that come with the WINCCOA installtion should stay registered
+    // and must never be deleted from disk, regardless of what the caller requested
     let remainRegistered = this.isInstalledAddonPath(repoPath);
+    if (remainRegistered && deleteFiles) {
+      winccoa.logWarning(
+        `Refusing to delete files for installed addon path: ${repoPath}`,
+      );
+      deleteFiles = false;
+    }
 
     const ret = (await this.ctrlScript.start(
       "unregisterSubProj",
@@ -1742,13 +1749,25 @@ void startManager(int manIdx)
    * @returns File content as string, or null if file doesn't exist or can't be read
    */
   public readFile(filePath: string): string | null {
+    const resolved = path.resolve(filePath);
+    const installDir = getWinCCOAInstallDir(winccoa);
+    const allowedRoots = [this._defaultDirectory, installDir]
+      .filter((p): p is string => !!p)
+      .map((p) => path.resolve(p));
+    const underAllowedRoot = allowedRoots.some(
+      (root) => resolved === root || resolved.startsWith(root + path.sep),
+    );
+    const isReadme = path.basename(resolved).toLowerCase() === "readme.md";
+
+    if (!underAllowedRoot || !isReadme) {
+      winccoa.logWarning(`Rejected readFile request for path: ${filePath}`);
+      return null;
+    }
     try {
-      if (!fs.existsSync(filePath)) {
-        return null;
-      }
-      return fs.readFileSync(filePath, "utf8");
+      if (!fs.existsSync(resolved)) return null;
+      return fs.readFileSync(resolved, "utf8");
     } catch (error: any) {
-      winccoa.logWarning(`Failed to read file ${filePath}: ${error.message}`);
+      winccoa.logWarning(`Failed to read file ${resolved}: ${error.message}`);
       return null;
     }
   }
