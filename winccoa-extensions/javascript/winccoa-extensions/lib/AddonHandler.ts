@@ -1086,6 +1086,15 @@ void startManager(int manIdx)
       deleteFiles = false;
     }
 
+    // Files may only be deleted for cloned repositories. This is checked before
+    // the CTRL call as well, since paDelProj() would delete the project files.
+    if (deleteFiles && !this.isDeletableRepositoryPath(repoPath)) {
+      winccoa.logWarning(
+        `Refusing to delete files outside of the addon directory: ${repoPath}`,
+      );
+      deleteFiles = false;
+    }
+
     const ret = (await this.ctrlScript.start(
       "unregisterSubProj",
       [repoPath, projectName, deleteFiles, remainRegistered],
@@ -1115,6 +1124,12 @@ void startManager(int manIdx)
       "addonHandler",
       `Removing local repository folder: ${repoPath}`,
     );
+    if (!this.isDeletableRepositoryPath(repoPath)) {
+      winccoa.logWarning(
+        `Refusing to remove folder outside of the addon directory: ${repoPath}`,
+      );
+      return false;
+    }
     try {
       await fs.promises.rm(repoPath, { recursive: true, force: true });
       return true;
@@ -1668,7 +1683,109 @@ void startManager(int manIdx)
     if (!installDir) {
       return false;
     }
-    return path.resolve(repositoryPath) === path.resolve(installDir);
+    return (
+      this.normalizePath(repositoryPath) === this.normalizePath(installDir)
+    );
+  }
+
+  /**
+   * Normalize a path for comparison: resolves it to an absolute path (which
+   * also removes "." and ".." segments), strips trailing separators and, on
+   * Windows, lowercases it because the file system is case-insensitive.
+   * @param p Path to normalize
+   * @returns Normalized path, to be used for comparisons only
+   */
+  private normalizePath(p: string): string {
+    const resolved = path.resolve(p);
+    return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+  }
+
+  /**
+   * Check whether a path is a direct child of the default addon directory
+   * (the project directory the repositories are cloned into), i.e. the
+   * location of every cloned repository. The directory itself does not count.
+   * @param p Path to check
+   * @returns True if the path is "<default addon directory>/<name>"
+   */
+  private isDirectChildOfAddonDirectory(p: string): boolean {
+    if (!p || !this._defaultDirectory) {
+      return false;
+    }
+    const resolved = path.resolve(p);
+    const parent = path.dirname(resolved);
+    return (
+      resolved !== parent &&
+      this.normalizePath(parent) === this.normalizePath(this._defaultDirectory)
+    );
+  }
+
+  /**
+   * Check whether files at the given path may be deleted from disk. This is
+   * only allowed for cloned repositories, which are always located directly in
+   * the default addon directory.
+   * @param repositoryPath Path to check
+   * @returns True if the path is a deletable (cloned) repository folder
+   */
+  public isDeletableRepositoryPath(repositoryPath: string): boolean {
+    return this.isDirectChildOfAddonDirectory(repositoryPath);
+  }
+
+  /**
+   * Validate a repository path received from a client request. Only two
+   * locations are legitimate: a cloned repository (a direct child of the
+   * default addon directory) and, if allowed by the caller, the WinCC OA
+   * installation directory (for preinstalled addons).
+   * @param requestedPath Path received from the request
+   * @param allowInstalled Whether the WinCC OA installation directory is accepted
+   * @returns The validated absolute path and whether it is the installation directory
+   * @throws Error if the path is neither of the allowed locations
+   */
+  public resolveAllowedRepositoryPath(
+    requestedPath: string,
+    allowInstalled: boolean,
+  ): { path: string; installed: boolean } {
+    if (!requestedPath) {
+      throw new Error("Repository path must not be empty");
+    }
+
+    if (allowInstalled && this.isInstalledAddonPath(requestedPath)) {
+      return { path: path.resolve(requestedPath), installed: true };
+    }
+
+    if (this.isDirectChildOfAddonDirectory(requestedPath)) {
+      return { path: path.resolve(requestedPath), installed: false };
+    }
+
+    winccoa.logWarning(`Rejected repository path: ${requestedPath}`);
+    throw new Error(`Repository path not allowed: ${requestedPath}`);
+  }
+
+  /**
+   * Ensure that a preinstalled addon with the given folder name really exists
+   * in the WinCC OA installation directory, so that a request cannot point the
+   * installation directory at an arbitrary folder name.
+   * @param addonName Folder name of the addon inside the installation directory
+   * @throws Error if the name is not a plain folder name or the addon (a folder
+   *   with a package.winccoa.json) does not exist
+   */
+  public assertInstalledAddonExists(addonName: string): void {
+    const installDir = getWinCCOAInstallDir(winccoa);
+    const isPlainName =
+      !!addonName &&
+      addonName !== "." &&
+      addonName !== ".." &&
+      addonName === path.basename(addonName);
+
+    if (
+      !installDir ||
+      !isPlainName ||
+      !fs.existsSync(path.join(installDir, addonName, "package.winccoa.json"))
+    ) {
+      winccoa.logWarning(`Rejected installed addon name: ${addonName}`);
+      throw new Error(
+        `Installed addon not found in the WinCC OA installation: ${addonName}`,
+      );
+    }
   }
 
   /**

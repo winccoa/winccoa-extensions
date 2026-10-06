@@ -119,6 +119,31 @@ export class ExtensionsService extends Vrpc.ServiceBase {
     return this._addonHandler.mapPackageJsonToAddonConfig(packageJson);
   }
 
+  /**
+   * Validate a repository path received from a client request. Only cloned
+   * repositories (direct children of the default addon directory) and, if
+   * allowed, the WinCC OA installation directory (preinstalled addons) are
+   * accepted. For the installation directory the addon named by repoName must
+   * exist there.
+   * @param repositoryPath Path received from the request
+   * @param repoName Folder name of the addon (required for preinstalled addons)
+   * @param allowInstalled Whether the installation directory is accepted
+   * @throws Error if the path is not allowed
+   */
+  private validateRepositoryPath(
+    repositoryPath: string,
+    repoName: string,
+    allowInstalled: boolean,
+  ): void {
+    const validated = this._addonHandler.resolveAllowedRepositoryPath(
+      repositoryPath,
+      allowInstalled,
+    );
+    if (validated.installed) {
+      this._addonHandler.assertInstalledAddonExists(repoName);
+    }
+  }
+
   private async registerSubProjects(
     serverContext: Vrpc.ServerContext,
     request: Vrpc.Variant,
@@ -154,6 +179,9 @@ export class ExtensionsService extends Vrpc.ServiceBase {
       );
       const repoName = repoNameVariant ? repoNameVariant.getString() : "";
       winccoa.logDebugF("addonHandler", "-------- repositoryName:", repoName);
+
+      // Only cloned repositories and preinstalled addons may be registered
+      this.validateRepositoryPath(repositoryPath, repoName, true);
 
       // Extract fileContent using requestMapping for the keys
       const fileContentVariant = requestMapping.get(
@@ -258,6 +286,10 @@ export class ExtensionsService extends Vrpc.ServiceBase {
     );
     const repoName = repoNameVariant ? repoNameVariant.getString() : "";
     winccoa.logDebugF("addonHandler", "-------- repositoryName:", repoName);
+
+    // Only cloned repositories and preinstalled addons may be unregistered
+    // (and, for cloned repositories, deleted)
+    this.validateRepositoryPath(repositoryPath, repoName, true);
 
     // Extract if files shall be deleted
     const deleteFileVariant = requestMapping.get(
@@ -368,6 +400,9 @@ export class ExtensionsService extends Vrpc.ServiceBase {
       throw new Error('Missing required "repositoryPath" parameter in mapping');
     }
     const repositoryPath = repositoryPathVariant.getString();
+
+    // Only cloned repositories can be pulled (not preinstalled addons)
+    this.validateRepositoryPath(repositoryPath, "", false);
 
     const sessionVariant = requestMapping.get(
       Vrpc.Variant.createString("session"),
@@ -490,6 +525,9 @@ export class ExtensionsService extends Vrpc.ServiceBase {
     request: Vrpc.Variant,
   ): Promise<Vrpc.Variant> {
     const directory = request.getString();
+    // Only cloned repositories can be removed; the handler additionally
+    // refuses to delete anything outside of the addon directory
+    this.validateRepositoryPath(directory, "", false);
     const result = await this._addonHandler.removeRepository(directory);
     return Vrpc.Variant.createBool(result);
   }

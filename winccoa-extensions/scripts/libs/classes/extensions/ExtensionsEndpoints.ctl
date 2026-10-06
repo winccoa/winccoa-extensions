@@ -205,7 +205,8 @@ class ExtensionsEndpoints
     }
     string fileContent = values.at(idx);
 
-    bool deleteFiles = true;
+    // Deleting files must be requested explicitly
+    bool deleteFiles = false;
     idx = names.indexOf("deleteFiles");
     if (idx >= 0)
     {
