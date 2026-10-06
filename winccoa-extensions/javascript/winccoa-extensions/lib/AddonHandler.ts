@@ -2484,14 +2484,17 @@ void startManager(int manIdx)
             break;
 
           case ".ts": {
-            const resolvedScript = this.resolveScriptPath(
-              repositoryPath,
-              "javascript",
-              scriptFile,
-            );
+            // Build first so the transpiled .js exists, then resolve its path.
+            // The extension is swapped on the raw script name, before
+            // resolveScriptPath() wraps the result in quotes.
             await NodeInstaller.installAndBuild(repositoryPath);
+            const jsScriptFile = scriptFile.replace(/\.ts$/i, ".js");
             await this.startWinCCOAnodeManager(
-              resolvedScript.replace(/\.ts$/, ".js"),
+              this.resolveScriptPath(
+                repositoryPath,
+                "javascript",
+                jsScriptFile,
+              ),
             );
             break;
           }
