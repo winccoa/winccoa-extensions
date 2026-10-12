@@ -133,7 +133,7 @@ Every installable extension repository must contain a `package.winccoa.json` fil
         "uninstall.ctl"
       ],
 
-      "DbUpdateScrips": [
+      "DbUpdateScripts": [
         "dbUpdate.ctl"
       ],
 
