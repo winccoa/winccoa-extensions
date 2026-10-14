@@ -649,7 +649,7 @@ dyn_string listSubProjs()
 
 bool addManager(string manager, string startMode, string options, string user, string pwd)
 {
-  DebugTN("Adding manager", manager, startMode, options, user, "pwd");
+  DebugTN("Adding manager", manager, startMode, options, user);
 
   int existingIdx = managerExists(manager, options);
   if (existingIdx != -1)
@@ -952,7 +952,7 @@ void startManager(int manIdx)
       return ret;
     }
 
-    await NodeInstaller.installAndBuild(path.join(repoPath, projectName));
+    await this.installAndBuildNodeProject(path.join(repoPath, projectName));
 
     // Import dplist files if available (from subproject config)
     if (
@@ -1685,6 +1685,43 @@ void startManager(int manIdx)
     return (
       this.normalizePath(repositoryPath) === this.normalizePath(installDir)
     );
+  }
+
+  /**
+   * Check whether a path is the WinCC OA installation directory or located
+   * anywhere below it.
+   * @param p Path to check
+   * @returns True if the path is inside the WinCC OA installation
+   */
+  private isInsideInstallDir(p: string): boolean {
+    if (!p) {
+      return false;
+    }
+    const installDir = getWinCCOAInstallDir(winccoa);
+    if (!installDir) {
+      return false;
+    }
+    const root = this.normalizePath(installDir);
+    const target = this.normalizePath(p);
+    return target === root || target.startsWith(root + path.sep);
+  }
+
+  /**
+   * Run "npm install" and "tsc" for all Node.js projects below the given
+   * project directory. Skipped for projects inside the WinCC OA installation
+   * directory: preinstalled addons ship prebuilt, and installing/building there
+   * would modify the product installation (package.json, node_modules, build
+   * output), which usually is not even writable.
+   * @param projectDir Subproject directory containing the "javascript" folder
+   */
+  private async installAndBuildNodeProject(projectDir: string): Promise<void> {
+    if (this.isInsideInstallDir(projectDir)) {
+      winccoa.logInfo(
+        `Skipping npm install/build for preinstalled addon in the WinCC OA installation: ${projectDir}`,
+      );
+      return;
+    }
+    await NodeInstaller.installAndBuild(projectDir);
   }
 
   /**
@@ -2603,7 +2640,7 @@ void startManager(int manIdx)
             // Build first so the transpiled .js exists, then resolve its path.
             // The extension is swapped on the raw script name, before
             // resolveScriptPath() wraps the result in quotes.
-            await NodeInstaller.installAndBuild(repositoryPath);
+            await this.installAndBuildNodeProject(repositoryPath);
             const jsScriptFile = scriptFile.replace(/\.ts$/i, ".js");
             await this.startWinCCOAnodeManager(
               this.resolveScriptPath(
