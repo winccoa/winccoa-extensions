@@ -650,7 +650,7 @@ dyn_string listSubProjs()
 
 bool addManager(string manager, string startMode, string options, string user, string pwd)
 {
-  DebugTN("Adding manager", manager, startMode, options, user, pwd);
+  DebugTN("Adding manager", manager, startMode, options, user, "pwd");
 
   int existingIdx = managerExists(manager, options);
   if (existingIdx != -1)
