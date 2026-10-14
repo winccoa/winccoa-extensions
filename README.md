@@ -238,7 +238,8 @@ The cycle is performed automatically:
    `DbUpdateScripts` are executed, and the managers are restored.
 2. **Explicit update (`UpdateScripts`)** — the same logic, but scoped to the current
    subproject's manifest and using `UpdateScripts` instead of `DbUpdateScripts`. It uses the
-   pmon credentials of the session that triggered the update.
+   pmon credentials of the session that triggered the update. The `Dplists` of the updated
+   subprojects are imported first, before the managers are stopped and the `UpdateScripts` run.
 
 Restoration always happens, even if the scripts fail or time out, so dependent managers are never
 left stopped. If the restored start mode is `once` or `always`, the manager is started again

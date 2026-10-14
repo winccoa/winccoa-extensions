@@ -225,13 +225,13 @@ How to read the diagram: the Service does the orchestration, the Handler does th
 2. `pullRepository` reads and validates the manifest before the pull (if that fails the method returns without pulling), runs `git pull`, then waits 30 seconds.
 3. It re-reads the manifest. The rest of the update runs only if `Version` increased (`isVersionHigher`).
 4. Dependencies are processed again (clone and register). Errors there are logged and the update continues.
-5. **Phase 1: update scripts under manager guard.** Every subproject with `UpdateScripts` becomes a script job. The union of all their `DependentManagers` is passed to `runAllScriptsGuardedByManagers` (see 4.7).
-6. **Phase 2: post-processing per subproject.** In order:
-   1. Import dplists.
-   2. Run `NodeInstaller.installAndBuild`.
-   3. Remove managers that existed in the old manifest and are gone from the new one (matched by name and options).
-   4. For each manager in the new manifest: if it exists and `RestartOnUpdate` is set, restart it; otherwise call `addManager`, which creates it or reuses an existing one.
-7. Errors during the post-pull processing are caught and logged. The method still returns a result so the UI can reload the new manifest.
+5. **Phase 0: import dplists.** The `Dplists` of every subproject are imported first, so that `UpdateScripts` can rely on the data point types they provide. Import errors are logged per file and do not stop the update.
+6. **Phase 1: update scripts under manager guard.** Every subproject with `UpdateScripts` becomes a script job. The union of all their `DependentManagers` is passed to `runAllScriptsGuardedByManagers` (see 4.7).
+7. **Phase 2: post-processing per subproject.** In order:
+   1. Run `NodeInstaller.installAndBuild`.
+   2. Remove managers that existed in the old manifest and are gone from the new one (matched by name and options).
+   3. For each manager in the new manifest: if it exists and `RestartOnUpdate` is set, restart it; otherwise call `addManager`, which creates it or reuses an existing one.
+8. Errors during the post-pull processing are caught and logged. The method still returns a result so the UI can reload the new manifest.
 
 ### 4.5 Uninstall (unregister)
 

@@ -2101,6 +2101,17 @@ void startManager(int manIdx)
             const pmonUser = sessionCredentials?.user || "";
             const pmonPassword = sessionCredentials?.password || "";
 
+            // Phase 0: import dplists of all subprojects first, so that the
+            // UpdateScripts can rely on the data point types they provide.
+            for (const subproject of updatedAddonConfig.Subprojects) {
+              if (subproject.Dplists && subproject.Dplists.length > 0) {
+                await this.importAsciiFiles(
+                  subproject.Dplists,
+                  path.join(repositoryPath, subproject.Name, "dplist"),
+                );
+              }
+            }
+
             // Phase 1: stop all dependent managers of the current package, run all
             // UpdateScripts, then restore all dependent managers. Errors are fatal after
             // the managers have been restored.
@@ -2137,21 +2148,14 @@ void startManager(int manIdx)
               );
             }
 
-            // Phase 2: post-process each subproject (dplist import, node build,
-            // manager creation/restart) after the guarded update scripts have finished.
+            // Phase 2: post-process each subproject (node build, manager
+            // creation/restart) after the guarded update scripts have finished.
+            // Dplists were already imported in Phase 0.
             for (const subproject of updatedAddonConfig.Subprojects) {
               const subprojectBeforePull =
                 updatedAddonConfigBeforePull.Subprojects.find(
                   (sp) => sp.Name === subproject.Name,
                 );
-
-              // Import dplist files if available
-              if (subproject.Dplists && subproject.Dplists.length > 0) {
-                await this.importAsciiFiles(
-                  subproject.Dplists,
-                  path.join(repositoryPath, subproject.Name, "dplist"),
-                );
-              }
 
               // update node managers
               await NodeInstaller.installAndBuild(repositoryPath);
