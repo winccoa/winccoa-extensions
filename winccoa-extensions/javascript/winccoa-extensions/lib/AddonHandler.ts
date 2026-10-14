@@ -593,7 +593,6 @@ int registerSubProj(string path, string projName)
   if (paCheckProj(projName, 4 /* PA_IS_PROJ_REGISTERED */) == 0) 
   {
     ret = 0;
-    DebugTN("------- CTRL (Already registered)", path, projName, ret);
   } 
   else 
   {

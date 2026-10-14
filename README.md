@@ -95,7 +95,7 @@ Every installable extension repository must contain a `package.winccoa.json` fil
   "RepoName": "my-extension",        // Display name of the add-on
   "Version": "1.0.0",                // Semantic version
   "Description": "Does something",  // Human-readable description
-  "OaVersion": "2025 SP1",           // Compatible WinCC OA version
+  "OaVersion": "^3.21.0",            // Compatible WinCC OA version
 
   // ── Optional fields ──────────────────────────────────────────
   "Keywords": ["scada", "hmi"],
@@ -106,7 +106,9 @@ Every installable extension repository must contain a `package.winccoa.json` fil
 
   "Subprojects": [
     {
-      // Required
+      // Required for add-ons from external sources (Git repositories).
+      // Optional for preinstalled add-ons in the WinCC OA installation directory,
+      // where it defaults to the add-on's folder name.
       "Name": "my-subproject",
 
       // Optional
@@ -158,7 +160,7 @@ Every installable extension repository must contain a `package.winccoa.json` fil
 | `OaVersion` | Yes | Target WinCC OA version. Add-ons targeting incompatible versions are filtered out. |
 | `Keywords` | No | Tags used for searching and filtering in the Extensions UI. Defaults to an empty array. |
 | `Dependencies` | No | List of Git repository URLs that are cloned and installed recursively. Each dependency repository must also contain its own `package.winccoa.json`. |
-| `Subprojects[].Name` | Yes | Name used when registering the WinCC OA subproject. |
+| `Subprojects[].Name` | Yes (external sources) | Name used when registering the WinCC OA subproject. Required for add-ons from external sources (Git repositories), since one repository may contain multiple subprojects. Optional for preinstalled add-ons in the WinCC OA installation directory (at most one subproject without a name), where it defaults to the add-on's folder name. |
 | `Subprojects[].Description` | No | Description of the subproject. |
 | `Subprojects[].Managers` | No | Manager processes that should be registered for the subproject. |
 | `Subprojects[].Managers[].Name` | Yes | Name of the manager process. |
@@ -166,9 +168,9 @@ Every installable extension repository must contain a `package.winccoa.json` fil
 | `Subprojects[].Managers[].Options` | No | Command-line options passed to the manager. |
 | `Subprojects[].Managers[].RestartOnUpdate` | No | Whether the manager should automatically restart after an update. Defaults to `true`. |
 | `Subprojects[].Dplists` | No | ASCII data point list files imported using the AsciiManager. |
-| `Subprojects[].UpdateScripts` | No | Control scripts executed after the add-on has been updated. |
-| `Subprojects[].UninstallScripts` | No | Control scripts executed when the add-on is removed. |
-| `Subprojects[].DbUpdateScripts` | No | Control scripts executed when the javascript manager, launching the index.js file, is started. |
+| `Subprojects[].UpdateScripts` | No | Scripts executed after the add-on has been updated. Supported types: `.ctl`, `.ctc` (run via `WCCOActrl`), `.js` and `.ts` (run via Node.js). |
+| `Subprojects[].UninstallScripts` | No | Scripts executed when the add-on is removed. Supported types are the same as for `UpdateScripts`. |
+| `Subprojects[].DbUpdateScripts` | No | Scripts executed each time the JavaScript manager launching the `index.js` file is started. Supported types are the same as for `UpdateScripts`. |
 | `Subprojects[].DependentManagers` | No | Managers that are stopped before update/DB update scripts run and restarted afterwards. Managed automatically around `UpdateScripts` and `DbUpdateScripts`. |
 | `Subprojects[].DependentManagers[].Name` | Yes | Manager type/executable (component) to match. Only managers whose name matches exactly are affected. |
 | `Subprojects[].DependentManagers[].Options` | No | Optional glob pattern matched against the manager's start options (e.g. `"ocpp/*.js"`). If omitted, all managers of the given `Name` are affected. |
@@ -208,7 +210,7 @@ Every installable extension repository must contain a `package.winccoa.json` fil
       ],
       "DbUpdateScripts": [
         "dbUpdate_1.ctl",
-        "dbUpdate_2.ctl",
+        "dbUpdate_2.ctl"
       ],
       "DependentManagers": [
         {
@@ -242,7 +244,7 @@ Restoration always happens, even if the scripts fail or time out, so dependent m
 left stopped. If the restored start mode is `once` or `always`, the manager is started again
 (`always` managers are additionally auto-restarted by pmon once their mode is set back).
 
-Matching is done against the running managers' start options using `patternMatch`. An entry with only
+Matching is done against the start options of all managers configured in the project (whether currently running or not) using `patternMatch`. An entry with only
 `Name` affects every manager of that type; adding `Options` restricts the match.
 
 ### Notes

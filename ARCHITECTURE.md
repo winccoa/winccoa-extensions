@@ -209,18 +209,13 @@ sequenceDiagram
   EP-->>UI: JSON result
 ```
 
-How to read the diagram: the Service does the orchestration, the Handler does the work.
-
-1. The Service validates the request itself: path, manifest, subproject names.
-2. If there are dependencies, the Handler clones them and registers their subprojects first. Internally it calls `registerSubProject` for each dependency subproject.
-3. The `loop each subproject` block is driven by the Service. For every subproject the Handler runs the same four steps in a fixed order: register the project through the embedded CTRL script, install and build the Node.js code, import the datapoint lists, then add each manager (inner loop). If the first step fails, the remaining steps for that subproject are skipped.
-4. After the last subproject the Service answers `true`, which the endpoint turns into the JSON response.
+How to read the diagram: the Service does the orchestration, the Handler does the work. The `loop each subproject` block is driven by the Service. After the last subproject the Service answers `true`, which the endpoint turns into the JSON response.
 
 1. If the add-on is not cloned and is not a preinstalled add-on, the UI runs the clone flow first.
 2. For preinstalled add-ons the UI also sends `repositoryPath` (the installation directory) and `repoName` (the folder name).
 3. The Service validates the path, parses the manifest and checks subproject names.
 4. `processDependencies` handles each URL in `Dependencies`: clone, read the manifest, recurse into nested dependencies, register that repository's subprojects. A `processedDeps` set prevents cycles and self-dependencies.
-5. For each subproject, `registerSubProject` runs `registerSubProj` in the CTRL script. A failure result aborts that subproject's remaining steps. Otherwise it continues with `npm install` and `tsc` for every `package.json` below the subproject's `javascript` folder, then imports each `Dplists` file from the subproject's `dplist` folder, then calls `addManager` for each entry in `Managers`.
+5. For each subproject, `registerSubProject` runs these steps in a fixed order: `registerSubProj` in the CTRL script, then `npm install` and `tsc` for every `package.json` below the subproject's `javascript` folder, then the import of each `Dplists` file from the subproject's `dplist` folder, then `addManager` for each entry in `Managers`. If `registerSubProj` fails, the remaining steps for that subproject are skipped.
 6. `registerSubProj` skips `paRegProj` if the project is already registered, so re-registering is safe.
 7. `addManager` reuses an existing manager with the same component name and options (updates the start mode and starts it) instead of adding a duplicate.
 

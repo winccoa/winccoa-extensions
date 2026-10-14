@@ -178,7 +178,6 @@ export class ExtensionsService extends Vrpc.ServiceBase {
         Vrpc.Variant.createString("repoName"),
       );
       const repoName = repoNameVariant ? repoNameVariant.getString() : "";
-      winccoa.logDebugF("addonHandler", "-------- repositoryName:", repoName);
 
       // Only cloned repositories and preinstalled addons may be registered
       this.validateRepositoryPath(repositoryPath, repoName, true);
@@ -285,7 +284,6 @@ export class ExtensionsService extends Vrpc.ServiceBase {
       Vrpc.Variant.createString("repoName"),
     );
     const repoName = repoNameVariant ? repoNameVariant.getString() : "";
-    winccoa.logDebugF("addonHandler", "-------- repositoryName:", repoName);
 
     // Only cloned repositories and preinstalled addons may be unregistered
     // (and, for cloned repositories, deleted)
