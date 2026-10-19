@@ -141,6 +141,29 @@ function readWindowsRegistry(
 }
 
 /**
+ * Build the Windows registry key path of the WinCC OA version the addon is running on.
+ * The version is taken from the current server via winccoa.getVersionInfo()
+ * (registry keys use "<major>.<minor>", e.g. "3.21").
+ * @returns Registry key path or null if the version could not be determined
+ */
+function getWinCCOARegistryPath(): string | null {
+  try {
+    const { major, minor } = winccoa.getVersionInfo().winccoa;
+    if (major === undefined || minor === undefined) {
+      winccoa.logWarning("WinCC OA version info is incomplete");
+      return null;
+    }
+    return `HKEY_LOCAL_MACHINE\\SOFTWARE\\ETM\\WinCC_OA\\${major}.${minor}`;
+  } catch (error) {
+    winccoa.logWarning(
+      "Failed to determine WinCC OA version for registry lookup:",
+      (error as Error).message,
+    );
+    return null;
+  }
+}
+
+/**
  * Generic function to read WinCC OA registry values with consistent error handling
  * @param valueName The registry value name to read (e.g., "PROJECTDIR", "INSTALLDIR")
  * @param description Human-readable description for logging
@@ -159,7 +182,10 @@ function getWinCCOARegistryValue(
   }
 
   try {
-    const registryPath = "HKEY_LOCAL_MACHINE\\SOFTWARE\\ETM\\WinCC_OA\\3.21";
+    const registryPath = getWinCCOARegistryPath();
+    if (!registryPath) {
+      return null;
+    }
     winccoa.logDebugF(
       "addonHandler",
       `Checking Windows registry for ${description}: ${registryPath}`,

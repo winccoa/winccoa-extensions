@@ -843,7 +843,7 @@ export class ExtensionsUI {
 
   /**
    * Load addons installed in the WinCC OA installation directory.
-   * These are addons found in the installation path (e.g., C:\Program Files\Siemens\WinCC_OA\3.21)
+   * These are addons found in the installation path (e.g., C:\Program Files\Siemens\WinCC_OA\<version>)
    * that are not already present in the project directory.
    *
    * @returns Array of repository objects from the installation directory
