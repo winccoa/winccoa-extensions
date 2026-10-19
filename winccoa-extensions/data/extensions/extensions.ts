@@ -657,7 +657,9 @@ export class ExtensionsUI {
           Managers: packageData.Managers,
           Dplists: packageData.Dplists,
           UpdateScripts: packageData.UpdateScripts,
-          UnInstallScripts: packageData.UnInstallScripts,
+          UninstallScripts: packageData.UninstallScripts,
+          DbUpdateScripts: packageData.DbUpdateScripts,
+          DependentManagers: packageData.DependentManagers,
         },
       ];
     }
@@ -670,6 +672,37 @@ export class ExtensionsUI {
    */
   private getRepositoryIdentifier(repo: Repository): string {
     return repo.subprojectName || repo.name;
+  }
+
+  /**
+   * Get the display name for a repository: the "RepoName" from
+   * package.winccoa.json when available, falling back to the repository name.
+   */
+  private getDisplayName(repo: Repository): string {
+    const candidates = [repo.localWinccoaPackage, (repo as any).winccoaPackage];
+
+    for (const candidate of candidates) {
+      if (!candidate) continue;
+
+      let packageData: any = candidate;
+      if (typeof candidate === "string") {
+        try {
+          packageData = JSON.parse(candidate);
+        } catch (e) {
+          continue;
+        }
+      }
+
+      if (
+        packageData &&
+        typeof packageData.RepoName === "string" &&
+        packageData.RepoName
+      ) {
+        return packageData.RepoName;
+      }
+    }
+
+    return repo.name;
   }
 
   /**
@@ -699,6 +732,17 @@ export class ExtensionsUI {
 
       // Combine all repositories
       this.repositories = results.flat();
+
+      // Load and merge addons installed in the WinCC OA installation directory.
+      // Wrapped in its own try/catch so failure never wipes the org repos above.
+      try {
+        const installedAddons = await this.loadInstalledAddons();
+        this.repositories.push(...installedAddons);
+      } catch (error: unknown) {
+        if ((error as Error).name !== "AbortError") {
+          console.warn("Failed to load installed addons:", error);
+        }
+      }
 
       // Extract latest version from winccoaPackage field for all repos
       this.repositories.forEach((repo) => this.extractPackageData(repo));
@@ -745,6 +789,17 @@ export class ExtensionsUI {
       if (response.ok) {
         this.repositories = Array.isArray(data) ? data : [];
 
+        // Load and merge addons installed in the WinCC OA installation directory.
+        // Wrapped in its own try/catch so failure never wipes the org repos above.
+        try {
+          const installedAddons = await this.loadInstalledAddons();
+          this.repositories.push(...installedAddons);
+        } catch (error: unknown) {
+          if ((error as Error).name !== "AbortError") {
+            console.warn("Failed to load installed addons:", error);
+          }
+        }
+
         // Extract latest version from winccoaPackage field
         this.repositories.forEach((repo) => this.extractPackageData(repo));
 
@@ -784,6 +839,38 @@ export class ExtensionsUI {
       this.repositories = [];
       // Don't render here - will be rendered after all status info is loaded
     }
+  }
+
+  /**
+   * Load addons installed in the WinCC OA installation directory.
+   * These are addons found in the installation path (e.g., C:\Program Files\Siemens\WinCC_OA\<version>)
+   * that are not already present in the project directory.
+   *
+   * @returns Array of repository objects from the installation directory
+   */
+  private async loadInstalledAddons(): Promise<Repository[]> {
+    try {
+      const response = await this.makeApiCall(
+        "/extensions/listInstalledAddons",
+        {
+          signal: this.currentLoadController?.signal,
+        },
+      );
+      if (response.ok) {
+        const data: Repository[] = await response.json();
+        return Array.isArray(data) ? data : [];
+      }
+    } catch (error: unknown) {
+      const apiError = error as ApiError;
+      if (apiError.name === "AbortError") {
+        throw error;
+      }
+      console.warn(
+        "Could not load installed addons:",
+        apiError.message || "Unknown error",
+      );
+    }
+    return [];
   }
 
   /**
@@ -909,7 +996,39 @@ export class ExtensionsUI {
       return;
     }
 
-    const repositoryItems = this.repositories
+    // Sort repositories by priority: registered first, then cloned and update available, then cloned/installed, then not installed
+    const sortedRepos = [...this.repositories].sort((a, b) => {
+      const aIsRegistered = this.registeredProjects.includes(
+        this.getRepositoryIdentifier(a),
+      );
+      const bIsRegistered = this.registeredProjects.includes(
+        this.getRepositoryIdentifier(b),
+      );
+
+      // Both `cloned` and `installedAddon` are typed as boolean | undefined, so the below
+      // expression could return undefined if both are undefined, the !! coerces to a definite
+      // boolean (undefined -> false, true -> true, ...)
+      const aIsClonedOrInstalled = !!(a.cloned || a.installedAddon);
+      const bIsClonedOrInstalled = !!(b.cloned || b.installedAddon);
+
+      const priority = (
+        repo: Repository,
+        isRegistered: boolean,
+        isClonedOrInstalled: boolean,
+      ): number => {
+        if (isRegistered) return 0;
+        if (repo.hasUpdate) return 1;
+        if (isClonedOrInstalled) return 2;
+        return 3;
+      };
+
+      return (
+        priority(a, aIsRegistered, aIsClonedOrInstalled) -
+        priority(b, bIsRegistered, bIsClonedOrInstalled)
+      );
+    });
+
+    const repositoryItems = sortedRepos
       .map((repo) => {
         // Check if registered by comparing subproject name (if available) or repository name
         const isRegistered = this.registeredProjects.includes(
@@ -917,14 +1036,18 @@ export class ExtensionsUI {
         );
         const statusClass = isRegistered
           ? "registered"
-          : repo.cloned
-            ? "cloned"
-            : "";
+          : repo.installedAddon
+            ? "installed"
+            : repo.cloned
+              ? "cloned"
+              : "";
         const statusTooltip = isRegistered
           ? "Installed"
-          : repo.cloned
-            ? "Downloaded"
-            : "Not downloaded";
+          : repo.installedAddon
+            ? "In installation directory"
+            : repo.cloned
+              ? "Downloaded"
+              : "Not downloaded";
         const isLoading = repo.loadingAction != null;
         const loadingText = repo.loadingAction
           ? `${repo.loadingAction.charAt(0).toUpperCase() + repo.loadingAction.slice(1)} in progress...`
@@ -944,7 +1067,7 @@ export class ExtensionsUI {
                         : ""
                     }
                     <div class="repository-item-header">
-                        <div class="repository-item-name">${repo.name}</div>
+                        <div class="repository-item-name">${this.getDisplayName(repo)}</div>
                         <ix-pill class="repository-item-visibility" variant="outline" size="small">
                             <ix-icon name="${repo.private ? "lock" : "unlock"}" slot="start"></ix-icon>
                             ${repo.private ? "Private" : "Public"}
@@ -954,6 +1077,9 @@ export class ExtensionsUI {
                         ${repo.description || "No description available"}
                     </div>
                     <div class="repository-item-meta">
+                        ${
+                          !repo.installedAddon
+                            ? `
                         <div class="repository-item-meta-item">
                             <ix-icon name="star-filled" size="12"></ix-icon>
                             <span>${repo.stars !== undefined && repo.stars !== null ? repo.stars : "N/A"}&nbsp;${repo.stars !== 1 ? "stars" : "star"}</span>
@@ -962,6 +1088,9 @@ export class ExtensionsUI {
                             <ix-icon name="split" size="12"></ix-icon>
                             <span>${repo.forks !== undefined && repo.forks !== null ? repo.forks : "N/A"}&nbsp;${repo.forks !== 1 ? "forks" : "fork"}</span>
                         </div>
+                        `
+                            : ""
+                        }
                         <div class="repository-item-meta-item" title="Last updated: ${this.formatExactDate(repo.updatedAt)}">
                             <ix-icon name="clock" size="12"></ix-icon>
                             <span>${this.formatRelativeTime(repo.updatedAt)}</span>
@@ -1036,6 +1165,7 @@ export class ExtensionsUI {
         const matchesSearch =
           !searchTerm ||
           repo.name.toLowerCase().includes(searchTerm) ||
+          this.getDisplayName(repo).toLowerCase().includes(searchTerm) ||
           (repo.description &&
             repo.description.toLowerCase().includes(searchTerm));
 
@@ -1146,7 +1276,7 @@ export class ExtensionsUI {
     const repoName = document.getElementById("repo-name");
     const repoDescription = document.getElementById("repo-description");
 
-    if (repoName) repoName.textContent = repo.name;
+    if (repoName) repoName.textContent = this.getDisplayName(repo);
     if (repoDescription)
       repoDescription.textContent =
         repo.description || "No description available";
@@ -1182,6 +1312,12 @@ export class ExtensionsUI {
         repo.forks !== undefined && repo.forks !== null ? repo.forks : "N/A";
       repoForksText.textContent = `${forksValue} ${repo.forks !== 1 ? "forks" : "fork"}`;
     }
+
+    // Hide stars/forks pills for installed addons
+    const repoStars = document.getElementById("repo-stars");
+    const repoForks = document.getElementById("repo-forks");
+    if (repoStars) repoStars.style.display = repo.installedAddon ? "none" : "";
+    if (repoForks) repoForks.style.display = repo.installedAddon ? "none" : "";
 
     // Update overview tab
     const repoSize = document.getElementById("repo-size");
@@ -1268,6 +1404,30 @@ export class ExtensionsUI {
     const readmeContent = document.getElementById("readme-content");
 
     if (!readmeSection || !readmeContent) return;
+
+    // Handle installed addons - read README.md from filesystem via backend
+    if (repo.installedAddon && repo.localPath) {
+      try {
+        const readmePath = `${repo.localPath}${repo.name}/README.md`;
+        const response = await this.makeApiCall(
+          `/extensions/readAddonFile?path=${encodeURIComponent(readmePath)}`,
+        );
+        if (response.ok) {
+          const data = await response.json();
+          if (data.content) {
+            const htmlContent = this.renderMarkdown(data.content, "");
+            readmeContent.innerHTML = htmlContent;
+            readmeSection.style.display = "block";
+            return;
+          }
+        }
+        readmeSection.style.display = "none";
+      } catch (error) {
+        console.warn("Could not fetch installed addon README:", error);
+        readmeSection.style.display = "none";
+      }
+      return;
+    }
 
     // Check if this is a GitHub repository
     if (!repo.cloneUrl || !repo.cloneUrl.includes("github.com")) {
@@ -1447,6 +1607,33 @@ export class ExtensionsUI {
         setButtonOutline(pullBtn, false);
         setButtonOutline(unregisterBtn, false); // Primary (main action)
       }
+    } else if (repo.installedAddon) {
+      // Installed addon (exists in the WinCC OA installation directory, not cloned from git)
+      // Can be registered directly, but cannot be downloaded, updated, or removed
+      cloneBtn?.setAttribute("disabled", "");
+      cloneBtn?.setAttribute(
+        "title",
+        "Cannot download: Addon is in the WinCC OA installation directory",
+      );
+      pullBtn?.setAttribute("disabled", "");
+      registerBtn?.removeAttribute("disabled");
+      registerBtn?.setAttribute(
+        "title",
+        "Install subproject from installation directory",
+      );
+      unregisterBtn?.setAttribute("disabled", "");
+      removeBtn?.setAttribute("disabled", "");
+      removeBtn?.setAttribute(
+        "title",
+        "Cannot remove: Addon is part of the WinCC OA installation",
+      );
+
+      // Outline styling: Install is primary action
+      setButtonOutline(cloneBtn, false);
+      setButtonOutline(pullBtn, false);
+      setButtonOutline(unregisterBtn, false);
+      setButtonOutline(removeBtn, false);
+      setButtonOutline(registerBtn, false); // Primary (main action)
     } else if (isCloned) {
       cloneBtn?.setAttribute("disabled", "");
       // Only show pull button if there's an update available
@@ -1543,6 +1730,10 @@ export class ExtensionsUI {
       statusPill.setAttribute("variant", "success");
       statusPill.setAttribute("icon", "success");
       statusPill.innerHTML = `Registered as subproject`;
+    } else if (repo.installedAddon) {
+      statusPill.setAttribute("variant", "info");
+      statusPill.setAttribute("icon", "download");
+      statusPill.innerHTML = `In installation directory`;
     } else if (isCloned) {
       statusPill.setAttribute("variant", "info");
       statusPill.setAttribute("icon", "download");
@@ -2025,6 +2216,47 @@ export class ExtensionsUI {
                 </div>`;
     }
 
+    // Dependent Managers Card
+    if (
+      subproject.DependentManagers &&
+      Array.isArray(subproject.DependentManagers) &&
+      subproject.DependentManagers.length > 0
+    ) {
+      html += `
+                <div class="overview-card">
+                    <h4>Dependent Managers (${subproject.DependentManagers.length})</h4>
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+            `;
+
+      subproject.DependentManagers.forEach((dm: any) => {
+        html += `
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <div style="display: flex; align-items: center; gap: 8px; color: var(--theme-color-std-text); font-weight: 600;">
+                                <ix-icon name="link" size="16" style="color: var(--theme-color-primary);"></ix-icon>
+                                <span>${dm.Name || "Unknown Manager"}</span>
+                            </div>
+                            <div style="margin-left: 24px; display: flex; flex-direction: column; gap: 4px;">
+                `;
+
+        if (dm.Options) {
+          html += `
+                                <div style="color: var(--theme-color-weak-text); font-size: 13px;">
+                                    <span style="font-weight: 500;">Options:</span> <span style="font-family: 'Courier New', monospace;">${dm.Options}</span>
+                                </div>
+                    `;
+        }
+
+        html += `
+                            </div>
+                        </div>
+                `;
+      });
+
+      html += `
+                    </div>
+                </div>`;
+    }
+
     // Update Scripts Card
     if (
       subproject.UpdateScripts &&
@@ -2049,21 +2281,45 @@ export class ExtensionsUI {
                 </div>`;
     }
 
-    // UnInstall Scripts Card
+    // Uninstall Scripts Card
     if (
-      subproject.UnInstallScripts &&
-      Array.isArray(subproject.UnInstallScripts) &&
-      subproject.UnInstallScripts.length > 0
+      subproject.UninstallScripts &&
+      Array.isArray(subproject.UninstallScripts) &&
+      subproject.UninstallScripts.length > 0
     ) {
       html += `
                 <div class="overview-card">
-                    <h4>Uninstall Scripts (${subproject.UnInstallScripts.length})</h4>
+                    <h4>Uninstall Scripts (${subproject.UninstallScripts.length})</h4>
                     <div style="display: flex; flex-direction: column; gap: 8px;">
             `;
-      subproject.UnInstallScripts.forEach((script: string) => {
+      subproject.UninstallScripts.forEach((script: string) => {
         html += `
                         <div style="display: flex; align-items: center; gap: 8px; color: var(--theme-color-std-text);">
                             <ix-icon name="trashcan" size="16" style="color: var(--theme-color-alarm);"></ix-icon>
+                            <span>${script}</span>
+                        </div>
+                `;
+      });
+      html += `
+                    </div>
+                </div>`;
+    }
+
+    // DbUpdateScripts Card
+    if (
+      subproject.DbUpdateScripts &&
+      Array.isArray(subproject.DbUpdateScripts) &&
+      subproject.DbUpdateScripts.length > 0
+    ) {
+      html += `
+                <div class="overview-card">
+                    <h4>DB Update Scripts (${subproject.DbUpdateScripts.length})</h4>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+            `;
+      subproject.DbUpdateScripts.forEach((script: string) => {
+        html += `
+                        <div style="display: flex; align-items: center; gap: 8px; color: var(--theme-color-std-text);">
+                            <ix-icon name="database" size="16" style="color: var(--theme-color-primary);"></ix-icon>
                             <span>${script}</span>
                         </div>
                 `;
@@ -2111,7 +2367,7 @@ export class ExtensionsUI {
       // Show confirmation dialog with the path
       const result = await window.ixShowMessage!({
         title: "Download Repository",
-        message: `Repository "${this.currentRepository.name}" will be downloaded to\n\n${fullClonePath}`,
+        message: `Repository "${this.getDisplayName(this.currentRepository)}" will be downloaded to\n\n${fullClonePath}`,
         actions: [
           {
             text: "Cancel",
@@ -2469,8 +2725,11 @@ export class ExtensionsUI {
     // Capture the repository being registered to avoid issues if user switches repos during operation
     const repositoryBeingRegistered = this.currentRepository;
 
-    // If repository is not cloned yet, clone it first
-    if (!repositoryBeingRegistered.cloned) {
+    // If repository is not cloned and not an installed addon, clone it first
+    if (
+      !repositoryBeingRegistered.cloned &&
+      !repositoryBeingRegistered.localPath
+    ) {
       // Show the clone modal with path confirmation
       const cloneSuccess = await this.cloneForRegistration(
         repositoryBeingRegistered,
@@ -2504,6 +2763,9 @@ export class ExtensionsUI {
         repoName: repositoryBeingRegistered.name,
         fileContent: repositoryBeingRegistered.fileContent,
       });
+      if (repositoryBeingRegistered.localPath) {
+        params.append("repositoryPath", repositoryBeingRegistered.localPath);
+      }
 
       const response = await this.makeApiCall(
         `/extensions/registerSubProjects?${params}`,
@@ -2579,7 +2841,7 @@ export class ExtensionsUI {
       // Show confirmation dialog with the path
       const result = await window.ixShowMessage!({
         title: "Download Repository",
-        message: `Repository "${repository.name}" will be downloaded to\n\n${fullClonePath}`,
+        message: `Repository "${this.getDisplayName(repository)}" will be downloaded to\n\n${fullClonePath}`,
         actions: [
           {
             text: "Cancel",
@@ -2706,15 +2968,19 @@ export class ExtensionsUI {
       return;
     }
 
-    // Check if repository is cloned
-    if (!repositoryBeingUnregistered.cloned) {
+    // Check if repository is cloned or is an installed addon
+    if (
+      !repositoryBeingUnregistered.cloned &&
+      !repositoryBeingUnregistered.localPath
+    ) {
       this.showError("Cannot uninstall: Repository is not downloaded.");
       return;
     }
 
     // Show confirmation modal with delete option
     const result = await window.ixShowUnregisterConfirm?.(
-      repositoryBeingUnregistered.name,
+      this.getDisplayName(repositoryBeingUnregistered),
+      repositoryBeingUnregistered.installedAddon,
     );
 
     // If user cancelled, return
@@ -2729,12 +2995,20 @@ export class ExtensionsUI {
     );
 
     try {
+      // For installed addons, never delete files from the installation directory
+      const deleteFiles = repositoryBeingUnregistered.installedAddon
+        ? false
+        : result.deleteRepository;
+
       // Pass the delete parameter and fileContent to the API
       const params = new URLSearchParams({
         repoName: repositoryBeingUnregistered.name,
         fileContent: repositoryBeingUnregistered.fileContent,
-        deleteFiles: result.deleteRepository ? "true" : "false",
+        deleteFiles: deleteFiles ? "true" : "false",
       });
+      if (repositoryBeingUnregistered.localPath) {
+        params.append("repositoryPath", repositoryBeingUnregistered.localPath);
+      }
 
       const response = await this.makeApiCall(
         `/extensions/unregisterSubProjects?${params}`,
@@ -2742,34 +3016,23 @@ export class ExtensionsUI {
       const resultText = await response.text();
 
       if (response.ok) {
-        const successMsg = result.deleteRepository
+        const successMsg = deleteFiles
           ? "Subproject uninstalled and repository removed successfully"
           : "Subproject uninstalled successfully";
         this.showSuccess(successMsg);
 
-        // Remove ALL subproject names from registered projects (for multiple subprojects)
-        const packageData = repositoryBeingUnregistered.localWinccoaPackage;
-        if (packageData) {
-          const subprojects = this.getSubprojects(packageData);
-          for (const sp of subprojects) {
-            if (sp.Name) {
-              const index = this.registeredProjects.indexOf(sp.Name);
-              if (index > -1) {
-                this.registeredProjects.splice(index, 1);
-              }
-            }
-          }
-        }
+        // Re-sync registered projects list from backend
+        await this.loadRegisteredProjects();
 
         // Reload local repositories if not deleted (to update version info)
-        if (!result.deleteRepository) {
+        if (!deleteFiles) {
           await this.loadLocalRepositories();
         }
 
         // Update the repository in the repositories array
         if (repoIndex !== -1) {
           // If repository was deleted, reset the cloned state
-          if (result.deleteRepository) {
+          if (deleteFiles) {
             this.resetRepositoryLocalState(repoIndex);
           }
           this.repositories[repoIndex].loadingAction = null;
@@ -2780,7 +3043,7 @@ export class ExtensionsUI {
           // Use tracked subproject tab name
           const currentSubprojectName = this.currentSubprojectTab || undefined;
 
-          if (result.deleteRepository) {
+          if (deleteFiles) {
             this.currentRepository.cloned = false;
             this.currentRepository.localPath = undefined;
             this.currentRepository.fileContent = undefined;
@@ -2825,6 +3088,14 @@ export class ExtensionsUI {
     // Capture the repository being deleted to avoid issues if user switches repos during operation
     const repositoryBeingDeleted = this.currentRepository;
 
+    // Installed addons cannot be deleted (they're part of the WinCC OA installation)
+    if (repositoryBeingDeleted.installedAddon) {
+      this.showError(
+        "Cannot delete: Addon is part of the WinCC OA installation.",
+      );
+      return;
+    }
+
     // Check if repository is cloned
     if (!repositoryBeingDeleted.cloned) {
       this.showError("Cannot delete: Repository is not cloned.");
@@ -2845,7 +3116,7 @@ export class ExtensionsUI {
 
     // Show confirmation modal
     const confirmed = await window.ixShowDeleteConfirm?.(
-      repositoryBeingDeleted.name,
+      this.getDisplayName(repositoryBeingDeleted),
     );
 
     // If user cancelled, return

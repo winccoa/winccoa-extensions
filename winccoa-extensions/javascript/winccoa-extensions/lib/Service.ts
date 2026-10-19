@@ -24,6 +24,11 @@ export class ExtensionsService extends Vrpc.ServiceBase {
     this.registerFunction("repoPath", this.getDefaultAddonPath.bind(this));
     this.registerFunction("localRepos", this.listLocalAddons.bind(this));
     this.registerFunction(
+      "listInstalledAddons",
+      this.listInstalledAddons.bind(this),
+    );
+    this.registerFunction("readFile", this.readFile.bind(this));
+    this.registerFunction(
       "setPmonCredentials",
       this.setPmonCredentials.bind(this),
     );
@@ -40,16 +45,102 @@ export class ExtensionsService extends Vrpc.ServiceBase {
   }
 
   /**
+   * Run one-time startup tasks after the service is fully initialized.
+   * Currently executes DbUpdateScripts for all registered extensions.
+   */
+  public async runStartupTasks(): Promise<void> {
+    try {
+      await this._addonHandler.executeStartupDbUpdateScripts();
+    } catch (error) {
+      winccoa.logWarning("Startup tasks encountered an error:", error);
+      // Non-fatal: startup tasks should not prevent the service from running
+    }
+  }
+
+  /**
    * Parse JSON fileContent and map to AddonConfig
+   * For addons located in the WinCC OA installation directory (preinstalled
+   * addons), a subproject entry without a name defaults to the addon's folder
+   * name. Addons from external sources must define a name for every subproject.
    * @param fileContent JSON string from package.winccoa.json
+   * @param repositoryPath Path of the repository root (detects the
+   *   installation directory context for preinstalled addons)
+   * @param repoName Name of the addon's folder (used as the default subproject
+   *   name and in error messages)
    * @returns AddonConfig object
    */
-  private parseAndMapAddonConfig(fileContent: string): AddonConfig {
+  private parseAndMapAddonConfig(
+    fileContent: string,
+    repositoryPath: string,
+    repoName: string,
+  ): AddonConfig {
+    let parsedContent: any;
     try {
-      const parsedContent = JSON.parse(fileContent);
-      return this._addonHandler.mapPackageJsonToAddonConfig(parsedContent);
+      parsedContent = JSON.parse(fileContent);
     } catch (error) {
       throw new Error(`Invalid JSON in fileContent: ${error}`);
+    }
+
+    let packageJson = parsedContent;
+
+    // Preinstalled addons live directly in the WinCC OA installation
+    // directory, whose path is passed as repository path during registration.
+    // The addon's folder is the subproject itself, so it carries the name.
+    if (this._addonHandler.isInstalledAddonPath(repositoryPath)) {
+      const namelessSubprojects = (
+        (parsedContent && parsedContent.Subprojects) ||
+        []
+      ).filter((sp: any) => !sp || !sp.Name);
+
+      if (namelessSubprojects.length > 1) {
+        throw new Error(
+          `Addon "${repoName}" in the WinCC OA installation directory has ` +
+            `${namelessSubprojects.length} subprojects without a "Name". ` +
+            `Preinstalled addons are subprojects themselves and may define ` +
+            `at most one subproject without a "Name" field.`,
+        );
+      }
+
+      if (namelessSubprojects.length === 1) {
+        if (!repoName) {
+          throw new Error(
+            'Missing "repoName" parameter required to resolve the subproject ' +
+              `name of the installed addon at ${repositoryPath}`,
+          );
+        }
+
+        packageJson = this._addonHandler.applyDefaultSubprojectName(
+          packageJson,
+          repoName,
+        );
+      }
+    }
+
+    return this._addonHandler.mapPackageJsonToAddonConfig(packageJson);
+  }
+
+  /**
+   * Validate a repository path received from a client request. Only cloned
+   * repositories (direct children of the default addon directory) and, if
+   * allowed, the WinCC OA installation directory (preinstalled addons) are
+   * accepted. For the installation directory the addon named by repoName must
+   * exist there.
+   * @param repositoryPath Path received from the request
+   * @param repoName Folder name of the addon (required for preinstalled addons)
+   * @param allowInstalled Whether the installation directory is accepted
+   * @throws Error if the path is not allowed
+   */
+  private validateRepositoryPath(
+    repositoryPath: string,
+    repoName: string,
+    allowInstalled: boolean,
+  ): void {
+    const validated = this._addonHandler.resolveAllowedRepositoryPath(
+      repositoryPath,
+      allowInstalled,
+    );
+    if (validated.installed) {
+      this._addonHandler.assertInstalledAddonExists(repoName);
     }
   }
 
@@ -81,6 +172,16 @@ export class ExtensionsService extends Vrpc.ServiceBase {
         repositoryPath,
       );
 
+      // Extract the optional repository name (name of the addon's folder);
+      // used as the default subproject name for preinstalled addons
+      const repoNameVariant = requestMapping.get(
+        Vrpc.Variant.createString("repoName"),
+      );
+      const repoName = repoNameVariant ? repoNameVariant.getString() : "";
+
+      // Only cloned repositories and preinstalled addons may be registered
+      this.validateRepositoryPath(repositoryPath, repoName, true);
+
       // Extract fileContent using requestMapping for the keys
       const fileContentVariant = requestMapping.get(
         Vrpc.Variant.createString("fileContent"),
@@ -97,7 +198,19 @@ export class ExtensionsService extends Vrpc.ServiceBase {
       const session = sessionVariant ? sessionVariant.getString() : "";
 
       // Parse the JSON string and map to AddonConfig interface
-      const config = this.parseAndMapAddonConfig(fileContent);
+      // (subprojects of preinstalled addons default to the addon's folder name)
+      const config = this.parseAndMapAddonConfig(
+        fileContent,
+        repositoryPath,
+        repoName,
+      );
+
+      // Subprojects of addons from external sources must define a name,
+      // since a single repository may contain multiple subprojects
+      this._addonHandler.assertSubprojectNamesPresent(
+        config,
+        repoName || repositoryPath,
+      );
 
       winccoa.logDebugF(
         "addonHandler",
@@ -165,6 +278,17 @@ export class ExtensionsService extends Vrpc.ServiceBase {
       repositoryPath,
     );
 
+    // Extract the optional repository name (name of the addon's folder);
+    // used as the default subproject name for preinstalled addons
+    const repoNameVariant = requestMapping.get(
+      Vrpc.Variant.createString("repoName"),
+    );
+    const repoName = repoNameVariant ? repoNameVariant.getString() : "";
+
+    // Only cloned repositories and preinstalled addons may be unregistered
+    // (and, for cloned repositories, deleted)
+    this.validateRepositoryPath(repositoryPath, repoName, true);
+
     // Extract if files shall be deleted
     const deleteFileVariant = requestMapping.get(
       Vrpc.Variant.createString("deleteFiles"),
@@ -186,7 +310,19 @@ export class ExtensionsService extends Vrpc.ServiceBase {
     winccoa.logDebugF("addonHandler", "-------- fileContent:", fileContent);
 
     // Parse the JSON string and map to AddonConfig interface
-    const config = this.parseAndMapAddonConfig(fileContent);
+    // (subprojects of preinstalled addons default to the addon's folder name)
+    const config = this.parseAndMapAddonConfig(
+      fileContent,
+      repositoryPath,
+      repoName,
+    );
+
+    // Subprojects of addons from external sources must define a name,
+    // since a single repository may contain multiple subprojects
+    this._addonHandler.assertSubprojectNamesPresent(
+      config,
+      repoName || repositoryPath,
+    );
 
     // Unregister each subproject
     for (const subproject of config.Subprojects) {
@@ -263,6 +399,9 @@ export class ExtensionsService extends Vrpc.ServiceBase {
     }
     const repositoryPath = repositoryPathVariant.getString();
 
+    // Only cloned repositories can be pulled (not preinstalled addons)
+    this.validateRepositoryPath(repositoryPath, "", false);
+
     const sessionVariant = requestMapping.get(
       Vrpc.Variant.createString("session"),
     );
@@ -334,9 +473,12 @@ export class ExtensionsService extends Vrpc.ServiceBase {
     );
 
     // Check for dependencies and process them
+    // (clone context: the repository is always cloned into the project
+    // directory, so no default subproject name applies here and nameless
+    // subprojects are only rejected later at install time)
     if (result.fileContent) {
       try {
-        const config = this.parseAndMapAddonConfig(result.fileContent);
+        const config = this.parseAndMapAddonConfig(result.fileContent, "", "");
 
         if (config.Dependencies && config.Dependencies.length > 0) {
           winccoa.logDebugF(
@@ -381,6 +523,9 @@ export class ExtensionsService extends Vrpc.ServiceBase {
     request: Vrpc.Variant,
   ): Promise<Vrpc.Variant> {
     const directory = request.getString();
+    // Only cloned repositories can be removed; the handler additionally
+    // refuses to delete anything outside of the addon directory
+    this.validateRepositoryPath(directory, "", false);
     const result = await this._addonHandler.removeRepository(directory);
     return Vrpc.Variant.createBool(result);
   }
@@ -399,6 +544,38 @@ export class ExtensionsService extends Vrpc.ServiceBase {
   ): Promise<Vrpc.Variant> {
     const result = await this._addonHandler.listLocalAddons();
     return Vrpc.Variant.createString(JSON.stringify(result));
+  }
+
+  private async listInstalledAddons(
+    serverContext: Vrpc.ServerContext,
+    request: Vrpc.Variant,
+  ): Promise<Vrpc.Variant> {
+    const result = await this._addonHandler.listInstalledAddons();
+    return Vrpc.Variant.createString(JSON.stringify(result));
+  }
+
+  // eslint-disable-next-line require-await
+  private async readFile(
+    serverContext: Vrpc.ServerContext,
+    request: Vrpc.Variant,
+  ): Promise<Vrpc.Variant> {
+    const requestMapping = request.getMapping();
+    const filePathVariant = requestMapping.get(
+      Vrpc.Variant.createString("filePath"),
+    );
+
+    if (!filePathVariant) {
+      return Vrpc.Variant.createBool(false);
+    }
+
+    const filePath = filePathVariant.getString();
+    const content = this._addonHandler.readFile(filePath);
+
+    if (content === null) {
+      return Vrpc.Variant.createBool(false);
+    }
+
+    return Vrpc.Variant.createString(content);
   }
 
   // eslint-disable-next-line require-await

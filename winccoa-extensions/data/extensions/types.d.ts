@@ -44,17 +44,13 @@ export interface Repository {
   defaultBranch?: string; // Default branch name (main, master, etc.)
   subprojectName?: string; // Subproject name from package.winccoa.json (used for registration)
   loadingAction?:
-    | "download"
-    | "update"
-    | "install"
-    | "uninstall"
-    | "remove"
-    | null; // Track which action is in progress
+    "download" | "update" | "install" | "uninstall" | "remove" | null; // Track which action is in progress
   currentVersion?: string; // Currently installed version (from local repo)
   latestVersion?: string; // Latest version from GitHub
   hasUpdate?: boolean; // Whether an update is available
   keywords?: string[]; // Keywords/tags from winccoaPackage
   localWinccoaPackage?: any; // Local winccoaPackage data from listLocalRepos
+  installedAddon?: boolean; // True if addon exists in the WinCC OA installation directory (not cloned from git)
 }
 
 export interface ApiError extends Error {
@@ -72,6 +68,7 @@ declare global {
     ixShowMessage?: (config: IxModalConfig) => Promise<IxModalResult>;
     ixShowUnregisterConfirm?: (
       repositoryName: string,
+      isInstalledAddon?: boolean,
     ) => Promise<IxUnregisterConfirmResult | null>;
     ixShowDeleteConfirm?: (repositoryName: string) => Promise<boolean>;
     ExtensionsUI?: import("./extensions").ExtensionsUI;
