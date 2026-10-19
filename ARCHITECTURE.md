@@ -305,7 +305,7 @@ How to read the diagram: it has four phases, top to bottom. The calls to `C` end
 
 Triggered from `index.ts` (`extensionsService.runStartupTasks()`) after the service is up, each time the JavaScript manager starts.
 
-1. `_discoverAllAddons` merges local clones and installed add-ons. Preinstalled add-ons default their subproject name to the folder name.
+1. `discoverAllAddons` merges local clones and installed add-ons. Preinstalled add-ons default their subproject name to the folder name.
 2. It keeps only subprojects that define `DbUpdateScripts`, have a name, and are currently registered (`listSubProjects`).
 3. It builds one job per subproject and the union of their `DependentManagers`.
 4. It runs the guarded flow from 4.7 with empty PMON credentials and `fatalOnError=false`. Errors are logged and never stop the service from running.

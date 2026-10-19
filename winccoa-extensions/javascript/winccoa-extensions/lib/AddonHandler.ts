@@ -65,6 +65,12 @@ export { AddonHandler };
  */
 interface AddonDiscovery {
   name: string;
+  /**
+   * Directory that contains the subproject folders of this addon:
+   * - cloned repositories: the repository root (<project dir>/<repo>)
+   * - preinstalled addons: the WinCC OA installation directory
+   * Subproject files are located at <addonDir>/<subproject name>.
+   */
   addonDir: string;
   config: AddonConfig;
 }
@@ -2714,7 +2720,7 @@ void startManager(int manIdx)
    * Local addons take precedence; installed addons that already exist
    * in the project directory are skipped by listInstalledAddons().
    */
-  private async _discoverAllAddons(): Promise<AddonDiscovery[]> {
+  private async discoverAllAddons(): Promise<AddonDiscovery[]> {
     const discovered: AddonDiscovery[] = [];
 
     // 1. Local addons (cloned repos in the project directory)
@@ -2736,7 +2742,10 @@ void startManager(int manIdx)
     const installedAddons = await this.listInstalledAddons();
     for (const installed of installedAddons) {
       const inst = installed as any;
-      const addonDir = path.join(inst.localPath, inst.name);
+      // Preinstalled addons are registered with the installation directory as
+      // their repository path (see registerSubProj / unregisterSubProject), so
+      // the subproject folders are located directly below it
+      const addonDir: string = inst.localPath;
       try {
         // Preinstalled addons are subprojects themselves, so a subproject
         // entry without a name defaults to the addon's folder name
@@ -3026,7 +3035,7 @@ void startManager(int manIdx)
       "Executing startup DbUpdateScripts for all registered extensions...",
     );
 
-    const addons = await this._discoverAllAddons();
+    const addons = await this.discoverAllAddons();
     const registeredSubProjects = new Set(await this.listSubProjects());
 
     // Collect all subprojects that define DbUpdateScripts together with the union
