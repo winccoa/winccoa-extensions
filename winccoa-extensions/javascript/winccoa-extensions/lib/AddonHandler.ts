@@ -1,4 +1,4 @@
-import { Octokit } from "@octokit/rest";
+﻿import { Octokit } from "@octokit/rest";
 import { execSync } from "child_process";
 import { simpleGit } from "simple-git";
 import * as path from "path";
@@ -635,7 +635,6 @@ int registerSubProj(string path, string projName)
   else 
   {
     ret = paRegProj(projName, path, "", 0, true);
-    DebugTN("------- CTRL", path, projName, ret);
   }
 
   if (ret < 0)
@@ -658,8 +657,6 @@ int registerSubProj(string path, string projName)
 int unregisterSubProj(string path, string projName, bool deleteFiles, bool remainRegistered)
 {
   dyn_string subProjects;
-  DebugTN("------- CTRL", path, projName, deleteFiles);
-
   paGetSubProjs(PROJ, subProjects);
 
   if (subProjects.contains(projName))
