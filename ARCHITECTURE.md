@@ -292,7 +292,7 @@ sequenceDiagram
 How to read the diagram: it has four phases, top to bottom. The calls to `C` end up as PMON commands (participant `P`) over the TCP connection opened in the first step.
 
 1. **Connect.** `startTcpConnection` opens the PMON connection used by all following calls. If it cannot be opened, the whole guarded run is skipped.
-2. **Stop.** For every `DependentManagers` entry the handler finds the matching managers, remembers each one's start mode, sets it to manual (so PMON does not restart it) and stops it. Managers that fail to stop are not recorded and are never touched again.
+2. **Stop.** For every `DependentManagers` entry the handler finds the matching managers, remembers each one's start mode, sets it to manual (so PMON does not restart it) and stops it. A manager is remembered before its mode is changed, so it is restored even if setting manual mode or stopping it fails. Managers whose start mode cannot be read are left untouched. A failed lookup of one entry is logged and does not prevent the other entries from being processed.
 3. **Run.** The jobs run one after another, each with a 5-minute timeout. A failing or timed-out job is logged and the next job still runs.
 4. **Restore.** For each stopped manager the original start mode is written back, and the manager is started again if that mode was `once` or `always`. Finally the TCP connection is closed.
 

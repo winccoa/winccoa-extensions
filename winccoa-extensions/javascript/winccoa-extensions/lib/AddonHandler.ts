@@ -43,6 +43,12 @@ interface DependentManagerSnapshot {
   originalStartMode: string;
 }
 
+/**
+ * Start modes a dependent manager can be restored to. Any other value read from
+ * pmon ("unknown", "invalid") means the manager options could not be read.
+ */
+const RESTORABLE_START_MODES: string[] = ["manual", "once", "always"];
+
 /** A set of scripts to execute while the dependent managers are stopped */
 interface ScriptJob {
   scriptDir: string;
@@ -2755,10 +2761,15 @@ void startManager(int manIdx)
    * (exact "Name" match on the component, optional glob "Options" pattern on
    * the start options). The previous manager options are stored so they can be
    * restored later. Matching managers are set to manual start mode and stopped.
+   * Every manager is recorded before its start mode is changed, so a manager is
+   * always restorable, even if setting manual mode or stopping it fails halfway.
+   * Managers whose original start mode cannot be read are left untouched.
+   * This method does not throw: errors are logged so that the snapshots
+   * collected so far are always returned and can be restored by the caller.
    * @param dependentManagers DependentManagers configuration entries
    * @param pmonUser pmon user for PROP_PUT commands (may be empty on startup)
    * @param pmonPassword pmon password for PROP_PUT commands (may be empty on startup)
-   * @returns Snapshots of the managers that were stopped successfully
+   * @returns Snapshots of the managers whose start mode may have been changed
    */
   private async stopDependentManagers(
     dependentManagers: DependentManagerConfig[] | undefined,
@@ -2777,12 +2788,23 @@ void startManager(int manIdx)
         continue;
       }
 
-      // eslint-disable-next-line no-await-in-loop
-      const indices = (await this.ctrlScript.start(
-        "findDependentManagers",
-        [dependentManager.Name, dependentManager.Options || ""],
-        [WinccoaCtrlType.string, WinccoaCtrlType.string],
-      )) as number[];
+      let indices: number[] = [];
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        indices = (await this.ctrlScript.start(
+          "findDependentManagers",
+          [dependentManager.Name, dependentManager.Options || ""],
+          [WinccoaCtrlType.string, WinccoaCtrlType.string],
+        )) as number[];
+      } catch (error) {
+        // Do not abort: managers stopped for earlier entries must still be
+        // returned to the caller so that they get restored
+        winccoa.logWarning(
+          `Failed to look up dependent manager "${dependentManager.Name}":`,
+          error,
+        );
+        continue;
+      }
 
       for (const manIdx of indices || []) {
         if (!Number.isInteger(manIdx) || seen.has(manIdx)) {
@@ -2791,14 +2813,28 @@ void startManager(int manIdx)
         seen.add(manIdx);
 
         try {
-          // Store the previous start mode before changing it, so it can be
-          // restored after the scripts have run.
+          // Read the previous start mode before changing anything, so it can
+          // be restored after the scripts have run.
           // eslint-disable-next-line no-await-in-loop
           const originalStartMode = (await this.ctrlScript.start(
             "getManagerStartMode",
             [manIdx],
             [WinccoaCtrlType.int],
           )) as string;
+
+          // "unknown"/"invalid" means the options could not be read. Such a
+          // value cannot be written back later, so leave the manager alone.
+          if (!RESTORABLE_START_MODES.includes(originalStartMode)) {
+            winccoa.logWarning(
+              `Leaving dependent manager index ${manIdx} untouched: unexpected start mode "${originalStartMode}"`,
+            );
+            continue;
+          }
+
+          // Record the manager BEFORE its start mode is changed. If setting
+          // manual mode or stopping fails afterwards, it is still restored
+          // (restoring an unchanged manager only writes its original mode back).
+          stopped.push({ manIdx, originalStartMode });
 
           // eslint-disable-next-line no-await-in-loop
           await this.ctrlScript.start(
@@ -2823,14 +2859,12 @@ void startManager(int manIdx)
             "addonHandler",
             `Stopped dependent manager index ${manIdx} (was ${originalStartMode})`,
           );
-
-          stopped.push({ manIdx, originalStartMode });
         } catch (error) {
+          // If the manager was already recorded above, it is still restored
           winccoa.logWarning(
             `Failed to stop dependent manager index ${manIdx}:`,
             error,
           );
-          // Skip this manager so it is never left stopped without being restorable
         }
       }
     }
