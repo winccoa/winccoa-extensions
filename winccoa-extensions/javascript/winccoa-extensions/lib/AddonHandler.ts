@@ -1,4 +1,4 @@
-import { Octokit } from "@octokit/rest";
+﻿import { Octokit } from "@octokit/rest";
 import { execSync } from "child_process";
 import { simpleGit } from "simple-git";
 import * as path from "path";
@@ -13,7 +13,12 @@ import { AsciiManager } from "./AsciiManager";
 import { CommandExecutor } from "./CommandExecutor";
 import { PathResolver } from "./PathResolver";
 import { NodeInstaller } from "./NodeInstaller";
-import { AddonConfig, SubprojectConfig } from "./AddonConfig";
+import {
+  AddonConfig,
+  SubprojectConfig,
+  NamedSubprojectConfig,
+  DependentManagerConfig,
+} from "./AddonConfig";
 
 /**
  * Interface for manager configuration
@@ -29,8 +34,46 @@ export interface PmonCredentials {
   password: string;
 }
 
+/**
+ * Snapshot of a dependent manager's options, taken before it is stopped so the
+ * manager can be restored afterwards.
+ */
+interface DependentManagerSnapshot {
+  manIdx: number;
+  originalStartMode: string;
+}
+
+/**
+ * Start modes a dependent manager can be restored to. Any other value read from
+ * pmon ("unknown", "invalid") means the manager options could not be read.
+ */
+const RESTORABLE_START_MODES: string[] = ["manual", "once", "always"];
+
+/** A set of scripts to execute while the dependent managers are stopped */
+interface ScriptJob {
+  scriptDir: string;
+  scripts: string[];
+  label: string;
+}
+
 // Export the class for use in other modules
 export { AddonHandler };
+
+/**
+ * Unified representation of a discovered addon (local or installed),
+ * used by startup tasks to iterate over all registered extensions.
+ */
+interface AddonDiscovery {
+  name: string;
+  /**
+   * Directory that contains the subproject folders of this addon:
+   * - cloned repositories: the repository root (<project dir>/<repo>)
+   * - preinstalled addons: the WinCC OA installation directory
+   * Subproject files are located at <addonDir>/<subproject name>.
+   */
+  addonDir: string;
+  config: AddonConfig;
+}
 
 /**
  * WinCC OA Addon Handler for managing GitHub repositories
@@ -110,6 +153,29 @@ function readWindowsRegistry(
 }
 
 /**
+ * Build the Windows registry key path of the WinCC OA version the addon is running on.
+ * The version is taken from the current server via winccoa.getVersionInfo()
+ * (registry keys use "<major>.<minor>", e.g. "3.21").
+ * @returns Registry key path or null if the version could not be determined
+ */
+function getWinCCOARegistryPath(): string | null {
+  try {
+    const { major, minor } = winccoa.getVersionInfo().winccoa;
+    if (major === undefined || minor === undefined) {
+      winccoa.logWarning("WinCC OA version info is incomplete");
+      return null;
+    }
+    return `HKEY_LOCAL_MACHINE\\SOFTWARE\\ETM\\WinCC_OA\\${major}.${minor}`;
+  } catch (error) {
+    winccoa.logWarning(
+      "Failed to determine WinCC OA version for registry lookup:",
+      (error as Error).message,
+    );
+    return null;
+  }
+}
+
+/**
  * Generic function to read WinCC OA registry values with consistent error handling
  * @param valueName The registry value name to read (e.g., "PROJECTDIR", "INSTALLDIR")
  * @param description Human-readable description for logging
@@ -128,7 +194,10 @@ function getWinCCOARegistryValue(
   }
 
   try {
-    const registryPath = "HKEY_LOCAL_MACHINE\\SOFTWARE\\ETM\\WinCC_OA\\3.21";
+    const registryPath = getWinCCOARegistryPath();
+    if (!registryPath) {
+      return null;
+    }
     winccoa.logDebugF(
       "addonHandler",
       `Checking Windows registry for ${description}: ${registryPath}`,
@@ -533,6 +602,10 @@ class AddonHandler {
 #uses "classes/projectEnvironment/ProjEnvProject"
 #uses "pmon"
 
+public int gTcpFileDescriptor2;
+public string host;
+public string port;
+
 string getPmonPath()
 {
   string sPvssPath;
@@ -554,8 +627,15 @@ string getProjectName()
 
 int registerSubProj(string path, string projName)
 {
-  int ret = paRegProj(projName, path, "", 0, true);
-  DebugTN("------- CTRL", path, projName, ret);
+  int ret;
+  if (paCheckProj(projName, 4 /* PA_IS_PROJ_REGISTERED */) == 0) 
+  {
+    ret = 0;
+  } 
+  else 
+  {
+    ret = paRegProj(projName, path, "", 0, true);
+  }
 
   if (ret < 0)
   {
@@ -574,12 +654,9 @@ int registerSubProj(string path, string projName)
   return ret;
 }
 
-int unregisterSubProj(string path, string projName, bool deleteFiles)
+int unregisterSubProj(string path, string projName, bool deleteFiles, bool remainRegistered)
 {
   dyn_string subProjects;
-
-  DebugTN("------- CTRL", path, projName, deleteFiles);
-
   paGetSubProjs(PROJ, subProjects);
 
   if (subProjects.contains(projName))
@@ -589,7 +666,13 @@ int unregisterSubProj(string path, string projName, bool deleteFiles)
     paSetSubProjs(PROJ, subProjects);
   }
 
-  return paDelProj(projName, deleteFiles);
+  if (!remainRegistered)
+  {
+    return paDelProj(projName, deleteFiles);
+  }
+    
+  // This project will remain a registered project
+  return 0;
 }
 
 dyn_string listSubProjs()
@@ -599,12 +682,25 @@ dyn_string listSubProjs()
   return subProjects;
 }
 
-int gTcpFileDescriptor2;
-string host;
-string port;
 bool addManager(string manager, string startMode, string options, string user, string pwd)
 {
-  DebugTN("Adding manager", manager, startMode, options, user, pwd);
+  DebugTN("Adding manager", manager, startMode, options, user);
+
+  int existingIdx = managerExists(manager, options);
+  if (existingIdx != -1)
+  {
+    startTcpConnection();
+    setManagerStartMode(existingIdx, startMode, user, pwd);
+
+    if (startMode == "once" || startMode == "always")
+    {
+      startManager(existingIdx);
+    }
+        
+    stopTcpConnection();
+    return false;
+  }
+
   paGetProjHostPort(PROJ, host, port);
   gTcpFileDescriptor2 = tcpOpen(host, port);
   ProjEnvProject proj  = new ProjEnvProject(PROJ);
@@ -647,6 +743,100 @@ void removeManager(int manIdx)
   proj.changeManagerOptions(manIdx, startOptions);
   proj.stopManager(manIdx, 30);
   proj.deleteManager(manIdx);
+}
+
+string startModeToString(ProjEnvManagerStartMode mode)
+{
+  switch (mode)
+  {
+    case ProjEnvManagerStartMode::Unknown : return "unknown";
+    case ProjEnvManagerStartMode::Manual  : return "manual";
+    case ProjEnvManagerStartMode::Once    : return "once";
+    case ProjEnvManagerStartMode::Always  : return "always";
+    default                              : return "invalid";
+  }
+}
+
+dyn_int findDependentManagers(string name, string optionPattern)
+{
+  ProjEnvProject proj = new ProjEnvProject(PROJ);
+  dyn_anytype managerOptions = proj.getListOfManagerOptions();
+  dyn_int result;
+
+  for (int i = 0; i < dynlen(managerOptions); i++)
+  {
+    ProjEnvManagerOptions opt = managerOptions[i + 1];
+    if (opt.component != name) continue;
+    if (optionPattern != "" && !patternMatch(optionPattern, opt.startOptions)) continue;
+    result.append(i);
+  }
+  return result;
+}
+
+string getManagerStartMode(int manIdx)
+{
+  ProjEnvProject proj = new ProjEnvProject(PROJ);
+  ProjEnvManagerOptions opt = proj.getManagerOptions(manIdx);
+  return startModeToString(opt.startMode);
+}
+
+bool startTcpConnection()
+{
+  int iErr = paGetProjHostPort(PROJ, host, port);
+  if (iErr)
+  {
+    pmon_warningOutput("errHostOrPort", -1);
+    return true;
+  }
+
+  if (gTcpFileDescriptor2 <= 0)
+  {
+    gTcpFileDescriptor2 = tcpOpen(host, port);
+  }
+  return false; // "already connected" is success, not failure
+}
+
+void stopTcpConnection()
+{
+  if (gTcpFileDescriptor2 >= 0)
+  {
+    tcpClose(gTcpFileDescriptor2);
+    gTcpFileDescriptor2 = -1; // reset so the next call reopens correctly
+  }
+}
+
+bool setManagerStartMode(int manPos, string startMode, string sUser, string sPassword)
+{
+  string sHost;
+  int   iPort;
+  int   iErr = paGetProjHostPort(PROJ, sHost, iPort);
+  if (iErr)
+  {
+    pmon_warningOutput("errHostOrPort", -1);
+    return true;
+  }
+  ProjEnvProject proj = new ProjEnvProject(PROJ);
+  ProjEnvManagerOptions opt = proj.getManagerOptions(manPos);
+  string str = "SINGLE_MGR:PROP_PUT " + manPos +
+    " " + startMode +
+    " " + opt.secondToKill +
+    " " + opt.restart +
+    " " + opt.resetStartCounter +
+    " " + opt.startOptions;
+  str = sUser + "#" + sPassword + "#" + str;
+  return pmon_command(str, sHost, iPort, false, false);
+}
+
+void stopManager(int manIdx)
+{
+  ProjEnvProject proj = new ProjEnvProject(PROJ);
+  proj.stopManager(manIdx, 30);
+}
+
+void startManager(int manIdx)
+{
+  ProjEnvProject proj = new ProjEnvProject(PROJ);
+  proj.startManager(manIdx);
 }
 
   `,
@@ -719,6 +909,10 @@ void removeManager(int manIdx)
           JSON.parse(cloneResult.fileContent),
         );
 
+        // Dependencies always come from external sources, whose subprojects
+        // must define a name (a repository may contain multiple subprojects)
+        this.assertSubprojectNamesPresent(depConfig, depUrl);
+
         // Recursively process nested dependencies
         if (depConfig.Dependencies && depConfig.Dependencies.length > 0) {
           await this.processDependencies(
@@ -737,12 +931,20 @@ void removeManager(int manIdx)
               "addonHandler",
               `Registering dependency subproject: ${subproject.Name}`,
             );
-            await this.registerSubProject(
+
+            let ret = await this.registerSubProject(
               cloneResult.path,
               subproject.Name,
               subproject,
               session,
             );
+
+            if (ret < 0) {
+              winccoa.logDebugF(
+                "addonHandler",
+                `Registering subproject: ${subproject.Name} has failed.`,
+              );
+            }
           }
         } else {
           winccoa.logDebugF(
@@ -781,7 +983,11 @@ void removeManager(int manIdx)
       [WinccoaCtrlType.string, WinccoaCtrlType.string],
     )) as number;
 
-    await NodeInstaller.installAndBuild(path.join(repoPath, projectName));
+    if (ret < 0) {
+      return ret;
+    }
+
+    await this.installAndBuildNodeProject(path.join(repoPath, projectName));
 
     // Import dplist files if available (from subproject config)
     if (
@@ -904,10 +1110,34 @@ void removeManager(int manIdx)
       winccoa.logInfo("No uninstall scripts to execute");
     }
 
+    // Projects that come with the WINCCOA installtion should stay registered
+    // and must never be deleted from disk, regardless of what the caller requested
+    let remainRegistered = this.isInstalledAddonPath(repoPath);
+    if (remainRegistered && deleteFiles) {
+      winccoa.logWarning(
+        `Refusing to delete files for installed addon path: ${repoPath}`,
+      );
+      deleteFiles = false;
+    }
+
+    // Files may only be deleted for cloned repositories. This is checked before
+    // the CTRL call as well, since paDelProj() would delete the project files.
+    if (deleteFiles && !this.isDeletableRepositoryPath(repoPath)) {
+      winccoa.logWarning(
+        `Refusing to delete files outside of the addon directory: ${repoPath}`,
+      );
+      deleteFiles = false;
+    }
+
     const ret = (await this.ctrlScript.start(
       "unregisterSubProj",
-      [repoPath, projectName, deleteFiles],
-      [WinccoaCtrlType.string, WinccoaCtrlType.string, WinccoaCtrlType.bool],
+      [repoPath, projectName, deleteFiles, remainRegistered],
+      [
+        WinccoaCtrlType.string,
+        WinccoaCtrlType.string,
+        WinccoaCtrlType.bool,
+        WinccoaCtrlType.bool,
+      ],
     )) as number;
 
     // delete the whole cloned repository folder
@@ -928,6 +1158,12 @@ void removeManager(int manIdx)
       "addonHandler",
       `Removing local repository folder: ${repoPath}`,
     );
+    if (!this.isDeletableRepositoryPath(repoPath)) {
+      winccoa.logWarning(
+        `Refusing to remove folder outside of the addon directory: ${repoPath}`,
+      );
+      return false;
+    }
     try {
       await fs.promises.rm(repoPath, { recursive: true, force: true });
       return true;
@@ -966,6 +1202,122 @@ void removeManager(int manIdx)
       }
     }
     return localAddons;
+  }
+
+  /**
+   * List addons installed in the WinCC OA installation directory.
+   * Scans immediate subdirectories of the installation path for package.winccoa.json files,
+   * excluding any that already exist in the project directory (to avoid duplicates with listLocalAddons).
+   *
+   * @returns Array of repository objects in the normalized shape expected by the frontend
+   */
+  async listInstalledAddons(): Promise<object[]> {
+    const installedAddons: object[] = [];
+
+    // Resolve the WinCC OA installation directory using the same fallback chain as getWinCCOAInstallDir
+    const installDir = getWinCCOAInstallDir(winccoa);
+    if (!installDir) {
+      winccoa.logWarning(
+        "addonHandler",
+        "[listInstalledAddons] Could not determine WinCC OA installation directory",
+      );
+      return installedAddons;
+    }
+
+    winccoa.logDebugF(
+      "addonHandler",
+      `[listInstalledAddons] Scanning installation directory: ${installDir}`,
+    );
+
+    let entries: fs.Dirent[]; // Dirent = directory entry
+    try {
+      entries = await fs.promises.readdir(installDir, { withFileTypes: true });
+    } catch (error) {
+      winccoa.logWarning(
+        `addonHandler`,
+        `[listInstalledAddons] Failed to read installation directory: ${(error as Error).message}`,
+      );
+      return installedAddons;
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+
+      const addonDir = path.join(installDir, entry.name);
+      const addonJsonPath = path.join(addonDir, "package.winccoa.json");
+
+      // Skip if no package.winccoa.json present
+      if (!fs.existsSync(addonJsonPath)) continue;
+
+      // Skip if this addon already exists in the project directory (handled by listLocalAddons)
+      const projectAddonPath = path.join(this._defaultDirectory, entry.name);
+      if (fs.existsSync(projectAddonPath)) {
+        winccoa.logDebugF(
+          "addonHandler",
+          `[listInstalledAddons] Skipping ${entry.name} - already present in project directory`,
+        );
+        continue;
+      }
+
+      try {
+        const fileContent = fs.readFileSync(addonJsonPath, "utf-8");
+        const packageJson = JSON.parse(fileContent);
+
+        // Check OA version compatibility if specified
+        if (
+          packageJson.OaVersion &&
+          !this.isVersionCompatible(packageJson.OaVersion)
+        ) {
+          winccoa.logDebugF(
+            "addonHandler",
+            `[listInstalledAddons] Skipping ${entry.name}: requires OaVersion ${packageJson.OaVersion}, current is ${this._oaVersion}`,
+          );
+          continue;
+        }
+
+        // Get directory stats for timestamps
+        const stats = fs.statSync(addonDir);
+
+        // Preinstalled addons are subprojects themselves: a subproject entry
+        // without a name defaults to the addon's folder name
+        const resolvedPackageJson = this.applyDefaultSubprojectName(
+          packageJson,
+          entry.name,
+        );
+
+        installedAddons.push({
+          name: entry.name,
+          localPath: installDir,
+          fileContent: JSON.stringify(resolvedPackageJson, null, 2),
+          winccoaPackage: resolvedPackageJson,
+          installedAddon: true,
+          description: packageJson.Description || "",
+          private: false,
+          stars: 0,
+          forks: 0,
+          language: undefined,
+          size: 0,
+          createdAt: stats.birthtime.toISOString(),
+          updatedAt: stats.mtime.toISOString(),
+        });
+
+        winccoa.logDebugF(
+          "addonHandler",
+          `[listInstalledAddons] Found installed addon: ${entry.name}`,
+        );
+      } catch (error) {
+        winccoa.logWarning(
+          `addonHandler`,
+          `[listInstalledAddons] Failed to read package.winccoa.json for ${entry.name}: ${(error as Error).message}`,
+        );
+      }
+    }
+
+    winccoa.logDebugF(
+      "addonHandler",
+      `[listInstalledAddons] Found ${installedAddons.length} installed addons`,
+    );
+    return installedAddons;
   }
 
   /**
@@ -1283,9 +1635,15 @@ void removeManager(int manIdx)
   /**
    * Map package.winccoa.json content to AddonConfig interface
    * @param packageJson Parsed package.winccoa.json content
+   * @param defaultSubprojectName Name used for subproject entries missing a
+   *   "Name" field (preinstalled addons in the WinCC OA installation
+   *   directory, where the name defaults to the addon's folder name)
    * @returns AddonConfig object
    */
-  mapPackageJsonToAddonConfig(packageJson: any): AddonConfig {
+  mapPackageJsonToAddonConfig(
+    packageJson: any,
+    defaultSubprojectName?: string,
+  ): AddonConfig {
     return {
       RepoName: packageJson.RepoName,
       Keywords: packageJson.Keywords || [],
@@ -1293,7 +1651,7 @@ void removeManager(int manIdx)
       Description: packageJson.Description,
       OaVersion: packageJson.OaVersion,
       Subprojects: (packageJson.Subprojects || []).map((sp: any) => ({
-        Name: sp.Name,
+        Name: sp.Name || defaultSubprojectName,
         Description: sp.Description,
         Managers: sp.Managers
           ? sp.Managers.map((manager: any) => ({
@@ -1308,10 +1666,220 @@ void removeManager(int manIdx)
           : [],
         Dplists: sp.Dplists || [],
         UpdateScripts: sp.UpdateScripts || [],
-        UnInstallScripts: sp.UninstallScripts || [],
+        UninstallScripts: sp.UninstallScripts || [],
+        DbUpdateScripts: sp.DbUpdateScripts || [],
+        DependentManagers: sp.DependentManagers
+          ? sp.DependentManagers.map((dependentManager: any) => ({
+              Name: dependentManager.Name || "",
+              Options: dependentManager.Options || "",
+            }))
+          : [],
       })),
       Dependencies: packageJson.Dependencies || [],
     };
+  }
+
+  /**
+   * Return a copy of the given package.winccoa.json content with the
+   * subproject name filled in from the given folder name for all subproject
+   * entries that have no "Name" set.
+   * Used for addons in the WinCC OA installation directory, where the addon's
+   * folder is the subproject itself and therefore always carries its name.
+   * @param packageJson Parsed package.winccoa.json content
+   * @param folderName Name of the folder containing the addon (the addon's name)
+   * @returns Copy of the package with missing subproject names filled in
+   */
+  public applyDefaultSubprojectName(packageJson: any, folderName: string): any {
+    if (!packageJson || !Array.isArray(packageJson.Subprojects)) {
+      return packageJson;
+    }
+    return {
+      ...packageJson,
+      Subprojects: packageJson.Subprojects.map((sp: any) =>
+        sp && !sp.Name ? { ...sp, Name: folderName } : sp,
+      ),
+    };
+  }
+
+  /**
+   * Check whether the given path points to the root of the WinCC OA
+   * installation. Preinstalled addons (located directly in the installation
+   * directory) are registered with the installation directory as their
+   * repository path.
+   * @param repositoryPath Path to compare against the installation directory
+   * @returns True if the path is the WinCC OA installation directory
+   */
+  public isInstalledAddonPath(repositoryPath: string): boolean {
+    if (!repositoryPath) {
+      return false;
+    }
+    const installDir = getWinCCOAInstallDir(winccoa);
+    if (!installDir) {
+      return false;
+    }
+    return (
+      this.normalizePath(repositoryPath) === this.normalizePath(installDir)
+    );
+  }
+
+  /**
+   * Check whether a path is the WinCC OA installation directory or located
+   * anywhere below it.
+   * @param p Path to check
+   * @returns True if the path is inside the WinCC OA installation
+   */
+  private isInsideInstallDir(p: string): boolean {
+    if (!p) {
+      return false;
+    }
+    const installDir = getWinCCOAInstallDir(winccoa);
+    if (!installDir) {
+      return false;
+    }
+    const root = this.normalizePath(installDir);
+    const target = this.normalizePath(p);
+    return target === root || target.startsWith(root + path.sep);
+  }
+
+  /**
+   * Run "npm install" and "tsc" for all Node.js projects below the given
+   * project directory. Skipped for projects inside the WinCC OA installation
+   * directory: preinstalled addons ship prebuilt, and installing/building there
+   * would modify the product installation (package.json, node_modules, build
+   * output), which usually is not even writable.
+   * @param projectDir Subproject directory containing the "javascript" folder
+   */
+  private async installAndBuildNodeProject(projectDir: string): Promise<void> {
+    if (this.isInsideInstallDir(projectDir)) {
+      winccoa.logInfo(
+        `Skipping npm install/build for preinstalled addon in the WinCC OA installation: ${projectDir}`,
+      );
+      return;
+    }
+    await NodeInstaller.installAndBuild(projectDir);
+  }
+
+  /**
+   * Normalize a path for comparison: resolves it to an absolute path (which
+   * also removes "." and ".." segments), strips trailing separators and, on
+   * Windows, lowercases it because the file system is case-insensitive.
+   * @param p Path to normalize
+   * @returns Normalized path, to be used for comparisons only
+   */
+  private normalizePath(p: string): string {
+    const resolved = path.resolve(p);
+    return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+  }
+
+  /**
+   * Check whether a path is a direct child of the default addon directory
+   * (the project directory the repositories are cloned into), i.e. the
+   * location of every cloned repository. The directory itself does not count.
+   * @param p Path to check
+   * @returns True if the path is "<default addon directory>/<name>"
+   */
+  private isDirectChildOfAddonDirectory(p: string): boolean {
+    if (!p || !this._defaultDirectory) {
+      return false;
+    }
+    const resolved = path.resolve(p);
+    const parent = path.dirname(resolved);
+    return (
+      resolved !== parent &&
+      this.normalizePath(parent) === this.normalizePath(this._defaultDirectory)
+    );
+  }
+
+  /**
+   * Check whether files at the given path may be deleted from disk. This is
+   * only allowed for cloned repositories, which are always located directly in
+   * the default addon directory.
+   * @param repositoryPath Path to check
+   * @returns True if the path is a deletable (cloned) repository folder
+   */
+  public isDeletableRepositoryPath(repositoryPath: string): boolean {
+    return this.isDirectChildOfAddonDirectory(repositoryPath);
+  }
+
+  /**
+   * Validate a repository path received from a client request. Only two
+   * locations are legitimate: a cloned repository (a direct child of the
+   * default addon directory) and, if allowed by the caller, the WinCC OA
+   * installation directory (for preinstalled addons).
+   * @param requestedPath Path received from the request
+   * @param allowInstalled Whether the WinCC OA installation directory is accepted
+   * @returns The validated absolute path and whether it is the installation directory
+   * @throws Error if the path is neither of the allowed locations
+   */
+  public resolveAllowedRepositoryPath(
+    requestedPath: string,
+    allowInstalled: boolean,
+  ): { path: string; installed: boolean } {
+    if (!requestedPath) {
+      throw new Error("Repository path must not be empty");
+    }
+
+    if (allowInstalled && this.isInstalledAddonPath(requestedPath)) {
+      return { path: path.resolve(requestedPath), installed: true };
+    }
+
+    if (this.isDirectChildOfAddonDirectory(requestedPath)) {
+      return { path: path.resolve(requestedPath), installed: false };
+    }
+
+    winccoa.logWarning(`Rejected repository path: ${requestedPath}`);
+    throw new Error(`Repository path not allowed: ${requestedPath}`);
+  }
+
+  /**
+   * Ensure that a preinstalled addon with the given folder name really exists
+   * in the WinCC OA installation directory, so that a request cannot point the
+   * installation directory at an arbitrary folder name.
+   * @param addonName Folder name of the addon inside the installation directory
+   * @throws Error if the name is not a plain folder name or the addon (a folder
+   *   with a package.winccoa.json) does not exist
+   */
+  public assertInstalledAddonExists(addonName: string): void {
+    const installDir = getWinCCOAInstallDir(winccoa);
+    const isPlainName =
+      !!addonName &&
+      addonName !== "." &&
+      addonName !== ".." &&
+      addonName === path.basename(addonName);
+
+    if (
+      !installDir ||
+      !isPlainName ||
+      !fs.existsSync(path.join(installDir, addonName, "package.winccoa.json"))
+    ) {
+      winccoa.logWarning(`Rejected installed addon name: ${addonName}`);
+      throw new Error(
+        `Installed addon not found in the WinCC OA installation: ${addonName}`,
+      );
+    }
+  }
+
+  /**
+   * Ensure that every subproject in the given addon config has a name set.
+   * Subprojects of addons from external sources (git repositories) must define
+   * a "Name", since a single repository may contain multiple subprojects.
+   * @param config Addon config to validate
+   * @param addonName Identifier (repo name, URL or path) used in the error message
+   */
+  public assertSubprojectNamesPresent(
+    config: AddonConfig,
+    addonName: string,
+  ): asserts config is AddonConfig & {
+    Subprojects: NamedSubprojectConfig[];
+  } {
+    for (const subproject of config.Subprojects) {
+      if (!subproject.Name) {
+        throw new Error(
+          `Subproject without a name found in package.winccoa.json of "${addonName}". ` +
+            `Subprojects of addons from external sources must define a "Name" field.`,
+        );
+      }
+    }
   }
 
   /**
@@ -1359,6 +1927,35 @@ void removeManager(int manIdx)
       winccoa.logWarning(
         `Failed to read or parse package.winccoa.json: ${error.message}`,
       );
+      return null;
+    }
+  }
+
+  /**
+   * Read a file from the filesystem and return its content as a string.
+   * @param filePath Absolute path to the file to read
+   * @returns File content as string, or null if file doesn't exist or can't be read
+   */
+  public readFile(filePath: string): string | null {
+    const resolved = path.resolve(filePath);
+    const installDir = getWinCCOAInstallDir(winccoa);
+    const allowedRoots = [this._defaultDirectory, installDir]
+      .filter((p): p is string => !!p)
+      .map((p) => path.resolve(p));
+    const underAllowedRoot = allowedRoots.some(
+      (root) => resolved === root || resolved.startsWith(root + path.sep),
+    );
+    const isReadme = path.basename(resolved).toLowerCase() === "readme.md";
+
+    if (!underAllowedRoot || !isReadme) {
+      winccoa.logWarning(`Rejected readFile request for path: ${filePath}`);
+      return null;
+    }
+    try {
+      if (!fs.existsSync(resolved)) return null;
+      return fs.readFileSync(resolved, "utf8");
+    } catch (error: any) {
+      winccoa.logWarning(`Failed to read file ${resolved}: ${error.message}`);
       return null;
     }
   }
@@ -1417,6 +2014,12 @@ void removeManager(int manIdx)
         const parsedPackage = JSON.parse(packageJsonContentBeforePull);
         updatedAddonConfigBeforePull =
           this.mapPackageJsonToAddonConfig(parsedPackage);
+        // Repositories pulled via git always come from external sources,
+        // whose subprojects must define a name
+        this.assertSubprojectNamesPresent(
+          updatedAddonConfigBeforePull,
+          repositoryPath,
+        );
       } catch (error) {
         winccoa.logWarning(
           "Could not read package.winccoa.json before pull:",
@@ -1462,6 +2065,9 @@ void removeManager(int manIdx)
         try {
           const parsedPackage = JSON.parse(packageJsonContent);
           updatedAddonConfig = this.mapPackageJsonToAddonConfig(parsedPackage);
+          // Repositories pulled via git always come from external sources,
+          // whose subprojects must define a name
+          this.assertSubprojectNamesPresent(updatedAddonConfig, repositoryPath);
 
           if (
             updatedAddonConfigBeforePull.Version &&
@@ -1524,79 +2130,67 @@ void removeManager(int manIdx)
               );
             }
 
-            // Process each subproject
+            const sessionCredentials = this.pmonCredentials.find(
+              (cred) => cred.session === session,
+            );
+            const pmonUser = sessionCredentials?.user || "";
+            const pmonPassword = sessionCredentials?.password || "";
+
+            // Phase 0: import dplists of all subprojects first, so that the
+            // UpdateScripts can rely on the data point types they provide.
             for (const subproject of updatedAddonConfig.Subprojects) {
-              const subprojectBeforePull =
-                updatedAddonConfigBeforePull.Subprojects.find(
-                  (sp) => sp.Name === subproject.Name,
-                );
-              // Import dplist files if available
               if (subproject.Dplists && subproject.Dplists.length > 0) {
                 await this.importAsciiFiles(
                   subproject.Dplists,
                   path.join(repositoryPath, subproject.Name, "dplist"),
                 );
               }
+            }
 
-              // Execute update scripts if any
+            // Phase 1: stop all dependent managers of the current package, run all
+            // UpdateScripts, then restore all dependent managers. Errors are fatal after
+            // the managers have been restored.
+            const updateJobs: ScriptJob[] = [];
+            const allUpdateDependentManagers: DependentManagerConfig[] = [];
+            for (const subproject of updatedAddonConfig.Subprojects) {
               if (
                 subproject.UpdateScripts &&
                 subproject.UpdateScripts.length > 0
               ) {
                 winccoa.logDebugF(
                   "addonHandler",
-                  `Executing ${subproject.UpdateScripts.length} update script(s) for subproject ${subproject.Name}...`,
+                  `Collecting ${subproject.UpdateScripts.length} update script(s) for subproject ${subproject.Name}...`,
                 );
-
-                // Create a timeout promise that rejects after 5 minutes
-                const timeoutPromise = new Promise<void>((_, reject) => {
-                  setTimeout(
-                    () => {
-                      reject(
-                        new Error(
-                          "Update scripts execution timed out after 5 minutes",
-                        ),
-                      );
-                    },
-                    5 * 60 * 1000,
-                  ); // 5 minutes in milliseconds
+                updateJobs.push({
+                  scriptDir: path.join(repositoryPath, subproject.Name),
+                  scripts: subproject.UpdateScripts,
+                  label: subproject.Name,
                 });
-
-                // Race the execution against the timeout
-                try {
-                  // eslint-disable-next-line no-await-in-loop
-                  await Promise.race([
-                    this.executeScripts(
-                      path.join(repositoryPath, subproject.Name),
-                      subproject.UpdateScripts,
-                    ),
-                    timeoutPromise,
-                  ]);
-                  winccoa.logInfo(
-                    `Update scripts for ${subproject.Name} completed successfully`,
-                  );
-                } catch (error) {
-                  if (
-                    error instanceof Error &&
-                    error.message.includes("timed out")
-                  ) {
-                    winccoa.logWarning(
-                      `Update scripts execution for ${subproject.Name} timed out after 5 minutes`,
-                    );
-                  } else {
-                    winccoa.logWarning(
-                      `Error executing update scripts for ${subproject.Name}:`,
-                      error,
-                    );
-                  }
-                  throw error;
+                for (const dependentManager of subproject.DependentManagers ||
+                  []) {
+                  allUpdateDependentManagers.push(dependentManager);
                 }
-              } else {
-                winccoa.logDebugF(
-                  "addonHandler",
-                  `No update scripts to execute for subproject ${subproject.Name}`,
-                );
               }
+            }
+
+            if (updateJobs.length > 0) {
+              await this.runAllScriptsGuardedByManagers(
+                updateJobs,
+                allUpdateDependentManagers,
+                pmonUser,
+                pmonPassword,
+                true,
+              );
+            }
+
+            // Phase 2: post-process each subproject (node build, manager
+            // creation/restart) after the guarded update scripts have finished.
+            // Dplists were already imported in Phase 0.
+            for (const subproject of updatedAddonConfig.Subprojects) {
+              const subprojectBeforePull =
+                updatedAddonConfigBeforePull.Subprojects.find(
+                  (sp) => sp.Name === subproject.Name,
+                );
 
               // update node managers
               await NodeInstaller.installAndBuild(repositoryPath);
@@ -1625,12 +2219,6 @@ void removeManager(int manIdx)
               }
 
               if (subproject.Managers) {
-                const sessionCredentials = this.pmonCredentials.find(
-                  (cred) => cred.session === session,
-                );
-                const pmonUser = sessionCredentials?.user || "";
-                const pmonPassword = sessionCredentials?.password || "";
-
                 for (const manager of subproject.Managers) {
                   // eslint-disable-next-line no-await-in-loop
                   const managerIdx = await this.ctrlScript.start(
@@ -2020,7 +2608,7 @@ void removeManager(int manIdx)
         "lib",
         "bootstrap.js",
       );
-      const command = `node.exe -- "${bootstrapPath}" -currentproj ${scriptFile}`;
+      const command = `node.exe "${bootstrapPath}" -currentproj ${scriptFile}`;
       winccoa.logDebugF(
         "addonHandler",
         `Executing JavaScript command: ${command}`,
@@ -2045,10 +2633,24 @@ void removeManager(int manIdx)
   }
 
   /**
+   * Resolve a script file to its quoted, full-path form.
+   * Checks whether the script exists under the given subdirectory of
+   * repositoryPath; if not, falls back to the bare filename (for scripts
+   * resolved by the manager from well-known directories).
+   */
+  private resolveScriptPath(
+    repositoryPath: string,
+    subDir: string,
+    scriptFile: string,
+  ): string {
+    const fullPath = path.join(repositoryPath, subDir, scriptFile);
+    return '"' + (fs.existsSync(fullPath) ? fullPath : scriptFile) + '"';
+  }
+
+  /**
    * Execute scripts based on their file extensions
    * @param repositoryPath The path to the repository
    * @param scripts Array of script filenames
-   * @param scriptType Type of scripts being executed (for logging)
    */
   private async executeScripts(
     repositoryPath: string,
@@ -2059,28 +2661,40 @@ void removeManager(int manIdx)
         const fileExtension = path.extname(scriptFile).toLowerCase();
 
         switch (fileExtension) {
+          case ".ctc":
           case ".ctl":
-            // For .ctl files, use WCCOActrl manager
             await this.startManagers(repositoryPath, [
               {
                 exeName: "WCCOActrl",
-                startParams: scriptFile,
+                startParams: this.resolveScriptPath(
+                  repositoryPath,
+                  "scripts",
+                  scriptFile,
+                ),
               },
             ]);
             break;
 
-          case ".ts":
-            // For .ts files, build TypeScript project and execute the transpiled JS file
-            await NodeInstaller.installAndBuild(repositoryPath);
-
-            // Execute the transpiled JavaScript file
-            const jsScriptFile = scriptFile.replace(/\.ts$/, ".js");
-            await this.startWinCCOAnodeManager(jsScriptFile);
+          case ".ts": {
+            // Build first so the transpiled .js exists, then resolve its path.
+            // The extension is swapped on the raw script name, before
+            // resolveScriptPath() wraps the result in quotes.
+            await this.installAndBuildNodeProject(repositoryPath);
+            const jsScriptFile = scriptFile.replace(/\.ts$/i, ".js");
+            await this.startWinCCOAnodeManager(
+              this.resolveScriptPath(
+                repositoryPath,
+                "javascript",
+                jsScriptFile,
+              ),
+            );
             break;
+          }
 
           case ".js":
-            // For .js files, execute with Node.js using WinCC OA bootstrap
-            await this.startWinCCOAnodeManager(scriptFile);
+            await this.startWinCCOAnodeManager(
+              this.resolveScriptPath(repositoryPath, "javascript", scriptFile),
+            );
             break;
 
           default:
@@ -2095,6 +2709,387 @@ void removeManager(int manIdx)
     }
 
     winccoa.logDebugF("addonHandler", "All update scripts have been processed");
+  }
+
+  /**
+   * Discover all addons from both the local project directory and the
+   * WinCC OA installation directory, returning a unified list.
+   * Local addons take precedence; installed addons that already exist
+   * in the project directory are skipped by listInstalledAddons().
+   */
+  private async discoverAllAddons(): Promise<AddonDiscovery[]> {
+    const discovered: AddonDiscovery[] = [];
+
+    // 1. Local addons (cloned repos in the project directory)
+    const localAddons = await this.listLocalAddons();
+    for (const local of localAddons) {
+      const addonDir = path.join(this._defaultDirectory, local.addon);
+      try {
+        const config = this.mapPackageJsonToAddonConfig(local.fileContent);
+        discovered.push({ name: local.addon, addonDir, config });
+      } catch (error) {
+        winccoa.logWarning(
+          `Failed to parse config for local addon ${local.addon}:`,
+          error,
+        );
+      }
+    }
+
+    // 2. Installed addons (WinCC OA installation directory, duplicates excluded)
+    const installedAddons = await this.listInstalledAddons();
+    for (const installed of installedAddons) {
+      const inst = installed as any;
+      // Preinstalled addons are registered with the installation directory as
+      // their repository path (see registerSubProj / unregisterSubProject), so
+      // the subproject folders are located directly below it
+      const addonDir: string = inst.localPath;
+      try {
+        // Preinstalled addons are subprojects themselves, so a subproject
+        // entry without a name defaults to the addon's folder name
+        const config = this.mapPackageJsonToAddonConfig(
+          inst.winccoaPackage,
+          inst.name,
+        );
+        discovered.push({ name: inst.name, addonDir, config });
+      } catch (error) {
+        winccoa.logWarning(
+          `Failed to parse config for installed addon ${inst.name}:`,
+          error,
+        );
+      }
+    }
+
+    return discovered;
+  }
+
+  /**
+   * Stop all managers that match the given DependentManagers entries
+   * (exact "Name" match on the component, optional glob "Options" pattern on
+   * the start options). The previous manager options are stored so they can be
+   * restored later. Matching managers are set to manual start mode and stopped.
+   * Every manager is recorded before its start mode is changed, so a manager is
+   * always restorable, even if setting manual mode or stopping it fails halfway.
+   * Managers whose original start mode cannot be read are left untouched.
+   * This method does not throw: errors are logged so that the snapshots
+   * collected so far are always returned and can be restored by the caller.
+   * @param dependentManagers DependentManagers configuration entries
+   * @param pmonUser pmon user for PROP_PUT commands (may be empty on startup)
+   * @param pmonPassword pmon password for PROP_PUT commands (may be empty on startup)
+   * @returns Snapshots of the managers whose start mode may have been changed
+   */
+  private async stopDependentManagers(
+    dependentManagers: DependentManagerConfig[] | undefined,
+    pmonUser: string,
+    pmonPassword: string,
+  ): Promise<DependentManagerSnapshot[]> {
+    const stopped: DependentManagerSnapshot[] = [];
+    const seen = new Set<number>();
+
+    if (!dependentManagers || dependentManagers.length === 0) {
+      return stopped;
+    }
+
+    for (const dependentManager of dependentManagers) {
+      if (!dependentManager.Name) {
+        continue;
+      }
+
+      let indices: number[] = [];
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        indices = (await this.ctrlScript.start(
+          "findDependentManagers",
+          [dependentManager.Name, dependentManager.Options || ""],
+          [WinccoaCtrlType.string, WinccoaCtrlType.string],
+        )) as number[];
+      } catch (error) {
+        // Do not abort: managers stopped for earlier entries must still be
+        // returned to the caller so that they get restored
+        winccoa.logWarning(
+          `Failed to look up dependent manager "${dependentManager.Name}":`,
+          error,
+        );
+        continue;
+      }
+
+      for (const manIdx of indices || []) {
+        if (!Number.isInteger(manIdx) || seen.has(manIdx)) {
+          continue;
+        }
+        seen.add(manIdx);
+
+        try {
+          // Read the previous start mode before changing anything, so it can
+          // be restored after the scripts have run.
+          // eslint-disable-next-line no-await-in-loop
+          const originalStartMode = (await this.ctrlScript.start(
+            "getManagerStartMode",
+            [manIdx],
+            [WinccoaCtrlType.int],
+          )) as string;
+
+          // "unknown"/"invalid" means the options could not be read. Such a
+          // value cannot be written back later, so leave the manager alone.
+          if (!RESTORABLE_START_MODES.includes(originalStartMode)) {
+            winccoa.logWarning(
+              `Leaving dependent manager index ${manIdx} untouched: unexpected start mode "${originalStartMode}"`,
+            );
+            continue;
+          }
+
+          // Record the manager BEFORE its start mode is changed. If setting
+          // manual mode or stopping fails afterwards, it is still restored
+          // (restoring an unchanged manager only writes its original mode back).
+          stopped.push({ manIdx, originalStartMode });
+
+          // eslint-disable-next-line no-await-in-loop
+          await this.ctrlScript.start(
+            "setManagerStartMode",
+            [manIdx, "manual", pmonUser, pmonPassword],
+            [
+              WinccoaCtrlType.int,
+              WinccoaCtrlType.string,
+              WinccoaCtrlType.string,
+              WinccoaCtrlType.string,
+            ],
+          );
+
+          // eslint-disable-next-line no-await-in-loop
+          await this.ctrlScript.start(
+            "stopManager",
+            [manIdx],
+            [WinccoaCtrlType.int],
+          );
+
+          winccoa.logDebugF(
+            "addonHandler",
+            `Stopped dependent manager index ${manIdx} (was ${originalStartMode})`,
+          );
+        } catch (error) {
+          // If the manager was already recorded above, it is still restored
+          winccoa.logWarning(
+            `Failed to stop dependent manager index ${manIdx}:`,
+            error,
+          );
+        }
+      }
+    }
+
+    return stopped;
+  }
+
+  /**
+   * Restore the previously stored manager options and, if the original start
+   * mode was "once" or "always", start the manager again. "always" managers
+   * are restarted by pmon automatically once their mode is set back, but an
+   * explicit start is harmless and idempotent, so it is used for both.
+   * Errors are logged and do not prevent the other managers from being restored.
+   */
+  private async restoreDependentManagers(
+    stopped: DependentManagerSnapshot[],
+    pmonUser: string,
+    pmonPassword: string,
+  ): Promise<void> {
+    for (const snapshot of stopped) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await this.ctrlScript.start(
+          "setManagerStartMode",
+          [snapshot.manIdx, snapshot.originalStartMode, pmonUser, pmonPassword],
+          [
+            WinccoaCtrlType.int,
+            WinccoaCtrlType.string,
+            WinccoaCtrlType.string,
+            WinccoaCtrlType.string,
+          ],
+        );
+
+        if (
+          snapshot.originalStartMode === "once" ||
+          snapshot.originalStartMode === "always"
+        ) {
+          // eslint-disable-next-line no-await-in-loop
+          await this.ctrlScript.start(
+            "startManager",
+            [snapshot.manIdx],
+            [WinccoaCtrlType.int],
+          );
+        }
+
+        winccoa.logDebugF(
+          "addonHandler",
+          `Restored dependent manager index ${snapshot.manIdx} to start mode ${snapshot.originalStartMode}`,
+        );
+        await this.delay(250);
+      } catch (error) {
+        winccoa.logWarning(
+          `Failed to restore dependent manager index ${snapshot.manIdx}:`,
+          error,
+        );
+      }
+    }
+  }
+
+  private delay(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Run all given script jobs while all matching dependent managers of the
+   * whole set are stopped. The managers are stopped once, all scripts are then
+   * executed (each with a 5-minute timeout), and the managers are restored
+   * afterwards. Restoration always happens, even when the scripts fail or time out,
+   * so the dependent managers are never left stopped.
+   * @param jobs One entry per script-relevant unit (e.g. subproject)
+   * @param dependentManagers Union of all DependentManagers entries to resolve
+   * @param pmonUser pmon user for PROP_PUT commands (may be empty on startup)
+   * @param pmonPassword pmon password for PROP_PUT commands (may be empty on startup)
+   * @param fatalOnError Whether to rethrow the first script error after restore
+   */
+  private async runAllScriptsGuardedByManagers(
+    jobs: ScriptJob[],
+    dependentManagers: DependentManagerConfig[],
+    pmonUser: string,
+    pmonPassword: string,
+    fatalOnError: boolean,
+  ): Promise<void> {
+    const hasFailed = (await this.ctrlScript.start(
+      "startTcpConnection",
+    )) as boolean;
+
+    if (hasFailed) {
+      winccoa.logWarning("Failed to start TCP connection");
+      return;
+    }
+
+    const stopped = (
+      await this.stopDependentManagers(
+        dependentManagers,
+        pmonUser,
+        pmonPassword,
+      )
+    ).sort((a, b) => a.manIdx - b.manIdx);
+
+    const errors: unknown[] = [];
+
+    try {
+      for (const job of jobs) {
+        const timeoutPromise = new Promise<void>((_, reject) => {
+          setTimeout(
+            () => {
+              reject(
+                new Error("Update scripts execution timed out after 5 minutes"),
+              );
+            },
+            5 * 60 * 1000,
+          );
+        });
+
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          await Promise.race([
+            this.executeScripts(job.scriptDir, job.scripts),
+            timeoutPromise,
+          ]);
+          winccoa.logInfo(`${job.label} scripts completed successfully`);
+        } catch (error) {
+          if (fatalOnError) {
+            errors.push(error);
+          }
+          if (error instanceof Error && error.message.includes("timed out")) {
+            winccoa.logWarning(
+              `${job.label} scripts execution timed out after 5 minutes`,
+            );
+          } else {
+            winccoa.logWarning(`${job.label} error executing scripts:`, error);
+          }
+        }
+      }
+    } finally {
+      await this.restoreDependentManagers(stopped, pmonUser, pmonPassword);
+      await this.ctrlScript.start("stopTcpConnection");
+    }
+
+    if (errors.length) {
+      throw errors[0];
+    }
+  }
+
+  /**
+   * Execute all DbUpdateScripts defined in package.winccoa.json for every
+   * registered extension (local and installed). This is intended to run once
+   * on manager startup.
+   *
+   * Execution reuses the existing executeScripts() dispatcher which handles
+   * .ctl, .ts, and .js files identically to UpdateScripts. A 5-minute
+   * timeout per subproject prevents runaway scripts from blocking startup.
+   * All dependent managers are stopped, then all DbUpdateScripts are executed,
+   * then the managers are restored. Errors are logged but do NOT prevent the
+   * service from starting.
+   */
+  async executeStartupDbUpdateScripts(): Promise<void> {
+    winccoa.logInfo(
+      "Executing startup DbUpdateScripts for all registered extensions...",
+    );
+
+    const addons = await this.discoverAllAddons();
+    const registeredSubProjects = new Set(await this.listSubProjects());
+
+    // Collect all subprojects that define DbUpdateScripts together with the union
+    // of their dependent managers, so that all dependent managers are stopped before
+    // any script runs and all are restored afterwards.
+    const jobs: ScriptJob[] = [];
+    const allDependentManagers: DependentManagerConfig[] = [];
+
+    for (const addon of addons) {
+      for (const subproject of addon.config.Subprojects) {
+        if (
+          !subproject.DbUpdateScripts ||
+          subproject.DbUpdateScripts.length === 0
+        ) {
+          continue;
+        }
+
+        // Subprojects without a name cannot be resolved in addons from
+        // external sources (preinstalled addons default their name to the
+        // addon's folder name during discovery)
+        if (!subproject.Name) {
+          winccoa.logWarning(
+            `[executeStartupDbUpdateScripts] Skipping subproject without a name in addon ${addon.name}`,
+          );
+          continue;
+        }
+
+        if (!registeredSubProjects.has(subproject.Name)) {
+          continue;
+        }
+
+        const displayName =
+          addon.name === subproject.Name
+            ? addon.name
+            : `${addon.name}/${subproject.Name}`;
+
+        jobs.push({
+          scriptDir: path.join(addon.addonDir, subproject.Name),
+          scripts: subproject.DbUpdateScripts,
+          label: displayName,
+        });
+        for (const dependentManager of subproject.DependentManagers || []) {
+          allDependentManagers.push(dependentManager);
+        }
+      }
+    }
+
+    // Stop all dependent managers, run all DbUpdateScripts, restore (non-fatal)
+    await this.runAllScriptsGuardedByManagers(
+      jobs,
+      allDependentManagers,
+      "",
+      "",
+      false,
+    );
+
+    winccoa.logInfo("Startup DbUpdateScripts execution completed.");
   }
 
   public async startManagers(

@@ -38,6 +38,8 @@ class ExtensionsEndpoints
     httpConnect(listSubProjects, EXTENSIONS_URL_PREFIX + "/listProjects", "application/json");
     httpConnect(getDefaultAddonPath, EXTENSIONS_URL_PREFIX + "/getDefaultAddonPath", "application/json");
     httpConnect(listLocalRepos, EXTENSIONS_URL_PREFIX + "/listLocalRepos", "application/json");
+    httpConnect(listInstalledAddons, EXTENSIONS_URL_PREFIX + "/listInstalledAddons", "application/json");
+    httpConnect(readAddonFile, EXTENSIONS_URL_PREFIX + "/readAddonFile", "application/json");
     httpConnect(remove, EXTENSIONS_URL_PREFIX + "/remove", "application/json");
     httpConnect(setPmonCredentials, EXTENSIONS_URL_PREFIX + "/setPmonCredentials", "application/json");
     httpConnect(pmonCredentialsAreSet, EXTENSIONS_URL_PREFIX + "/pmonCredentialsAreSet", "application/json");
@@ -155,10 +157,23 @@ class ExtensionsEndpoints
     }
 
     mapping requestMapping;
-    string path = joinPath(client.repoPath(), repoName);
+    // Accept optional repositoryPath override (for installed addons in the installation directory)
+    idx = names.indexOf("repositoryPath");
+    string path;
+    if (idx >= 0)
+    {
+      path = values.at(idx);
+    }
+    else
+    {
+      path = joinPath(client.repoPath(), repoName);
+    }
     requestMapping.insert("repositoryPath", path);
     requestMapping.insert("fileContent", fileContent);
     requestMapping.insert("session", session);
+    // Used by the Extensions service to resolve the default subproject
+    // name of preinstalled addons (name of the addon's folder)
+    requestMapping.insert("repoName", repoName);
 
     bool success = client.registerSubProjects(requestMapping);
 
@@ -190,7 +205,8 @@ class ExtensionsEndpoints
     }
     string fileContent = values.at(idx);
 
-    bool deleteFiles = true;
+    // Deleting files must be requested explicitly
+    bool deleteFiles = false;
     idx = names.indexOf("deleteFiles");
     if (idx >= 0)
     {
@@ -198,10 +214,23 @@ class ExtensionsEndpoints
     }
 
     mapping requestMapping;
-    string path = joinPath(client.repoPath(), repoName);
+    // Accept optional repositoryPath override (for installed addons in the installation directory)
+    idx = names.indexOf("repositoryPath");
+    string path;
+    if (idx >= 0)
+    {
+      path = values.at(idx);
+    }
+    else
+    {
+      path = joinPath(client.repoPath(), repoName);
+    }
     requestMapping.insert("repositoryPath", path);
     requestMapping.insert("fileContent", fileContent);
     requestMapping.insert("deleteFiles", deleteFiles);
+    // Used by the Extensions service to resolve the default subproject
+    // name of preinstalled addons (name of the addon's folder)
+    requestMapping.insert("repoName", repoName);
 
     bool success = client.unregisterSubProjects(requestMapping);
 
@@ -258,6 +287,42 @@ class ExtensionsEndpoints
     else
     {
       return makeDynString(jsonEncode(makeMapping("error", "Could not find local repos")), "Status: 404 Not Found");
+    }
+  }
+
+  //--------------------------------------------------------------------------------
+  public static dyn_string listInstalledAddons()
+  {
+    string response = client.listInstalledAddons();
+    if (response != "")
+    {
+      return makeDynString(response, "Status: 200 OK");
+    }
+    else
+    {
+      return makeDynString(jsonEncode(makeMapping("error", "Could not list installed addons")), "Status: 404 Not Found");
+    }
+  }
+
+  //--------------------------------------------------------------------------------
+  public static dyn_string readAddonFile(const dyn_string &names, const dyn_string &values)
+  {
+    int idx = names.indexOf("path"); // indexOf uses 0-based-indexing
+
+    if (idx < 0 || idx >= sizeof(values))
+    {
+      return makeDynString(jsonEncode(makeMapping("error", "Missing required parameter: path")), "Status: 400 Bad Request");
+    }
+    
+    string filePath = values[idx + 1]; // + 1 since dyn_string uses 1-based-indexing
+    string response = client.readFile(filePath);
+    if (response != "")
+    {
+      return makeDynString(jsonEncode(makeMapping("content", response)), "Status: 200 OK");
+    }
+    else
+    {
+      return makeDynString(jsonEncode(makeMapping("error", "File not found or could not be read")), "Status: 404 Not Found");
     }
   }
 
