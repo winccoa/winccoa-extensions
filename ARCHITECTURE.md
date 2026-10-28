@@ -357,7 +357,8 @@ types array matches the CTRL signature one for one.
 | Preinstalled add-on | An add-on found in the WinCC OA installation directory. It is a subproject itself and is never deleted from disk. |
 | Dependent manager | A running manager that must be stopped while update or DB update scripts run, then restored. |
 | DbUpdateScripts | Scripts run at every start of the Extensions JavaScript manager. |
-| UpdateScripts | Scripts run after a successful pull with a higher `Version`. |
+| UpdateScripts | Scrists run after a successful pull with a higher `Version`. |
 | PMON | The WinCC OA process monitor. It starts, stops and configures managers. |
-| vRPC | WinCC OA's service-to-service RPC, used between CTRL and the JavaScript manager. |
+| MSA | Manager Service API. WinCC OA's framework for hosting services in managers and calling them through client stubs. Currently uses vRPC. |
+| (MSA-based) vRPC | Variable Remote Procedure Call. The MSA-based, service-to-service RPC protocol used between CTRL and the JavaScript manager. |
 | `ProjEnv` | WinCC OA CTRL library (`ProjEnvProject`) used to read and control managers and the project. |
